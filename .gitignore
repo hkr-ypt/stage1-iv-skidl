@@ -1,0 +1,9 @@
+# Python
+__pycache__/
+*.pyc
+
+# SKiDL auto-generated side files (regenerated on every run)
+*_sklib.py
+main.erc
+main.log
+skidl_REPL.*
