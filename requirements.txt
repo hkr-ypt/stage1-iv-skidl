@@ -1,0 +1,23 @@
+# Stage 1 I–V Characterization System — SKiDL project dependencies
+#
+# Core requirement:
+skidl==2.2.3
+#
+# SKiDL runtime dependencies (import-time). Installed explicitly because SKiDL's
+# two *optional* PCB-placement extras (kinet2pcb, hierplace) may fail to build
+# on some platforms; they are NOT needed to build the netlist, run ERC, or run
+# the validation in this project.
+graphviz>=0.20
+future>=0.18
+kinparse>=0.1.2
+simp_sexp>=0.3.1
+rich>=13.0
+#
+# Recommended install (skip the optional extras that pull in PCB placement):
+#   pip install skidl --no-deps
+#   pip install graphviz future kinparse simp_sexp rich
+#
+# To later import/visualize in KiCad you also need KiCad 7/8/9 installed with
+# its standard symbol + footprint libraries (set KICADn_SYMBOL_DIR). The design
+# runs fully WITHOUT KiCad libraries present, because every part is declared as
+# a SKiDL-native symbol (see libraries/custom_symbols.py).
