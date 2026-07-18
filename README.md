@@ -7,12 +7,10 @@ limiting (~49 mA), defense-in-depth protection, and a **shared 2.500 V
 reference** for ratiometric measurement.
 
 This project is the electrical source-of-truth. Running it produces a **KiCad
-netlist** (`stage1_iv.net`) that you import into KiCad for schematic
-visualization, PCB layout, and ERC — plus a generated component manifest.
-
-> This is a SKiDL *source design*, not a raw `.kicad_sch` file. It does not
-> touch a running KiCad instance, invent KiCad UUIDs, or perform GUI
-> automation. It emits a standard KiCad netlist.
+netlist** (`stage1_iv.net`) that you import into KiCad for PCB layout and ERC,
+a **hierarchical KiCad schematic** (`stage1_iv.kicad_sch` + one child
+`.kicad_sch` per block, generated from the same in-memory circuit — see
+[`SCHEMATIC.md`](SCHEMATIC.md)) — plus a generated component manifest.
 
 ---
 
@@ -49,10 +47,11 @@ Nothing is silently substituted; everything flagged is surfaced again in
 
 ```
 stage1-iv-skidl/
-├── main.py                     # instantiate all blocks, validate, emit netlist
+├── main.py                     # instantiate all blocks, validate, emit outputs
 ├── requirements.txt
 ├── manifest.yaml               # machine-readable design summary + unresolved items
 ├── README.md
+├── SCHEMATIC.md                # how the .kicad_sch output is generated
 │
 ├── blocks/
 │   ├── nets.py                 # global cross-sheet nets (the net manifest)
@@ -65,9 +64,13 @@ stage1-iv-skidl/
 │   ├── adc.py                  # Sheet 7 — ADS1256 + RC filters
 │   └── protection.py           # Sheet 8 — fuse/TVS + DUT connector
 │
+├── generators/
+│   └── schematic.py            # hierarchical .kicad_sch emitter (live circuit)
+│
 ├── validation/
 │   ├── erc.py                  # SKiDL ERC + structural checks
-│   └── assertions.py           # custom connectivity/topology assertions
+│   ├── assertions.py           # custom connectivity/topology assertions
+│   └── schematic_check.py      # schematic <-> netlist consistency validator
 │
 └── libraries/
     └── custom_symbols.py       # SKiDL-native symbols + intended KiCad lib IDs
@@ -86,16 +89,24 @@ and connects them to the shared global nets. `main.py` builds all eight sheets.
 pip install skidl --no-deps
 pip install graphviz future kinparse simp_sexp rich
 
-# Build: validate + emit netlist + manifests
+# Build: validate + emit netlist + schematic + manifests
 python3 main.py
 
 # Just emit the netlist
 python3 main.py --netlist-only
+
+# Just emit the hierarchical schematic
+python3 main.py --schematic-only
+
+# Verify schematic <-> netlist consistency (exits non-zero on mismatch)
+python3 validation/schematic_check.py
 ```
 
 Expected result: **0 ERC errors, 0 ERC warnings, 8/8 assertions PASS**, and:
 
 - `stage1_iv.net` — KiCad netlist
+- `stage1_iv.kicad_sch` + 8 child `.kicad_sch` — hierarchical KiCad schematic
+  (self-contained; see below and [`SCHEMATIC.md`](SCHEMATIC.md))
 - `component_manifest.md` — generated component table
 
 > In a library-less environment SKiDL prints benign `KICADn_SYMBOL_DIR` /
@@ -131,6 +142,37 @@ footprints, duplicate references, and a pin-number-provenance report. Result:
 - SPI1 and SPI2 are physically **separate buses**
 - AGND and DGND join **only** at the `R31` star point
 - every required manifest net exists and is populated
+
+---
+
+## Generated hierarchical schematic
+
+`python3 main.py` also emits a **valid, human-readable KiCad schematic** from
+the *same live SKiDL circuit* that produced the netlist (module
+`generators/schematic.py`) — consistent with `stage1_iv.net` by construction:
+
+- **Hierarchy** — `stage1_iv.kicad_sch` (top) contains one `(sheet)` per
+  block; each block becomes its own child sheet (`power.kicad_sch`,
+  `mcu.kicad_sch`, `dac_sweep.kicad_sch`, `output_buffer.kicad_sch`,
+  `current_sense.kicad_sch`, `voltage_sense.kicad_sch`, `adc.kicad_sch`,
+  `protection.kicad_sch`).
+- **Self-contained** — every symbol is a synthesized rectangle embedded in the
+  sheet's `(lib_symbols)`; the files open in KiCad 7/8/9 with **zero symbol
+  libraries installed**. Embedded lib IDs reuse the intended official
+  `KiCad_Lib` identifier, and `PLACEHOLDER-REMAP` / `VERIFY-DATASHEET` parts
+  show their `Pins_Verified` flag visibly on the sheet.
+- **Label-based connectivity** — each pin carries a wire stub and a label with
+  the exact SKiDL net name: global labels for power rails, hierarchical
+  labels + top-sheet sheet pins for nets crossing blocks, local labels
+  otherwise. No rat's-nest routing.
+- **Deterministic** — stable UUIDv5 identifiers and grid placement; repeated
+  runs are byte-identical.
+- **Verified** — `python3 validation/schematic_check.py` reconstructs
+  connectivity from the emitted files and asserts the `(reference, pin, net)`
+  set equals the netlist's (295 connections, 107 parts, 66 nets).
+
+Details, conventions, and all documented assumptions: [`SCHEMATIC.md`](SCHEMATIC.md)
+and `manifest.yaml → schematic_assumptions`.
 
 ---
 

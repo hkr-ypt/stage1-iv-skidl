@@ -17,6 +17,11 @@ project:
   entry_point: main.py
   outputs:
     netlist: stage1_iv.net           # KiCad netlist (import target)
+    schematic_top: stage1_iv.kicad_sch   # hierarchical KiCad schematic (top)
+    schematic_sheets: [power.kicad_sch, mcu.kicad_sch, dac_sweep.kicad_sch,
+                       output_buffer.kicad_sch, current_sense.kicad_sch,
+                       voltage_sense.kicad_sch, adc.kicad_sch,
+                       protection.kicad_sch]
     component_manifest: component_manifest.md
   totals:
     components: 107
@@ -152,6 +157,70 @@ net_manifest:
             I_SENSE_OUT, V_SENSE_OUT]
 
 # ---------------------------------------------------------------------
+# Schematic generation (generators/schematic.py) — documented decisions
+# ---------------------------------------------------------------------
+schematic_assumptions:
+  - schema: >
+      KiCad 7 s-expression .kicad_sch, (version 20230121), generator
+      stage1_iv_skidl. kicad-cli was not installed in the generation
+      environment, so the stable KiCad 7 schema is emitted; KiCad 8/9
+      migrate it on load. The generator never requires KiCad.
+  - mechanism: >
+      skidl.generate_schematic() was evaluated and rejected: it requires
+      installed KiCad symbol libraries for symbol graphics and does not
+      emit hierarchical KiCad 7 sheets in a library-less environment.
+  - symbols: >
+      Generic rectangles synthesized from the SKiDL pin lists and embedded
+      per-sheet in (lib_symbols) — fully self-contained, no external
+      libraries needed to open. Embedded lib IDs reuse the intended
+      official KiCad_Lib identifier (fallback MPN, then ref prefix) so the
+      target symbol is documented on the sheet; pin names/numbers are the
+      SKiDL pin names/numbers; first half of pins on the left side,
+      second half on the right, 2.54 mm pitch, 2.54 mm pin length.
+  - symbol_fields: >
+      Reference and Value visible; Footprint, Datasheet, MPN, KiCad_Lib,
+      Sheet (owning block) hidden; Pins_Verified visible on any part not
+      flagged STD so VERIFY-DATASHEET / PLACEHOLDER-REMAP parts stay
+      visibly flagged on the schematic.
+  - connectivity: >
+      Label-based, no point-to-point routing: every connected pin gets a
+      5.08 mm wire stub ending in a label carrying the exact SKiDL net
+      name. GLOBAL_POWER nets (drive=POWER rails + NET_MANIFEST power
+      group: +15VA, -15VA, +5VA, +5V_RAW, +3V3D, VDDA, VBUS, AGND, DGND,
+      VREF_2V5) use global labels; nets spanning >=2 blocks use
+      hierarchical labels matched by sheet pins on the top sheet (tied
+      together there with stubs + local labels); single-block nets use
+      local labels. SKiDL no-connect pins get (no_connect) markers.
+      Global labels (not power-port symbols) were chosen so no extra
+      power symbols need to be synthesized.
+  - hierarchy: >
+      One child sheet per block, filenames <block>.kicad_sch (power, mcu,
+      dac_sweep, output_buffer, current_sense, voltage_sense, adc,
+      protection), top sheet stage1_iv.kicad_sch; pages 1-9 in block
+      order. Sheet pins are type bidirectional (no direction is asserted).
+  - placement: >
+      Deterministic row-flow on the 1.27 mm grid (integer grid-unit
+      arithmetic): parts in circuit build order, one cell per part sized
+      from body + stubs + label text allowances, wrapped into rows;
+      smallest fitting landscape paper of A4/A3/A2/A1/A0 per sheet.
+  - uuids: >
+      UUIDv5 in the fixed namespace uuid5(NAMESPACE_DNS,
+      "stage1-iv-skidl.schematic"), keyed by stable object identities
+      (e.g. "power:sym:R31"), unique per object and byte-stable across
+      runs.
+  - netlist_immutability: >
+      Schematic generation adds no fields to parts (block tags are plain
+      Python attributes set in main.build), so stage1_iv.net is unchanged
+      except its volatile (date ...) stamp, which SKiDL rewrites on every
+      run regardless.
+  - validation: >
+      validation/schematic_check.py re-derives connectivity from the
+      emitted files (simp_sexp) and compares the (reference, pin, net)
+      set against stage1_iv.net (kinparse; two pre-parse text shims fix
+      kinparse-incompatible SKiDL 2.2.3 clauses without touching the nets
+      section). Exits non-zero on any mismatch.
+
+# ---------------------------------------------------------------------
 # Validation
 # ---------------------------------------------------------------------
 validation:
@@ -171,6 +240,13 @@ validation:
       - AGND and DGND join only at the R31 star point
       - all required manifest nets exist and are populated
     result: 8/8 PASS
+  schematic_check:
+    module: validation/schematic_check.py
+    checks: [schematic-vs-netlist (ref,pin,net) set equality, part-set match,
+             label-class correctness, sheet-pin/hierarchical-label integrity,
+             uuid validity+uniqueness, no floating pins / marked no-connects,
+             every net >= 2 endpoints]
+    result: PASS (295 connections verified across 8 sheets)
 
 # ---------------------------------------------------------------------
 # Design assumptions carried from the source spec
