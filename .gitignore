@@ -4,6 +4,6 @@ __pycache__/
 
 # SKiDL auto-generated side files (regenerated on every run)
 *_sklib.py
-main.erc
-main.log
+*.erc
+*.log
 skidl_REPL.*
