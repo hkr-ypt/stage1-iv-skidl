@@ -8,11 +8,14 @@ nets, runs ERC + custom connectivity assertions, prints the component manifest,
 and generates the KiCad netlist.
 
 Run:
-    python3 main.py                 # validate + emit netlist + manifest
-    python3 main.py --netlist-only  # just emit the netlist
+    python3 main.py                  # validate + emit netlist + schematic + manifest
+    python3 main.py --netlist-only   # just emit the netlist
+    python3 main.py --schematic-only # just emit the hierarchical schematic
 
 Outputs (written next to this file):
     stage1_iv.net            KiCad netlist (import into a KiCad project)
+    stage1_iv.kicad_sch      Top-level KiCad schematic (hierarchical)
+    <block>.kicad_sch        One child schematic sheet per block (8 files)
     component_manifest.md    Component manifest table
 """
 
@@ -36,6 +39,21 @@ from validation.assertions import run_assertions
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
+# Block build order == hierarchical sheet order (sheet 1..8). The block name is
+# stamped on every part as a plain Python attribute (`skidl_block`) so the
+# schematic generator can recover sheet membership from the live circuit. A
+# plain attribute never enters part.fields, so the netlist is unaffected.
+BLOCKS = [
+    ("power", create_power_block),                # Sheet 1
+    ("mcu", create_mcu_block),                    # Sheet 2
+    ("dac_sweep", create_dac_block),              # Sheet 3
+    ("output_buffer", create_output_buffer_block),# Sheet 4
+    ("current_sense", create_current_sense_block),# Sheet 5
+    ("voltage_sense", create_voltage_sense_block),# Sheet 6
+    ("adc", create_adc_block),                    # Sheet 7
+    ("protection", create_protection_block),      # Sheet 8
+]
+
 
 def build():
     """Build the complete circuit. Returns (nets_namespace, parts_dict, circuit)."""
@@ -45,14 +63,11 @@ def build():
     n = create_nets()
 
     parts = {}
-    parts.update(create_power_block(n))           # Sheet 1
-    parts.update(create_mcu_block(n))             # Sheet 2
-    parts.update(create_dac_block(n))             # Sheet 3
-    parts.update(create_output_buffer_block(n))   # Sheet 4
-    parts.update(create_current_sense_block(n))   # Sheet 5
-    parts.update(create_voltage_sense_block(n))   # Sheet 6
-    parts.update(create_adc_block(n))             # Sheet 7
-    parts.update(create_protection_block(n))      # Sheet 8
+    for block_name, create_block in BLOCKS:
+        block_parts = create_block(n)
+        for part in block_parts.values():
+            part.skidl_block = block_name
+        parts.update(block_parts)
 
     circuit = n.AGND.circuit
     return n, parts, circuit
@@ -141,10 +156,25 @@ def print_net_manifest(n):
             print(f"    {name:<14} {len(net.get_pins()):>2} pins")
 
 
+def write_schematic(circuit):
+    """Emit the hierarchical KiCad schematic from the live circuit."""
+    from generators.schematic import generate_schematic
+    sch_files = generate_schematic(circuit, out_dir=HERE)
+    print("\nKiCad schematic written:")
+    for path in sch_files:
+        print(f"  {path}")
+    return sch_files
+
+
 def main():
     netlist_only = "--netlist-only" in sys.argv
+    schematic_only = "--schematic-only" in sys.argv
 
     n, parts, circuit = build()
+
+    if schematic_only:
+        write_schematic(circuit)
+        return 0
 
     netlist_path = os.path.join(HERE, "stage1_iv.net")
     generate_netlist(tool=KICAD, file_=netlist_path)
@@ -152,6 +182,8 @@ def main():
 
     if netlist_only:
         return 0
+
+    sch_files = write_schematic(circuit)
 
     print_net_manifest(n)
     write_component_manifest(circuit)
@@ -165,6 +197,8 @@ def main():
     print(f"  Parts .............. {erc_summary['parts']}")
     print(f"  Nets ............... {erc_summary['nets']}")
     print(f"  Netlist ............ {os.path.basename(netlist_path)}")
+    print(f"  Schematic .......... {len(sch_files)} sheets "
+          f"({os.path.basename(sch_files[0])} + 8 child sheets)")
     print("  ERC ................ PASS (see warnings above for reserved pins)")
     print("  Assertions ......... PASS")
     print("\nDesign build complete.")
