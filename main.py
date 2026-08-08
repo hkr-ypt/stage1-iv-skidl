@@ -8,15 +8,21 @@ nets, runs ERC + custom connectivity assertions, prints the component manifest,
 and generates the KiCad netlist.
 
 Run:
-    python3 main.py                  # validate + emit netlist + schematic + manifest
+    python3 main.py                  # validate + emit netlist + schematic + PCB
     python3 main.py --netlist-only   # just emit the netlist
     python3 main.py --schematic-only # just emit the hierarchical schematic
+    python3 main.py --pcb-only       # just emit the board
 
 Outputs (written next to this file):
     stage1_iv.net            KiCad netlist (import into a KiCad project)
     stage1_iv.kicad_sch      Top-level KiCad schematic (hierarchical)
     <block>.kicad_sch        One child schematic sheet per block (8 files)
+    stage1_iv.kicad_pcb      Placed, unrouted board with board setup and zones
     component_manifest.md    Component manifest table
+
+The board is **not routed**. `generators/pcb.py` places parts, pours the two
+ground planes and writes the design rules; drawing the tracks is a human task.
+Nothing in this build reports a DRC pass.
 """
 
 import sys
@@ -177,7 +183,30 @@ def write_schematic(circuit):
     return sch_files
 
 
-def capability_banner(circuit=None, erc_summary=None, checks=None):
+def write_pcb(circuit):
+    """Emit the board and run the structural board checks on the emitted file.
+
+    Returns the drc_check report, or raises. The board needs real footprint
+    files, so this only runs when the KiCad libraries are installed; callers
+    report SKIPPED otherwise rather than pretending.
+    """
+    from generators.pcb import generate_pcb
+    from validation.drc_check import run_drc_check
+
+    path, report = generate_pcb(circuit, out_dir=HERE)
+    print(f"\nKiCad board written to {path}")
+    print(f"  {report['board_mm'][0]} x {report['board_mm'][1]} mm, "
+          f"{report['parts']} footprints, {report['nets']} nets, "
+          f"{report['mounting_holes']} mounting holes")
+    print(f"  AGND/DGND split at x={report['zone_boundary_x']} mm "
+          f"({report['zone_gap_mm']} mm gap), straddled by "
+          f"{', '.join(report['ground_bridges'])}")
+    print("  UNROUTED — no track was drawn and none was autorouted.")
+    return report, run_drc_check(os.path.join(HERE, "stage1_iv.kicad_pcb"))
+
+
+def capability_banner(circuit=None, erc_summary=None, checks=None,
+                      drc_report=None):
     """State plainly what this run was able to verify, and what it was not.
 
     The build deliberately runs on a machine with no KiCad installed — that is
@@ -223,12 +252,30 @@ def capability_banner(circuit=None, erc_summary=None, checks=None):
     A("  KiCad ERC ............. NOT RUN (open stage1_iv.kicad_sch in KiCad "
       "and run ERC;")
     A("                          see docs/LIBRARY_DEPENDENCIES.md)")
+
+    if drc_report is None:
+        A("  Board checks .......... SKIPPED (no board generated this run)")
+        A("  KiCad DRC ............. NOT RUN")
+    else:
+        passed = sum(1 for c in drc_report["checks"].values()
+                     if c["status"] == "PASS")
+        A(f"  Board checks .......... {passed} PASS "
+          f"(courtyards, edge clearance, ground split, netclasses)")
+        drc = drc_report["checks"]["kicad_drc"]
+        if drc["status"] == "SKIPPED":
+            A(f"  KiCad DRC ............. NOT RUN — {drc['reason']}")
+            A("                          The board's DRC state is UNKNOWN. "
+              "Run it in KiCad 8+.")
+        else:
+            A(f"  KiCad DRC ............. {len(drc['problems'])} defects, "
+              f"{drc['routing_violations']} unrouted connections")
     return "\n".join(lines), env
 
 
 def main():
     netlist_only = "--netlist-only" in sys.argv
     schematic_only = "--schematic-only" in sys.argv
+    pcb_only = "--pcb-only" in sys.argv
 
     n, parts, circuit = build()
 
@@ -260,6 +307,15 @@ def main():
         print("has not been shown to be KiCad-conformant.")
         print("=" * 70)
 
+    if pcb_only:
+        if not env["available"]:
+            print("\nPCB generation needs the KiCad footprint libraries; none "
+                  "are installed. Run tools/install_kicad_libs.sh.",
+                  file=sys.stderr)
+            return 1
+        write_pcb(circuit)
+        return 0
+
     if schematic_only:
         write_schematic(circuit)
         return 0
@@ -272,6 +328,21 @@ def main():
         return 0
 
     sch_files = write_schematic(circuit)
+
+    # The board needs the real footprint files, so it can only be built where
+    # the libraries are installed. Where they are not, say so — do not emit a
+    # board from guessed geometry.
+    pcb_report = drc_report = None
+    if env["available"]:
+        from validation.drc_check import DrcCheckError
+        try:
+            pcb_report, drc_report = write_pcb(circuit)
+        except DrcCheckError as exc:
+            print(f"\nBOARD CHECK: FAIL\n{exc}", file=sys.stderr)
+            return 1
+    else:
+        print("\nPCB generation ....... SKIPPED — no KiCad footprint libraries "
+              "on this machine.")
 
     print_net_manifest(n)
     write_component_manifest(circuit)
@@ -292,6 +363,12 @@ def main():
     print(f"  Netlist ............ {os.path.basename(netlist_path)}")
     print(f"  Schematic .......... {len(sch_files)} sheets "
           f"({os.path.basename(sch_files[0])} + 8 child sheets)")
+    if pcb_report is None:
+        print("  Board .............. SKIPPED — no KiCad footprint libraries")
+    else:
+        print(f"  Board .............. {pcb_report['board_mm'][0]} x "
+              f"{pcb_report['board_mm'][1]} mm, {pcb_report['parts']} "
+              f"footprints placed, UNROUTED")
     # Derived from the ERC result, never asserted. run_erc() already raises on
     # any error or un-allow-listed warning, so reaching here means both are
     # zero; printing the actual numbers keeps that visible and auditable.
@@ -315,7 +392,7 @@ def main():
           "run is not evidence about KiCad ERC.")
 
     print()
-    print(capability_banner(circuit, erc_summary, checks)[0])
+    print(capability_banner(circuit, erc_summary, checks, drc_report)[0])
 
     if erc_errors or erc_summary["erc_warnings_offending"]:
         print("\nDesign build FAILED on ERC.", file=sys.stderr)

@@ -29,7 +29,12 @@ reset_copy() {
 # expect_fail <gate> <name> <python-patch-script>
 #   gate = structural : validation/footprint_check.py must fail
 #   gate = erc        : validation/erc.py must fail
-# main.py must fail in BOTH cases — it is the thing a user actually runs.
+#   gate = board      : validation/drc_check.py must fail
+# main.py must fail in EVERY case — it is the thing a user actually runs.
+#
+# `board` injections run against the board that main.py already emitted, so the
+# patch runs first, then main.py regenerates and re-checks. A board defect that
+# only main.py catches, or only drc_check.py catches, counts as MISSED.
 expect_fail() {
     local gate="$1" name="$2" patch="$3"
     reset_copy
@@ -42,8 +47,16 @@ expect_fail() {
     case "$gate" in
         structural) checker="validation/footprint_check.py" ;;
         erc)        checker="validation/erc.py" ;;
+        board)      checker="validation/drc_check.py" ;;
         *) echo "  [BUG] unknown gate $gate"; FAILURES=$((FAILURES + 1)); return ;;
     esac
+
+    # The board checks read the emitted .kicad_pcb, so it has to exist and be
+    # built from the patched source before the gate can see the defect.
+    if [ "$gate" = board ]; then
+        ( cd "$WORK/repo" && python3 main.py --pcb-only ) \
+            >"$WORK/pcb.log" 2>&1 || true
+    fi
 
     ( cd "$WORK/repo" && python3 "$checker" ) >"$WORK/gate.log" 2>&1
     gate_rc=$?
@@ -53,7 +66,8 @@ expect_fail() {
     if [ "$gate_rc" -ne 0 ] && [ "$main_rc" -ne 0 ]; then
         echo "  [CAUGHT] $name"
         echo "           $checker=$gate_rc, main.py=$main_rc"
-        grep -m2 -E "\[ERROR\]|\[ERC WARNING\]|ERC FAILED|PWR_FLAG invariant" \
+        grep -m2 -E "\[ERROR\]|\[ERC WARNING\]|ERC FAILED|PWR_FLAG invariant|\
+board defect|netclass|straddle|overlap" \
             "$WORK/gate.log" | sed 's/^/            /' || true
     else
         echo "  [MISSED] $name  ($checker=$gate_rc, main.py=$main_rc)"
@@ -139,6 +153,49 @@ p = pathlib.Path("libraries/custom_symbols.py"); s = p.read_text()
 assert "Connector_USB:USB_C_Receptacle_GCT_USB4085" in s
 p.write_text(s.replace("Connector_USB:USB_C_Receptacle_GCT_USB4085",
                        "Package_SO:VSSOP-8_3x3mm_P0.65mm"))
+'
+
+# --- the board gate --------------------------------------------------------
+
+# 9. a net in the design with no netclass: the board must refuse to be
+#    generated rather than let the net inherit somebody else's clearance
+expect_fail board "net with no netclass (LED_STATUS unclassified)" '
+import pathlib
+p = pathlib.Path("libraries/netclasses.py"); s = p.read_text()
+assert "\"LED_STATUS\"" in s
+p.write_text(s.replace("\"BOOT0\", \"LED_STATUS\", \"VBUS_SENSE\"",
+                       "\"BOOT0\", \"VBUS_SENSE\""))
+'
+
+# 10. the star resistor moved off the plane boundary: R31 no longer straddles
+#     the split, so AGND and DGND stop meeting where the schematic says they do
+expect_fail board "R31 no longer straddles the AGND/DGND split" '
+import pathlib
+p = pathlib.Path("generators/pcb.py"); s = p.read_text()
+assert "if len(sides) == 2:" in s
+p.write_text(s.replace(
+    "        if len(sides) == 2:",
+    "        if len(sides) == 2 and part.ref != \"R31\":"))
+'
+
+# 11. a placement that overlaps courtyards — the non-routing DRC violation class
+#     that a real fabrication run would reject
+expect_fail board "overlapping courtyards (negative part gutter)" '
+import pathlib
+p = pathlib.Path("generators/pcb.py"); s = p.read_text()
+assert "PART_GUTTER = 1.2" in s
+p.write_text(s.replace("PART_GUTTER = 1.2", "PART_GUTTER = -1.0"))
+'
+
+# 12. a netclass relaxed below what the fabricator can build: the board must not
+#     be emitted at all, however quiet it would make DRC
+expect_fail board "track width below the fab minimum (F3)" '
+import pathlib
+p = pathlib.Path("libraries/netclasses.py"); s = p.read_text()
+assert "\"DIGITAL\": {" in s
+head, tail = s.split("\"DIGITAL\": {", 1)
+tail = tail.replace("\"track_width\": 0.25,", "\"track_width\": 0.10,", 1)
+p.write_text(head + "\"DIGITAL\": {" + tail)
 '
 
 echo "----------------------------------------------------------------------"

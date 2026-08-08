@@ -151,6 +151,56 @@ def parse_sexp(text: str) -> SexpList:
     return root
 
 
+def write_sexp(node, indent=0, _out=None):
+    """Render a parsed s-expression back to text.
+
+    Round-trips :func:`parse_sexp`: :class:`Atom` remembers whether it was
+    quoted, so strings stay strings and bare tokens stay bare. Used by
+    generators/pcb.py, which loads footprints from the installed libraries,
+    edits them (position, reference, net) and writes them into the board.
+    """
+    if _out is None:
+        _out = []
+    pad = "\t" * indent
+    if not isinstance(node, list):
+        _out.append(_atom_text(node))
+        return "".join(_out)
+    head = node[0] if node and isinstance(node[0], str) else None
+    simple = all(not isinstance(c, list) for c in node)
+    if simple:
+        _out.append(pad + "(" + " ".join(_atom_text(c) for c in node) + ")")
+        return "".join(_out)
+    _out.append(pad + "(" + (_atom_text(head) if head is not None else ""))
+    inline = []
+    i = 1 if head is not None else 0
+    while i < len(node) and not isinstance(node[i], list):
+        inline.append(_atom_text(node[i]))
+        i += 1
+    if inline:
+        _out.append(" " + " ".join(inline))
+    for child in node[i:]:
+        _out.append("\n")
+        if isinstance(child, list):
+            write_sexp(child, indent + 1, _out)
+        else:
+            _out.append("\t" * (indent + 1) + _atom_text(child))
+    _out.append("\n" + pad + ")")
+    return "".join(_out)
+
+
+_NEEDS_QUOTE = re.compile(r'[\s()"]')
+
+
+def _atom_text(atom):
+    text = str(atom)
+    quoted = getattr(atom, "quoted", None)
+    if quoted is None:
+        quoted = text == "" or bool(_NEEDS_QUOTE.search(text))
+    if not quoted:
+        return text
+    return '"' + text.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
 def _head(node) -> str:
     return node[0] if isinstance(node, SexpList) and node and isinstance(node[0], str) else ""
 

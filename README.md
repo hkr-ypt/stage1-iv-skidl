@@ -7,10 +7,16 @@ limiting (~49 mA), defense-in-depth protection, and a **shared 2.500 V
 reference** for ratiometric measurement.
 
 This project is the electrical source-of-truth. Running it produces a **KiCad
-netlist** (`stage1_iv.net`) that you import into KiCad for PCB layout and ERC,
-a **hierarchical KiCad schematic** (`stage1_iv.kicad_sch` + one child
-`.kicad_sch` per block, generated from the same in-memory circuit — see
-[`SCHEMATIC.md`](SCHEMATIC.md)) — plus a generated component manifest.
+netlist** (`stage1_iv.net`), a **hierarchical KiCad schematic**
+(`stage1_iv.kicad_sch` + one child `.kicad_sch` per block, generated from the
+same in-memory circuit — see [`SCHEMATIC.md`](SCHEMATIC.md)), a **placed but
+unrouted board** (`stage1_iv.kicad_pcb`, with board setup, netclasses and the
+two ground pours — see [`docs/pcb_generation.md`](docs/pcb_generation.md)),
+plus a generated component manifest.
+
+> **The board is not routed and DRC has not been run.** `generators/pcb.py`
+> places parts and writes design rules; drawing tracks is a human task, and
+> nothing in this repository claims a DRC pass. 241 connections remain.
 
 ---
 
@@ -91,7 +97,8 @@ stage1-iv-skidl/
 │   └── protection.py           # Sheet 8 — fuse/TVS + DUT connector
 │
 ├── generators/
-│   └── schematic.py            # hierarchical .kicad_sch emitter (live circuit)
+│   ├── schematic.py            # hierarchical .kicad_sch emitter (live circuit)
+│   └── pcb.py                  # .kicad_pcb emitter: placement, outline, zones
 │
 ├── tools/
 │   ├── resolve_kicad_libs.py   # THE resolver: reads installed KiCad libraries
@@ -99,16 +106,22 @@ stage1-iv-skidl/
 │   ├── audit_identifiers.py    # per-part identifier / pad audit -> markdown
 │   ├── author_project_symbols.py # generate libraries/stage1_iv.kicad_sym
 │   ├── kicad_roundtrip.py      # verify the schematic through kicad-cli
+│   ├── check_kicad_loads.py    # KiCad itself reads the library/schematic/board
+│   ├── gen_project_config.py   # lib tables + board setup from netclasses
+│   ├── measure_pad_gaps.py     # measure intrinsic pad gaps from the footprints
 │   └── test_guard_fails.sh     # fault-injection: prove the guard fails
 │
 ├── validation/
 │   ├── erc.py                  # SKiDL ERC + structural checks
 │   ├── assertions.py           # custom connectivity/topology assertions
 │   ├── footprint_check.py      # identifiers/pads guard (aborts the build)
+│   ├── drc_check.py            # board checks + real DRC where available
 │   └── schematic_check.py      # schematic <-> netlist consistency validator
 │
 ├── docs/
 │   ├── identifier_resolution.md      # what was wrong, what it became, sources
+│   ├── FAB_CONSTRAINTS.md            # assumed fabricator capability (F1..F12)
+│   ├── pcb_generation.md             # board setup, netclasses, ground split
 │   ├── audit_identifiers_before.md   # pre-fix baseline
 │   └── audit_identifiers_after.md    # post-fix state
 │
@@ -117,6 +130,7 @@ stage1-iv-skidl/
 │
 └── libraries/
     ├── custom_symbols.py       # part factories; pins READ from the libraries
+    ├── netclasses.py           # netclasses; every value cites FAB_CONSTRAINTS
     ├── stage1_iv.kicad_sym     # generated: parts with no upstream symbol
     └── provenance/             # verbatim sources every project pin came from
 ```
@@ -232,6 +246,9 @@ PASS, 0 unresolved identifiers, 0 unaccounted pads**, and:
 - `stage1_iv.net` — KiCad netlist
 - `stage1_iv.kicad_sch` + 8 child `.kicad_sch` — hierarchical KiCad schematic
   (self-contained; see below and [`SCHEMATIC.md`](SCHEMATIC.md))
+- `stage1_iv.kicad_pcb` — placed, **unrouted** board: outline, mounting holes,
+  netclass-aware setup and the AGND/DGND pours
+  (see [`docs/pcb_generation.md`](docs/pcb_generation.md))
 - `component_manifest.md` — generated component table
 
 > SKiDL prints benign `KICADn_SYMBOL_DIR` / `fp-lib-table` warnings on import
