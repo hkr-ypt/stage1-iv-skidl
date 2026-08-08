@@ -1,9 +1,17 @@
 # Component Manifest — Stage 1 I–V Characterization System
 
-Total components: **110**
+Total components: **118**
 
 | Ref | Value | MPN | KiCad Library | Footprint | Sheet | Status |
 |-----|-------|-----|---------------|-----------|-------|--------|
+| #FLG1 | +15VA | n/a | power:PWR_FLAG |  | 1 Power | OK — pin numbers read from power.kicad_sym:9842 |
+| #FLG2 | -15VA | n/a | power:PWR_FLAG |  | 1 Power | OK — pin numbers read from power.kicad_sym:9842 |
+| #FLG3 | +5V_RAW | n/a | power:PWR_FLAG |  | 1 Power | OK — pin numbers read from power.kicad_sym:9842 |
+| #FLG4 | DGND | n/a | power:PWR_FLAG |  | 1 Power | OK — pin numbers read from power.kicad_sym:9842 |
+| #FLG5 | +5VA | n/a | power:PWR_FLAG |  | 1 Power | OK — pin numbers read from power.kicad_sym:9842 |
+| #FLG6 | AGND | n/a | power:PWR_FLAG |  | 1 Power | OK — pin numbers read from power.kicad_sym:9842 |
+| #FLG7 | VBUS | n/a | power:PWR_FLAG |  | 2 MCU | OK — pin numbers read from power.kicad_sym:9842 |
+| #FLG8 | VDDA | n/a | power:PWR_FLAG |  | 2 MCU | OK — pin numbers read from power.kicad_sym:9842 |
 | C1 | 10uF | generic | Device:C_Polarized | Capacitor_Tantalum_SMD:CP_EIA-3528-21_Kemet-B | 1 Power | OK — pin numbers read from Device.kicad_sym:5140 |
 | C2 | 10uF | generic | Device:C_Polarized | Capacitor_Tantalum_SMD:CP_EIA-3528-21_Kemet-B | 1 Power | OK — pin numbers read from Device.kicad_sym:5140 |
 | C3 | 100nF | generic | Device:C | Capacitor_SMD:C_0805_2012Metric | 1 Power | OK — pin numbers read from Device.kicad_sym:1761 |

@@ -115,12 +115,19 @@ def check(circuit, libs=None):
 
     errors = []
     warnings = []
-    summary = {"parts": 0, "pads": 0, "netted_pads": 0, "nc_pads": 0,
-               "unaccounted_pads": 0}
+    summary = {"parts": 0, "virtual_parts": 0, "pads": 0, "netted_pads": 0,
+               "nc_pads": 0, "unaccounted_pads": 0}
 
     for part in sorted(circuit.parts, key=lambda p: p.ref):
         ref = part.ref
         summary["parts"] += 1
+
+        # Virtual, schematic-only symbols (PWR_FLAG) have no footprint by
+        # design. They are exempted from the footprint checks by a positive
+        # test on their Symbol_Class field — NOT by tolerating an empty
+        # footprint string, so a real part that lost its footprint still
+        # fails. Their symbol identifier is still checked below.
+        virtual = bool(part.fields.get("Symbol_Class"))
 
         # -- 5. provenance flag ------------------------------------------
         flag = part.fields.get("Pins_Verified", "")
@@ -151,6 +158,14 @@ def check(circuit, libs=None):
         # -- 2. footprint identifier -------------------------------------
         fp_id = (part.footprint or "").strip()
         fp = None
+        if virtual:
+            if fp_id:
+                errors.append(
+                    f"{ref}: virtual symbol (Symbol_Class="
+                    f"{part.fields.get('Symbol_Class')!r}) must not carry a "
+                    f"footprint, but has {fp_id!r}.")
+            summary["virtual_parts"] = summary.get("virtual_parts", 0) + 1
+            continue
         if ":" not in fp_id:
             errors.append(f"{ref}: footprint {fp_id!r} is not 'Library:Footprint'.")
         else:
@@ -250,7 +265,8 @@ def run_footprint_check(circuit, verbose=True):
             if tag:
                 print(f"  {label:<18} {tag} @ "
                       f"{prov[label].get('commit', '')[:12]}")
-        print(f"  parts checked ...... {summary['parts']}")
+        print(f"  parts checked ...... {summary['parts']} "
+              f"({summary['virtual_parts']} virtual, no footprint by design)")
         print(f"  pads total ......... {summary['pads']}")
         print(f"  pads with a net .... {summary['netted_pads']}")
         print(f"  pads no-connect .... {summary['nc_pads']} "

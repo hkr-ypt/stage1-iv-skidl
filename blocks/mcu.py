@@ -16,7 +16,7 @@ table. All other parts match the source Sheet-2 BOM.
 
 from libraries.custom_symbols import (
     STM32F411RET6, Crystal, R, C, C_POL, L_FerriteBead, LED, SW_Push,
-    Header_1x05, USB_C_Receptacle, USBLC6_2SC6,
+    Header_1x05, USB_C_Receptacle, USBLC6_2SC6, PWR_FLAG,
 )
 from skidl import Net
 from .nets import nc, nc_named
@@ -154,10 +154,26 @@ def create_mcu_block(n):
         "PB3", "PB4", "PB5", "PB6", "PB7", "PB8", "PB9",
     )
 
+    # ---- POWER-SOURCE FLAGS -------------------------------------------
+    # VBUS is supplied by the USB HOST at the other end of the cable. On this
+    # board it only ever enters through J3; every pin on it (J3's four VBUS
+    # pads, U10's VBUS clamp pin, R28, C42) is passive or an input, so there
+    # is no driver here and never will be. Flagged at the receptacle.
+    FLG7 = PWR_FLAG()(ref="#FLG7", tag="FLG7", value="VBUS")
+    n.VBUS += FLG7[1]
+
+    # VDDA is +3V3D after ferrite bead FB2. +3V3D has a genuine driver
+    # (U1.VOUT) and is deliberately NOT flagged, but FB2 is a passive
+    # two-terminal part, so VDDA is a separate net with no driver of its own.
+    # Flagged on the far side of FB2, where the MCU's analog supply starts.
+    FLG8 = PWR_FLAG()(ref="#FLG8", tag="FLG8", value="VDDA")
+    n.VDDA += FLG8[1]
+
     return {
         "U9": U9, "Y2": Y2, "C32": C32, "C33": C33, "C34": C34, "C35": C35,
         "C36": C36, "C37": C37, "C38": C38, "C39": C39, "C40": C40, "C43": C43,
         "FB2": FB2, "R21": R21, "C41": C41, "SW1": SW1, "R22": R22, "R23": R23,
         "LED1": LED1, "J2": J2, "J3": J3, "U10": U10, "R24": R24, "R25": R25,
         "R26": R26, "R27": R27, "R28": R28, "R29": R29, "C42": C42,
+        "FLG7": FLG7, "FLG8": FLG8,
     }

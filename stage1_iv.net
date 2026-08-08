@@ -2,7 +2,7 @@
   (version "D")
   (design
     (source "main.py")
-    (date "08/08/2026 02:49 AM")
+    (date "08/08/2026 03:34 AM")
     (tool "SKiDL (2.2.3)")
     (sheet
       (number 1)
@@ -42,6 +42,278 @@
           (number "9")
           (value "")))))
   (components
+    (comp
+      (ref "#FLG1")
+      (value "+15VA")
+      (description "Power flag: declares an externally-sourced net as driven")
+      (footprint "")
+      (fields
+        (field
+          (name "MPN") "n/a")
+        (field
+          (name "KiCad_Lib") "power:PWR_FLAG")
+        (field
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "power.kicad_sym:9842")
+        (field
+          (name "Symbol_Class") "power")
+        (field
+          (name "Description") "Power flag: declares an externally-sourced net as driven")
+        (field
+          (name "Footprint"))
+        (field
+          (name "Datasheet") "~")
+        (field
+          (name "SKiDL Tag") "FLG1")
+        (field
+          (name "SKiDL Line") "blocks/power.py:93"))
+      (libsource
+        (lib "NO_LIB")
+        (part "PWR_FLAG"))
+      (sheetpath
+        (names "/")
+        (tstamps "/"))
+      (component_classes)
+      (tstamps "a7e6d95d-ce2b-5953-8873-dff1d77bf5c3"))
+    (comp
+      (ref "#FLG2")
+      (value "-15VA")
+      (description "Power flag: declares an externally-sourced net as driven")
+      (footprint "")
+      (fields
+        (field
+          (name "MPN") "n/a")
+        (field
+          (name "KiCad_Lib") "power:PWR_FLAG")
+        (field
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "power.kicad_sym:9842")
+        (field
+          (name "Symbol_Class") "power")
+        (field
+          (name "Description") "Power flag: declares an externally-sourced net as driven")
+        (field
+          (name "Footprint"))
+        (field
+          (name "Datasheet") "~")
+        (field
+          (name "SKiDL Tag") "FLG2")
+        (field
+          (name "SKiDL Line") "blocks/power.py:94"))
+      (libsource
+        (lib "NO_LIB")
+        (part "PWR_FLAG"))
+      (sheetpath
+        (names "/")
+        (tstamps "/"))
+      (component_classes)
+      (tstamps "edc65aaa-fcef-500b-9205-20ca90e71573"))
+    (comp
+      (ref "#FLG3")
+      (value "+5V_RAW")
+      (description "Power flag: declares an externally-sourced net as driven")
+      (footprint "")
+      (fields
+        (field
+          (name "MPN") "n/a")
+        (field
+          (name "KiCad_Lib") "power:PWR_FLAG")
+        (field
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "power.kicad_sym:9842")
+        (field
+          (name "Symbol_Class") "power")
+        (field
+          (name "Description") "Power flag: declares an externally-sourced net as driven")
+        (field
+          (name "Footprint"))
+        (field
+          (name "Datasheet") "~")
+        (field
+          (name "SKiDL Tag") "FLG3")
+        (field
+          (name "SKiDL Line") "blocks/power.py:95"))
+      (libsource
+        (lib "NO_LIB")
+        (part "PWR_FLAG"))
+      (sheetpath
+        (names "/")
+        (tstamps "/"))
+      (component_classes)
+      (tstamps "41bde36a-6364-5537-9be5-1c13f4516e00"))
+    (comp
+      (ref "#FLG4")
+      (value "DGND")
+      (description "Power flag: declares an externally-sourced net as driven")
+      (footprint "")
+      (fields
+        (field
+          (name "MPN") "n/a")
+        (field
+          (name "KiCad_Lib") "power:PWR_FLAG")
+        (field
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "power.kicad_sym:9842")
+        (field
+          (name "Symbol_Class") "power")
+        (field
+          (name "Description") "Power flag: declares an externally-sourced net as driven")
+        (field
+          (name "Footprint"))
+        (field
+          (name "Datasheet") "~")
+        (field
+          (name "SKiDL Tag") "FLG4")
+        (field
+          (name "SKiDL Line") "blocks/power.py:96"))
+      (libsource
+        (lib "NO_LIB")
+        (part "PWR_FLAG"))
+      (sheetpath
+        (names "/")
+        (tstamps "/"))
+      (component_classes)
+      (tstamps "2ace4692-d5fe-507e-b324-61df8d1faad6"))
+    (comp
+      (ref "#FLG5")
+      (value "+5VA")
+      (description "Power flag: declares an externally-sourced net as driven")
+      (footprint "")
+      (fields
+        (field
+          (name "MPN") "n/a")
+        (field
+          (name "KiCad_Lib") "power:PWR_FLAG")
+        (field
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "power.kicad_sym:9842")
+        (field
+          (name "Symbol_Class") "power")
+        (field
+          (name "Description") "Power flag: declares an externally-sourced net as driven")
+        (field
+          (name "Footprint"))
+        (field
+          (name "Datasheet") "~")
+        (field
+          (name "SKiDL Tag") "FLG5")
+        (field
+          (name "SKiDL Line") "blocks/power.py:106"))
+      (libsource
+        (lib "NO_LIB")
+        (part "PWR_FLAG"))
+      (sheetpath
+        (names "/")
+        (tstamps "/"))
+      (component_classes)
+      (tstamps "c359ac1b-3512-506b-aefd-bdd79a6c5a94"))
+    (comp
+      (ref "#FLG6")
+      (value "AGND")
+      (description "Power flag: declares an externally-sourced net as driven")
+      (footprint "")
+      (fields
+        (field
+          (name "MPN") "n/a")
+        (field
+          (name "KiCad_Lib") "power:PWR_FLAG")
+        (field
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "power.kicad_sym:9842")
+        (field
+          (name "Symbol_Class") "power")
+        (field
+          (name "Description") "Power flag: declares an externally-sourced net as driven")
+        (field
+          (name "Footprint"))
+        (field
+          (name "Datasheet") "~")
+        (field
+          (name "SKiDL Tag") "FLG6")
+        (field
+          (name "SKiDL Line") "blocks/power.py:116"))
+      (libsource
+        (lib "NO_LIB")
+        (part "PWR_FLAG"))
+      (sheetpath
+        (names "/")
+        (tstamps "/"))
+      (component_classes)
+      (tstamps "1fcf3084-1140-5074-9295-9450e23aaabe"))
+    (comp
+      (ref "#FLG7")
+      (value "VBUS")
+      (description "Power flag: declares an externally-sourced net as driven")
+      (footprint "")
+      (fields
+        (field
+          (name "MPN") "n/a")
+        (field
+          (name "KiCad_Lib") "power:PWR_FLAG")
+        (field
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "power.kicad_sym:9842")
+        (field
+          (name "Symbol_Class") "power")
+        (field
+          (name "Description") "Power flag: declares an externally-sourced net as driven")
+        (field
+          (name "Footprint"))
+        (field
+          (name "Datasheet") "~")
+        (field
+          (name "SKiDL Tag") "FLG7")
+        (field
+          (name "SKiDL Line") "blocks/mcu.py:162"))
+      (libsource
+        (lib "NO_LIB")
+        (part "PWR_FLAG"))
+      (sheetpath
+        (names "/")
+        (tstamps "/"))
+      (component_classes)
+      (tstamps "c5732ed1-cf7a-55ed-8f5d-b322bd8760a7"))
+    (comp
+      (ref "#FLG8")
+      (value "VDDA")
+      (description "Power flag: declares an externally-sourced net as driven")
+      (footprint "")
+      (fields
+        (field
+          (name "MPN") "n/a")
+        (field
+          (name "KiCad_Lib") "power:PWR_FLAG")
+        (field
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "power.kicad_sym:9842")
+        (field
+          (name "Symbol_Class") "power")
+        (field
+          (name "Description") "Power flag: declares an externally-sourced net as driven")
+        (field
+          (name "Footprint"))
+        (field
+          (name "Datasheet") "~")
+        (field
+          (name "SKiDL Tag") "FLG8")
+        (field
+          (name "SKiDL Line") "blocks/mcu.py:169"))
+      (libsource
+        (lib "NO_LIB")
+        (part "PWR_FLAG"))
+      (sheetpath
+        (names "/")
+        (tstamps "/"))
+      (component_classes)
+      (tstamps "1db1b3fa-757e-56a8-a86c-957aa5a07fb5"))
     (comp
       (ref "C1")
       (value "10uF")
@@ -3568,6 +3840,10 @@
       (name "+15VA")
       (class "Default")
       (node
+        (ref "#FLG1")
+        (pin "1")
+        (pintype "POWER-OUT"))
+      (node
         (ref "C11")
         (pin "1")
         (pintype "PASSIVE"))
@@ -3720,6 +3996,10 @@
       (name "+5VA")
       (class "Default")
       (node
+        (ref "#FLG5")
+        (pin "1")
+        (pintype "POWER-OUT"))
+      (node
         (ref "C10")
         (pin "1")
         (pintype "PASSIVE"))
@@ -3760,6 +4040,10 @@
       (name "+5V_RAW")
       (class "Default")
       (node
+        (ref "#FLG3")
+        (pin "1")
+        (pintype "POWER-OUT"))
+      (node
         (ref "C1")
         (pin "1")
         (pintype "PASSIVE"))
@@ -3783,6 +4067,10 @@
       (code 5)
       (name "-15VA")
       (class "Default")
+      (node
+        (ref "#FLG2")
+        (pin "1")
+        (pintype "POWER-OUT"))
       (node
         (ref "C12")
         (pin "1")
@@ -3943,6 +4231,10 @@
       (code 12)
       (name "AGND")
       (class "Default")
+      (node
+        (ref "#FLG6")
+        (pin "1")
+        (pintype "POWER-OUT"))
       (node
         (ref "C10")
         (pin "2")
@@ -4147,6 +4439,10 @@
       (code 18)
       (name "DGND")
       (class "Default")
+      (node
+        (ref "#FLG4")
+        (pin "1")
+        (pintype "POWER-OUT"))
       (node
         (ref "C1")
         (pin "2")
@@ -4832,6 +5128,10 @@
       (name "VBUS")
       (class "Default")
       (node
+        (ref "#FLG7")
+        (pin "1")
+        (pintype "POWER-OUT"))
+      (node
         (ref "C42")
         (pin "1")
         (pintype "PASSIVE"))
@@ -4891,6 +5191,10 @@
       (code 58)
       (name "VDDA")
       (class "Default")
+      (node
+        (ref "#FLG8")
+        (pin "1")
+        (pintype "POWER-OUT"))
       (node
         (ref "C38")
         (pin "1")
