@@ -75,9 +75,31 @@ def create_nets():
 
 
 def nc(*pins):
-    """Mark one or more pins as intentional no-connects (suppresses ERC)."""
+    """Mark one or more pins as intentional no-connects (suppresses ERC).
+
+    Accepts single pins and lists of pins, so ``nc(part["VSS"])`` works even
+    when a name maps to several pads.
+    """
     for p in pins:
-        p += p.circuit.NC
+        if isinstance(p, (list, tuple, set)):
+            nc(*p)
+        else:
+            p += p.circuit.NC
+
+
+def nc_named(part, *names):
+    """No-connect every pin of `part` addressed by the given function names.
+
+    Used to state, explicitly and greppably, that a pad is deliberately
+    unconnected. Nothing may be left out silently:
+    ``validation/footprint_check.py`` errors on any pad that is neither netted
+    nor listed here.
+    """
+    for name in names:
+        pin = part[name]
+        if pin is None:
+            raise KeyError(f"{part.ref}: no pin named {name!r} to no-connect")
+        nc(pin)
 
 
 # The canonical net manifest (KiCad net names), grouped, for validation/reports.

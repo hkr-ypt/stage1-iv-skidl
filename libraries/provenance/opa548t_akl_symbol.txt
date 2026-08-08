@@ -1,0 +1,169 @@
+SOURCE      : Alternate KiCad Library (AKL) - community KiCad symbol library
+REPOSITORY  : https://github.com/DawidCislo/Alternate-KiCad-Library
+COMMIT      : cf93181d5934eca1b0560f66895f1b06958700f7
+COMMIT DATE : 2026-05-24T19:46:37+02:00
+FILE        : symbols/Amplifier_Operational_AKL.kicad_sym
+FILE SHA256 : 2dd2fc02838698516787cc50a56a46689d8f387099a51a20cae628eb70431a48
+SYMBOL      : OPA548T, defined at line 169890; pins at lines 169965-170090
+IMPORTANT   : This is NOT the manufacturer data sheet. The TI OPA548 data
+              sheet (SBOS070) could not be retrieved in this environment
+              (www.ti.com and every datasheet mirror are refused by the
+              network egress policy - see docs/identifier_resolution.md).
+              These pin numbers are therefore READ from a published,
+              version-pinned third-party KiCad library and MUST be
+              re-verified against SBOS070 before fabrication.
+---------------- BEGIN VERBATIM EXCERPT ----------------
+	(symbol "OPA548T"
+		(pin_names
+			(offset 0.2)
+		)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(property "Reference" "U"
+			(at 2.54 7.62 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "OPA548T"
+			(at 2.54 5.08 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" "Package_TO_SOT_THT_AKL:TO-220-7_P2.54x3.7mm_StaggerOdd_Lead3.8mm_Vertical"
+        ... (graphics elided) ...
+		(symbol "OPA548T_1_1"
+			(pin input line
+				(at -7.62 -2.54 0)
+				(length 2.54)
+				(name "+"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+				(number "1"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
+			(pin input line
+				(at -7.62 2.54 0)
+				(length 2.54)
+				(name "-"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+				(number "2"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
+			(pin passive line
+				(at 2.54 -5.08 90)
+				(length 3.81)
+				(name "CS"
+					(effects
+						(font
+							(size 0.8 0.8)
+						)
+					)
+				)
+				(number "3"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
+			(pin power_in line
+				(at -2.54 -7.62 90)
+				(length 3.81)
+				(name "V-"
+					(effects
+						(font
+							(size 1 1)
+						)
+					)
+				)
+				(number "4"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
+			(pin power_in line
+				(at -2.54 7.62 270)
+				(length 3.81)
+				(name "V+"
+					(effects
+						(font
+							(size 1 1)
+						)
+					)
+				)
+				(number "5"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
+			(pin output line
+				(at 7.62 0 180)
+				(length 2.54)
+				(name "~"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+				(number "6"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
+			(pin passive line
+				(at 0 6.35 270)
+				(length 3.81)
+				(name "E/S"
+					(effects
+						(font
+							(size 1 1)
+						)
+					)
+				)
+				(number "7"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+----------------- END VERBATIM EXCERPT -----------------

@@ -36,6 +36,7 @@ from blocks.protection import create_protection_block
 
 from validation.erc import run_erc
 from validation.assertions import run_assertions
+from validation.footprint_check import run_footprint_check, FootprintCheckError
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -88,7 +89,9 @@ SHEET_OF = {
                         "C23", "TP5", "TP6", "TP7"],
     "7 ADC": ["U8", "Y1", "C26", "C27", "C28", "C29", "C30", "R19", "R20", "R15",
               "R16", "R17", "R18", "C24", "C25", "TP8"],
-    "8 Protection/DUT": ["F1", "R30", "D5", "J4"],
+    # J4..J7 are the four separate single-pin DUT banana jacks
+    # (FORCE+, SENSE+, SENSE-, FORCE-) — see blocks/protection.py.
+    "8 Protection/DUT": ["F1", "R30", "D5", "J4", "J5", "J6", "J7"],
 }
 
 
@@ -107,9 +110,9 @@ def write_component_manifest(circuit):
         lib = part.fields.get("KiCad_Lib", "")
         pv = part.fields.get("Pins_Verified", "")
         status = {
-            "STD": "OK",
+            "RESOLVED": "OK — pin numbers read from " + (
+                part.fields.get("Symbol_Source", "the symbol library")),
             "VERIFY-DATASHEET": "VERIFY pin#s @ datasheet",
-            "PLACEHOLDER-REMAP": "REMAP pin#s @ official symbol",
         }.get(pv, pv)
         rows.append((part.ref, str(part.value), mpn, lib,
                      part.footprint or "", sheet_for(part.ref), status))
@@ -172,6 +175,17 @@ def main():
 
     n, parts, circuit = build()
 
+    # Structural guard FIRST: every symbol and footprint identifier must
+    # resolve against the installed KiCad libraries, every declared pin must
+    # correspond to a real pad, and every pad must be netted or explicitly
+    # no-connect. Emitting a netlist that cannot be laid out is worse than
+    # emitting nothing, so this aborts the build.
+    try:
+        run_footprint_check(circuit)
+    except FootprintCheckError as exc:
+        print(f"\nSTRUCTURAL CHECK: FAIL\n{exc}", file=sys.stderr)
+        return 1
+
     if schematic_only:
         write_schematic(circuit)
         return 0
@@ -200,6 +214,7 @@ def main():
     print(f"  Schematic .......... {len(sch_files)} sheets "
           f"({os.path.basename(sch_files[0])} + 8 child sheets)")
     print("  ERC ................ PASS (see warnings above for reserved pins)")
+    print("  Structural check ... PASS (identifiers, pads, provenance)")
     print("  Assertions ......... PASS")
     print("\nDesign build complete.")
     return 0

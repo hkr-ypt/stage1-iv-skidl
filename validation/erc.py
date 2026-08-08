@@ -69,7 +69,8 @@ def run_erc(circuit):
           f"{dup_refs if dup_refs else 'none'}")
 
     print("\n--- Pin-number provenance (see custom_symbols.py policy) ---")
-    for status in ("STD", "VERIFY-DATASHEET", "PLACEHOLDER-REMAP", "UNKNOWN"):
+    for status in ("RESOLVED", "VERIFY-DATASHEET", "PLACEHOLDER-REMAP",
+                   "STD", "UNKNOWN"):
         if status in provenance:
             print(f"  [{status}] {', '.join(provenance[status])}")
 
