@@ -45,16 +45,24 @@ def _natural(ref):
     return (ref[0] if ref else "", int(num) if num else 0)
 
 
+NC_NET_NAME = "__NOCONNECT"
+
+
+def _real_nets(pin):
+    """Nets a pin sits on, excluding SKiDL's no-connect net."""
+    return [n for n in pin.get_nets()
+            if type(n).__name__ != "NCNet" and getattr(n, "name", "") != NC_NET_NAME]
+
+
 def _pin_net_name(pin):
     """Return the net name a pin sits on, or None when it carries no net."""
-    nets = [n for n in pin.get_nets()]
+    nets = _real_nets(pin)
     if not nets:
         return None
     net = nets[0]
     if getattr(net, "is_implicit", lambda: False)() and len(net.get_pins()) < 2:
         return None
-    name = getattr(net, "name", None)
-    return name
+    return getattr(net, "name", None)
 
 
 _NAME_STRIP_RE = re.compile(r"[_{}~\s]")
@@ -71,13 +79,17 @@ def _norm_pin_name(name):
 
 
 def _is_nc(pin):
+    """True when the pin is an *explicit* no-connect.
+
+    SKiDL puts pins attached with ``pin += circuit.NC`` onto an ``NCNet``
+    named ``__NOCONNECT``; a pin whose electrical type is ``no_connect``
+    counts too. Either way the pad is deliberately unconnected, which is a
+    different thing from a pad that was silently left floating.
+    """
     from skidl import Pin
     for net in pin.get_nets():
-        if getattr(net, "netclass", None) == "NC":
+        if type(net).__name__ == "NCNet" or getattr(net, "name", "") == NC_NET_NAME:
             return True
-    circuit = getattr(pin, "circuit", None)
-    if circuit is not None and pin.is_attached(circuit.NC):
-        return True
     return pin.func == Pin.types.NOCONNECT
 
 
@@ -122,7 +134,10 @@ def audit(libs, circuit):
         matched = sorted(declared & pad_names) if fp_ok else []
 
         # A pad is "netted" when a declared pin with that number carries a real
-        # net that is not the no-connect net.
+        # net. A pad is "no-connect" when its pin is explicitly NC'd. Anything
+        # else is an *unaccounted* pad: either the symbol declares no pin for
+        # it at all, or the pin exists and was left silently floating. Only the
+        # unaccounted ones are defects.
         netted = set()
         nc_pins = set()
         for p in part.pins:
@@ -132,7 +147,8 @@ def audit(libs, circuit):
                 continue
             if _pin_net_name(p):
                 netted.add(num)
-        unnetted_pads = sorted(pad_names - netted) if fp_ok else []
+        nc_pads = sorted(pad_names & nc_pins) if fp_ok else []
+        unnetted_pads = sorted(pad_names - netted - nc_pins) if fp_ok else []
 
         # Does the SKiDL numbering agree with the official symbol's?
         numbering = "n/a"
@@ -151,8 +167,14 @@ def audit(libs, circuit):
                 num = str(p.num)
                 if num not in sym_pin_map:
                     continue
-                ours, theirs = _norm_pin_name(p.name), _norm_pin_name(sym_pin_map[num])
-                if ours != theirs:
+                # A design-facing rename is fine as long as the symbol's own
+                # name is still reachable as an alias (see the alias layer in
+                # libraries/custom_symbols.py). Only a pin that no longer
+                # answers to its official name at all is a real divergence.
+                theirs = _norm_pin_name(sym_pin_map[num])
+                ours = {_norm_pin_name(p.name)}
+                ours |= {_norm_pin_name(a) for a in getattr(p, "aliases", ())}
+                if theirs not in ours:
                     name_conflicts.append(f"{num}:{p.name}!={sym_pin_map[num]}")
 
         rows.append({
@@ -175,6 +197,7 @@ def audit(libs, circuit):
             "extra": extra,
             "matched_count": len(matched),
             "nc_pins": sorted(nc_pins),
+            "nc_pads": nc_pads,
             "unnetted_pads": unnetted_pads,
             "symbol_numbering": numbering,
             "pin_name_conflicts": name_conflicts,
@@ -231,8 +254,11 @@ def to_markdown(rows, libs):
     A(f"| **unresolved footprints** | **{len(unresolved_fp)}** |")
     A(f"| parts with `Pins_Verified == PLACEHOLDER-REMAP` | {len(placeholder)} |")
     A(f"| parts declaring a pin with no matching pad | {len(with_missing)} |")
-    A(f"| parts with at least one unnetted pad | {len(with_unnetted)} |")
-    A(f"| total unnetted pads | {sum(len(r['unnetted_pads']) for r in rows)} |")
+    A(f"| parts with at least one unaccounted pad | {len(with_unnetted)} |")
+    A(f"| **total unaccounted pads** (no net and no explicit no-connect) | "
+      f"**{sum(len(r['unnetted_pads']) for r in rows)}** |")
+    A(f"| pads explicitly no-connected (declared, not silently omitted) | "
+      f"{sum(len(r['nc_pads']) for r in rows)} |")
     A(f"| parts whose pin *names* disagree with the official symbol at the "
       f"same pin number | {len(with_name_conflicts)} |")
     A("")
@@ -247,8 +273,8 @@ def to_markdown(rows, libs):
 
     if with_name_conflicts:
         A("**Pin number -> name mismatches against the official symbol** "
-          "(same pin numbers, different function on that number — a silent "
-          "mis-wiring):")
+          "(the pin does not answer to the official symbol's name for that "
+          "number, by name or alias — a silent mis-wiring):")
         A("")
         for r in with_name_conflicts:
             A(f"  * `{r['ref']}` vs `{r['kicad_lib']}`: "
@@ -262,15 +288,17 @@ def to_markdown(rows, libs):
       "library nickname itself does not exist.")
     A("")
     A("| Ref | Value | Pins_Verified | KiCad_Lib | sym | footprint | fp | "
-      "pins | pads | pins with no pad | unnetted pads | vs official symbol |")
-    A("|---|---|---|---|---|---|---|---|---|---|---|---|")
+      "pins | pads | pins with no pad | no-connect pads | unaccounted pads | "
+      "vs official symbol |")
+    A("|---|---|---|---|---|---|---|---|---|---|---|---|---|")
     for r in rows:
         sym_state = ("OK" if r["sym_ok"]
                      else ("NO SYM" if r["sym_lib_ok"] else "NO LIB"))
         fp_state = ("OK" if r["fp_ok"]
                     else ("NO FP" if r["fp_lib_ok"] else "NO LIB"))
         A("| {ref} | {value} | {pv} | `{lib}` | {sym} | `{fp}` | {fps} | "
-          "{npins} | {npads} | {missing} | {unnetted} | {numbering} |".format(
+          "{npins} | {npads} | {missing} | {ncpads} | {unnetted} | "
+          "{numbering} |".format(
               ref=r["ref"], value=r["value"] or "—",
               pv=r["pins_verified"] or "—",
               lib=r["kicad_lib"] or "—", sym=sym_state,
@@ -278,6 +306,7 @@ def to_markdown(rows, libs):
               npins=len(r["declared_pins"]),
               npads=(r["pad_total"] if r["fp_ok"] else "?"),
               missing=_fmt_set(r["missing"]),
+              ncpads=_fmt_set(r["nc_pads"]),
               unnetted=_fmt_set(r["unnetted_pads"]),
               numbering=r["symbol_numbering"]))
     A("")

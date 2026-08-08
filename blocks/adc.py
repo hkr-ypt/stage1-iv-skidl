@@ -16,6 +16,7 @@ Uses SPI2 (separate from the DAC's SPI1). PDWN/SYNC tied high (always on).
 
 from libraries.custom_symbols import ADS1256, Crystal, R, C, C_POL, TestPoint
 from skidl import Net
+from .nets import nc_named
 
 
 def create_adc_block(n):
@@ -50,8 +51,11 @@ def create_adc_block(n):
     n.VREF_2V5 += U8["VREFP"], TP8[1]
     n.AGND += U8["VREFN"]
 
-    # ---- CLKIN crystal (XTAL1==CLKIN on the real part) ----
-    clk1 = Net("ADC_XTAL1"); clk1 += U8["XTAL1"], U8["CLKIN"], Y1[1], C26[1]
+    # ---- CLKIN crystal ----
+    # On the real ADS1256 the oscillator input and the external-clock input are
+    # ONE pad, named XTAL1/CLKIN (pin 19, SBAS288K Terminal Functions p.5).
+    # The previous model declared XTAL1 and CLKIN as two separate pins.
+    clk1 = Net("ADC_XTAL1"); clk1 += U8["XTAL1/CLKIN"], Y1[1], C26[1]
     clk2 = Net("ADC_XTAL2"); clk2 += U8["XTAL2"], Y1[2], C27[1]
     n.AGND += C26[2], C27[2]
 
@@ -77,8 +81,18 @@ def create_adc_block(n):
     n.DRDY += U8["DRDY"], R19[2]
     n.RESET_ADC += U8["RESET"], R20[2]
 
-    # ---- PDWN / SYNC tied high (always powered, not used in Stage 1) ----
-    n.P3V3D += U8["PDWN"], U8["SYNC"]
+    # ---- SYNC/PDWN tied high (always converting, never powered down) ----
+    # Also one pad on the real part (pin 14, SYNC/PDWN), not two.
+    n.P3V3D += U8["SYNC/PDWN"]
+
+    # ---- unused ADC pins: explicit no-connects ----
+    # The SSOP-28 has 28 pads; 20 are used above. Stage 1 digitises two
+    # differential channels (AIN0/1 and AIN2/3) and uses no general-purpose
+    # digital I/O, so the remaining 8 pads are declared unconnected here rather
+    # than being left out of the symbol.
+    nc_named(U8,
+             "AIN4", "AIN5", "AIN6", "AIN7",   # spare analog inputs
+             "D0/CLKOUT", "D1", "D2", "D3")    # general-purpose digital I/O
 
     return {"U8": U8, "Y1": Y1, "C26": C26, "C27": C27, "C28": C28, "C29": C29,
             "C30": C30, "R19": R19, "R20": R20, "R15": R15, "R16": R16,
