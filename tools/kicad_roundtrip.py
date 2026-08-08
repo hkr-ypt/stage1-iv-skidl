@@ -56,6 +56,23 @@ def _first(node, head):
     return kids[0] if kids else None
 
 
+def parse_kicad_sheets(path):
+    """Return {ref: sheet_name} from a KiCad `export` netlist."""
+    with open(path, encoding="utf-8") as fh:
+        tree = parse_sexp(fh.read())
+    export = _first(tree, "export")
+    out = {}
+    for comp in _kids(_first(export, "components") or [], "comp"):
+        ref_node = _first(comp, "ref")
+        sp = _first(comp, "sheetpath")
+        if ref_node is None or sp is None:
+            continue
+        names = _first(sp, "names")
+        if names is not None and len(names) > 1:
+            out[str(ref_node[1])] = str(names[1])
+    return out
+
+
 def parse_kicad_netlist(path):
     """Return {(ref, pin_number): net_name} from a KiCad `export` netlist."""
     with open(path, encoding="utf-8") as fh:
@@ -178,6 +195,40 @@ def run(sch, net, keep=False):
         errors.extend(f"net name differs: netlist {a!r} vs schematic {b!r}"
                       for a, b in renamed)
 
+    # --- sheet assignment: the schematic is the single source of truth ------
+    # stage1_iv.net is intentionally FLAT (every sheetpath is "/"): SKiDL emits
+    # a flat netlist and this project does not drive the PCB from it. The
+    # schematic carries the hierarchy, and the PCB must be updated with
+    # "Update PCB from Schematic". This check verifies KiCad's reading of that
+    # hierarchy matches the block each part was built in, so the two artifacts
+    # cannot silently diverge. See docs/LIBRARY_DEPENDENCIES.md.
+    kicad_sheets = parse_kicad_sheets(exported)
+    flat = parse_kicad_sheets(net)
+    non_flat = sorted(r for r, s_ in flat.items() if s_ != "/")
+    if non_flat:
+        errors.append(
+            "stage1_iv.net is documented as flat but has hierarchical "
+            f"sheetpaths for {non_flat[:10]}; update Step 7's decision in "
+            "docs/LIBRARY_DEPENDENCIES.md or revert the change")
+
+    sys.path.insert(0, REPO_ROOT)
+    import main as project_main
+    _n0, _p0, circuit0 = project_main.build()
+    expected_sheet = {p.ref: getattr(p, "skidl_block", None) for p in circuit0.parts}
+    mismatched = []
+    for ref, sheet in sorted(kicad_sheets.items()):
+        want = expected_sheet.get(ref)
+        if want is None:
+            continue
+        if sheet.strip("/") != want:
+            mismatched.append(f"{ref}: schematic sheet {sheet!r} != block {want!r}")
+    if mismatched:
+        errors.extend(mismatched[:10])
+    print(f"sheet assignment         : {len(kicad_sheets)} components across "
+          f"{len(set(kicad_sheets.values()))} sheets, "
+          f"{'all match' if not mismatched else str(len(mismatched)) + ' MISMATCH'}"
+          f" the design's blocks")
+
     # ERC categories this project owns.
     try:
         libs = KicadLibraries()
@@ -185,9 +236,7 @@ def run(sch, net, keep=False):
         print(str(exc), file=sys.stderr)
         return 2
 
-    sys.path.insert(0, REPO_ROOT)
-    import main as project_main
-    _n, _parts, circuit = project_main.build()
+    circuit = circuit0
     sym_missing, fp_missing = [], []
     for part in circuit.parts:
         lib_id = (part.fields.get("KiCad_Lib") or "").strip()
@@ -200,6 +249,44 @@ def run(sch, net, keep=False):
         fp_id = (part.footprint or "").strip()
         if ":" not in fp_id or libs.get_footprint(fp_id) is None:
             fp_missing.append(f"{part.ref} ({fp_id})")
+
+    # --- lib_symbol_issues / lib_symbol_mismatch ----------------------------
+    # KiCad compares each symbol cached in a sheet's (lib_symbols) against the
+    # library its lib_id names: a missing library is lib_symbol_issues, a body
+    # that differs is lib_symbol_mismatch. Every instance in this design names
+    # the PROJECT library, which is generated from the same SymbolDef objects
+    # the sheets embed, so both counts are structurally zero.
+    import glob
+    lib_issues, lib_mismatch, project_ids = [], [], set()
+    sch_dir = os.path.dirname(os.path.abspath(sch)) or "."
+    for path in sorted(glob.glob(os.path.join(sch_dir, "*.kicad_sch"))):
+        with open(path, encoding="utf-8") as fh:
+            tree = parse_sexp(fh.read())
+        sheet = _first(tree, "kicad_sch")
+        cached = {str(n[1]): n for n in _kids(_first(sheet, "lib_symbols") or [],
+                                              "symbol")}
+        for inst in _kids(sheet or [], "symbol"):
+            lid_node = _first(inst, "lib_id")
+            if lid_node is None:
+                continue
+            lid = str(lid_node[1])
+            nick = lid.split(":", 1)[0]
+            if nick == "stage1_iv":
+                project_ids.add(lid)
+                if lid not in cached:
+                    lib_issues.append(f"{lid} (not in this sheet's cache)")
+                continue
+            if libs.get_symbol(lid) is None:
+                lib_issues.append(f"{lid} ({os.path.basename(path)})")
+            else:
+                lib_mismatch.append(f"{lid} ({os.path.basename(path)})")
+
+    print(f"ERC lib_symbol_issues                  : {len(set(lib_issues))}"
+          + (f"  {sorted(set(lib_issues))[:5]}" if lib_issues else ""))
+    print(f"ERC lib_symbol_mismatch (upper bound)  : {len(set(lib_mismatch))}"
+          + (f"  {sorted(set(lib_mismatch))[:5]}" if lib_mismatch else ""))
+    print(f"    ({len(project_ids)} distinct lib_ids, all in the project library)")
+    errors.extend(f"lib_symbol_issue: {x}" for x in sorted(set(lib_issues)))
 
     print(f'ERC "Symbol not found in symbol library": {len(sym_missing)}'
           + (f"  {sym_missing}" if sym_missing else ""))

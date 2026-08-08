@@ -257,9 +257,29 @@ class SymbolDef:
 
 
 def lib_id_for(part):
+    """The lib_id every schematic instance points at: the PROJECT library.
+
+    This used to return the part's ``KiCad_Lib`` field — the official upstream
+    identifier, e.g. ``Device:R``. That made KiCad's ``lib_symbol_issues`` and
+    ``lib_symbol_mismatch`` fire by construction: the schematic claimed each
+    symbol was an instance of the official one while the body cached in
+    ``(lib_symbols)`` was a synthesized rectangle sharing nothing with it but
+    the pin names. A cache that has drifted from its library is exactly what
+    that rule exists to detect, and it was right.
+
+    Now every instance names ``stage1_iv:<SymbolName>``, and
+    ``libraries/stage1_iv.kicad_sym`` is generated from these same
+    :class:`SymbolDef` objects — so the cache and the library are the same
+    bytes and cannot disagree. The upstream identifier is preserved as the
+    ``KiCad_Lib`` property on every instance, still verified against the
+    installed libraries by validation/footprint_check.py.
+    """
+    project_symbol = (part.fields.get("Project_Symbol") or "").strip()
+    if project_symbol:
+        return project_symbol
     lib = (part.fields.get("KiCad_Lib") or "").strip()
     if lib:
-        return lib
+        return f"{PROJECT}:{lib.split(':', 1)[-1]}"
     mpn = (part.fields.get("MPN") or "").strip()
     if mpn and mpn not in ("generic", "n/a"):
         return f"{PROJECT}:{mpn}"

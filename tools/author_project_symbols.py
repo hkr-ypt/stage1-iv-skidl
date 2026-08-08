@@ -3,33 +3,46 @@
 author_project_symbols.py — generate ``libraries/stage1_iv.kicad_sym``.
 =======================================================================
 
-Two parts in this design have **no symbol in the official KiCad libraries**:
+The project symbol library is the **single source of truth for every symbol the
+schematic instantiates**. Two kinds of symbol live in it:
 
-    ADS1256   (Analog_ADC has ADS1251 only)
-    OPA548T   (no OPA548 of any kind exists upstream)
+1. **Datasheet-authored** — parts with no symbol in the official KiCad
+   libraries at all::
 
-Rather than invent pin numbers, this script *parses* them out of committed,
-verbatim provenance excerpts and emits a real KiCad symbol library from the
-parse.  No pin number in ``libraries/stage1_iv.kicad_sym`` is typed by hand:
-each one is read from a source file under ``libraries/provenance/`` and can be
-re-derived by re-running this script.
+       ADS1256   Analog_ADC has ADS1251 only
+       OPA548T   no OPA548 of any kind exists upstream
 
-    ADS1256   <- libraries/provenance/ads1256_sbas288k_terminal_functions.txt
-                 verbatim ``pdftotext -layout`` extract of the "Terminal
-                 Functions" table on page 5 of the Texas Instruments ADS1255/
-                 ADS1256 data sheet, SBAS288K (June 2003, rev. Sept 2013).
-                 The "TERMINAL NO. / ADS1256" column is the pin number.
+   Their pins are *parsed* out of committed verbatim provenance excerpts under
+   ``libraries/provenance/``; no pin number is typed by hand.
 
-    OPA548T   <- libraries/provenance/opa548t_akl_symbol.txt
-                 verbatim excerpt of the OPA548T symbol in the Alternate KiCad
-                 Library.  See the header of that file: the TI OPA548 data
-                 sheet itself is unreachable from this environment, so these
-                 numbers carry a weaker provenance and the part is flagged
-                 ``VERIFY-DATASHEET`` rather than ``RESOLVED``.
+       ADS1256 <- ads1256_sbas288k_terminal_functions.txt
+                  verbatim ``pdftotext -layout`` extract of the "Terminal
+                  Functions" table on page 5 of the TI ADS1255/ADS1256 data
+                  sheet, SBAS288K (June 2003, rev. Sept 2013). The
+                  "TERMINAL NO. / ADS1256" column is the pin number.
+       OPA548T <- opa548t_akl_symbol.txt
+                  verbatim excerpt of the OPA548T symbol in the Alternate
+                  KiCad Library. The TI data sheet is unreachable from this
+                  environment, so these numbers carry weaker provenance and
+                  the part is flagged ``VERIFY-DATASHEET``.
+
+2. **Upstream-derived** — every other part. Pin numbers, names and electrical
+   types are read from the installed KiCad libraries by
+   ``tools/resolve_kicad_libs.py`` at generation time, then frozen here.
+
+WHY THE WHOLE LIBRARY IS GENERATED
+----------------------------------
+The schematic embeds a copy of each symbol in its ``(lib_symbols)`` block.
+KiCad's ``lib_symbol_mismatch`` rule compares that cache against the library the
+``lib_id`` names. Generating both from the *same* :class:`SymbolDef` objects
+makes them the same bytes, so the rule cannot fire. It also means the design
+still builds on a machine with no KiCad: ``libraries/custom_symbols.py`` falls
+back to this committed library for pin data, and the build reports which source
+it used.
 
 Usage::
 
-    python3 tools/author_project_symbols.py            # write the library
+    python3 tools/author_project_symbols.py            # regenerate
     python3 tools/author_project_symbols.py --check    # verify it is current
 """
 
@@ -57,8 +70,6 @@ OPA_SRC = os.path.join(PROV_DIR, "opa548t_akl_symbol.txt")
 #  parse: ADS1256 "Terminal Functions" table (TI SBAS288K, page 5)
 # =====================================================================
 
-# NAME  <ADS1255 no.>  <ADS1256 no.>  <analog/digital>  <description>
-# The ADS1255 column is "—" for pins that exist on the ADS1256 only.
 _TERM_RE = re.compile(
     r"^(?P<name>[A-Z0-9/]+)\s+"
     r"(?P<n1255>\d+|—|-)\s+"
@@ -67,7 +78,6 @@ _TERM_RE = re.compile(
     r"(?P<desc>\S.*)$"
 )
 
-# Electrical type per the table's ANALOG/DIGITAL INPUT/OUTPUT column.
 _ADS_ETYPE = {
     "Analog power supply": "power_in",
     "Analog ground": "power_in",
@@ -102,11 +112,10 @@ def parse_ads1256(path=ADS_SRC):
             m = _TERM_RE.match(line.strip())
             if not m:
                 continue
-            name = m.group("name")
-            number = m.group("n1256")
-            etype = _ads_etype(name, m.group("io"), m.group("desc").strip())
             pins.append({
-                "number": number, "name": name, "etype": etype,
+                "number": m.group("n1256"), "name": m.group("name"),
+                "etype": _ads_etype(m.group("name"), m.group("io"),
+                                    m.group("desc").strip()),
                 "description": m.group("desc").strip(),
                 "source": f"{os.path.relpath(path, REPO_ROOT)}:{lineno}",
             })
@@ -158,130 +167,96 @@ def parse_opa548t(path=OPA_SRC):
 
 
 # =====================================================================
-#  emit: a real KiCad 9 symbol library
+#  emit: the project symbol library
 # =====================================================================
 
-GRID = 2.54
-
-
-def _rect_symbol(name, pins, properties, description, keywords, datasheet):
-    """Lay pins out down the left and right edges of a rectangle body."""
-    n = len(pins)
-    left = pins[: (n + 1) // 2]
-    right = pins[(n + 1) // 2:]
-    rows = max(len(left), len(right))
-    half_h = ((rows + 1) * GRID) / 2.0
-    half_w = 5 * GRID
-
-    out = []
-    A = out.append
-    A(f'\t(symbol "{name}"')
-    A("\t\t(pin_names\n\t\t\t(offset 1.016)\n\t\t)")
-    A("\t\t(exclude_from_sim no)\n\t\t(in_bom yes)\n\t\t(on_board yes)")
-    props = [("Reference", properties["Reference"], half_h + GRID),
-             ("Value", name, half_h + GRID * 2),
-             ("Footprint", properties.get("Footprint", ""), 0),
-             ("Datasheet", datasheet, 0),
-             ("Description", description, 0),
-             ("ki_keywords", keywords, 0)]
-    for idx, (key, value, y) in enumerate(props):
-        hide = "\n\t\t\t\t\t(hide yes)" if idx >= 2 else ""
-        A(f'\t\t(property "{key}" "{_esc(value)}"')
-        A(f"\t\t\t(at 0 {-y if idx == 0 else y:g} 0)")
-        A("\t\t\t(effects\n\t\t\t\t(font\n\t\t\t\t\t(size 1.27 1.27)\n\t\t\t\t)"
-          f"{hide}\n\t\t\t)")
-        A("\t\t)")
-
-    A(f'\t\t(symbol "{name}_0_1")')
-    out[-1] = f'\t\t(symbol "{name}_0_1"'
-    A("\t\t\t(rectangle")
-    A(f"\t\t\t\t(start {-half_w:g} {half_h:g})")
-    A(f"\t\t\t\t(end {half_w:g} {-half_h:g})")
-    A("\t\t\t\t(stroke\n\t\t\t\t\t(width 0.254)\n\t\t\t\t\t(type default)\n\t\t\t\t)")
-    A("\t\t\t\t(fill\n\t\t\t\t\t(type background)\n\t\t\t\t)")
-    A("\t\t\t)")
-    A("\t\t)")
-
-    A(f'\t\t(symbol "{name}_1_1"')
-    for side, group in (("left", left), ("right", right)):
-        for i, p in enumerate(group):
-            y = half_h - GRID * (i + 1)
-            if side == "left":
-                x, rot = -(half_w + GRID), 0
-            else:
-                x, rot = (half_w + GRID), 180
-            A(f"\t\t\t(pin {p['etype']} line")
-            A(f"\t\t\t\t(at {x:g} {y:g} {rot})")
-            A("\t\t\t\t(length 2.54)")
-            A(f'\t\t\t\t(name "{_esc(p["name"])}"')
-            A("\t\t\t\t\t(effects\n\t\t\t\t\t\t(font\n\t\t\t\t\t\t\t"
-              "(size 1.27 1.27)\n\t\t\t\t\t\t)\n\t\t\t\t\t)")
-            A("\t\t\t\t)")
-            A(f'\t\t\t\t(number "{_esc(p["number"])}"')
-            A("\t\t\t\t\t(effects\n\t\t\t\t\t\t(font\n\t\t\t\t\t\t\t"
-              "(size 1.27 1.27)\n\t\t\t\t\t\t)\n\t\t\t\t\t)")
-            A("\t\t\t\t)")
-            A("\t\t\t)")
-    A("\t\t)")
-    A("\t\t(embedded_fonts no)")
-    A("\t)")
-    return "\n".join(out)
-
-
-def _esc(text):
-    return str(text).replace("\\", "\\\\").replace('"', '\\"')
-
-
 HEADER_COMMENT = """\
-; stage1_iv.kicad_sym — project-local KiCad symbols for the Stage 1 I–V
+; stage1_iv.kicad_sym — project symbol library for the Stage 1 I–V
 ; Characterization System.
 ;
 ; GENERATED FILE — do not edit by hand.
 ;   regenerate with:  python3 tools/author_project_symbols.py
+;   verify with:      python3 tools/author_project_symbols.py --check
 ;
-; It holds only the parts that have NO symbol in the official KiCad libraries.
-; Every pin number below is parsed out of a committed provenance excerpt under
-; libraries/provenance/ (see libraries/provenance/stage1_iv_pin_provenance.json
-; for the per-pin source file and line).
+; Every symbol the schematic instantiates lives here, and the bodies below are
+; produced by the SAME generators/schematic.py::SymbolDef objects the schematic
+; embeds in its (lib_symbols) block — so the schematic's cache and this library
+; are byte-identical and KiCad's lib_symbol_mismatch cannot fire.
+;
+; Pin provenance per symbol is in provenance/stage1_iv_pin_provenance.json:
+; ADS1256 and OPA548T are parsed from committed datasheet/library excerpts;
+; every other symbol is read from the installed upstream KiCad libraries at
+; generation time (version recorded in that same file).
 """
 
 
-def build_library():
-    ads_pins = parse_ads1256()
-    opa_pins = parse_opa548t()
+def collect_symbols():
+    """Build the circuit and return {symbol_name: SymbolDef}, plus the model."""
+    sys.path.insert(0, REPO_ROOT)
+    import main as project_main
+    from generators.schematic import CircuitModel
 
-    ads_pins.sort(key=lambda p: int(p["number"]))
-    opa_pins.sort(key=lambda p: int(p["number"]))
-
-    body = [HEADER_COMMENT.rstrip(), "(kicad_symbol_lib",
-            "\t(version 20241209)",
-            '\t(generator "stage1_iv:tools/author_project_symbols.py")',
-            '\t(generator_version "9.0")']
-    body.append(_rect_symbol(
-        "ADS1256", ads_pins, {"Reference": "U",
-                              "Footprint": "Package_SO:SSOP-28_5.3x10.2mm_P0.65mm"},
-        "24-bit delta-sigma ADC, 8-channel mux, PGA, SPI, SSOP-28 (TI DB package)",
-        "ADC 24-bit delta-sigma SPI ADS1256",
-        "https://www.ti.com/lit/ds/symlink/ads1256.pdf"))
-    body.append(_rect_symbol(
-        "OPA548T", opa_pins,
-        {"Reference": "U",
-         "Footprint": "Package_TO_SOT_THT:TO-220-7_P2.54x3.7mm_StaggerOdd_Lead3.8mm_Vertical"},
-        "High-current power op-amp with adjustable current limit, TO-220-7",
-        "opamp power current limit OPA548",
-        "https://www.ti.com/lit/ds/symlink/opa548.pdf"))
-    body.append(")")
-    return "\n".join(body) + "\n", ads_pins, opa_pins
+    _n, _parts, circuit = project_main.build()
+    model = CircuitModel(circuit)
+    return model, circuit
 
 
-def provenance_record(ads_pins, opa_pins):
+def library_text(model):
+    """Render the full .kicad_sym from the model's SymbolDefs."""
+    out = [HEADER_COMMENT.rstrip(), "(kicad_symbol_lib",
+           "\t(version 20241209)",
+           '\t(generator "stage1_iv:tools/author_project_symbols.py")',
+           '\t(generator_version "9.0")']
+    for lib_id in sorted(model.symbols):
+        sym = model.symbols[lib_id]
+        lines = sym.sexpr()
+        # SymbolDef emits `(symbol "stage1_iv:Name" ...)` for embedding in a
+        # sheet's (lib_symbols); a library file names the symbol bare.
+        lines[0] = lines[0].replace(f'"{sym.lib_id}"', f'"{sym.name}"', 1)
+        out.extend(lines)
+    out.append(")")
+    return "\n".join(out) + "\n"
+
+
+def provenance_record(model, circuit):
+    """Per-symbol record of where each symbol's pins came from."""
     def digest(path):
         with open(path, "rb") as fh:
             return hashlib.sha256(fh.read()).hexdigest()
 
+    sys.path.insert(0, REPO_ROOT)
+    from libraries.custom_symbols import upstream_state
+
+    libs_info = {}
+    try:
+        from resolve_kicad_libs import KicadLibraries
+        libs_info = KicadLibraries().provenance()
+    except Exception:                                    # noqa: BLE001
+        libs_info = {}
+
+    by_symbol = {}
+    for part in circuit.parts:
+        name = (part.fields.get("Project_Symbol") or "").split(":")[-1]
+        if not name or name in by_symbol:
+            continue
+        by_symbol[name] = {
+            "upstream_lib_id": part.fields.get("KiCad_Lib", ""),
+            "symbol_source": part.fields.get("Symbol_Source", ""),
+            "pins_verified": part.fields.get("Pins_Verified", ""),
+            "pins": [{"number": str(p.num), "name": str(p.name)}
+                     for p in sorted(part.pins, key=lambda x: str(x.num))],
+        }
+
+    state = upstream_state()
     return {
         "generated_by": "tools/author_project_symbols.py",
-        "symbols": {
+        "upstream_library_revision": libs_info,
+        "symbol_sources": {
+            "upstream": sorted(state["used"]),
+            "datasheet_authored": sorted(state["authored_used"]),
+            "committed_project_library_fallback": sorted(state["fallback_used"]),
+        },
+        "authored": {
             "stage1_iv:ADS1256": {
                 "provenance_class": "RESOLVED",
                 "source_document": "Texas Instruments ADS1255/ADS1256 data sheet",
@@ -291,7 +266,7 @@ def provenance_record(ads_pins, opa_pins):
                          "column 'TERMINAL NO. / ADS1256'",
                 "excerpt_file": os.path.relpath(ADS_SRC, REPO_ROOT),
                 "excerpt_sha256": digest(ADS_SRC),
-                "pins": ads_pins,
+                "pins": parse_ads1256(),
             },
             "stage1_iv:OPA548T": {
                 "provenance_class": "VERIFY-DATASHEET",
@@ -307,21 +282,22 @@ def provenance_record(ads_pins, opa_pins):
                               "are refused by this environment's network egress "
                               "policy. These pin numbers MUST be re-verified "
                               "against SBOS070 before fabrication.",
-                "pins": opa_pins,
+                "pins": parse_opa548t(),
             },
         },
+        "symbols": dict(sorted(by_symbol.items())),
     }
 
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[1])
     ap.add_argument("--check", action="store_true",
-                    help="verify the committed library matches the sources")
+                    help="verify the committed library matches its sources")
     args = ap.parse_args(argv)
 
-    text, ads_pins, opa_pins = build_library()
-    record = provenance_record(ads_pins, opa_pins)
-    record_text = json.dumps(record, indent=2) + "\n"
+    model, circuit = collect_symbols()
+    text = library_text(model)
+    record_text = json.dumps(provenance_record(model, circuit), indent=2) + "\n"
 
     if args.check:
         problems = []
@@ -334,7 +310,8 @@ def main(argv=None):
             for p in problems:
                 print("FAIL " + p, file=sys.stderr)
             return 1
-        print("OK  libraries/stage1_iv.kicad_sym is current with its sources")
+        print(f"OK  libraries/stage1_iv.kicad_sym is current "
+              f"({len(model.symbols)} symbols)")
         return 0
 
     os.makedirs(PROV_DIR, exist_ok=True)
@@ -342,8 +319,7 @@ def main(argv=None):
         fh.write(text)
     with open(OUT_JSON, "w", encoding="utf-8") as fh:
         fh.write(record_text)
-    print(f"wrote {OUT_SYM} ({len(ads_pins)} ADS1256 pins, "
-          f"{len(opa_pins)} OPA548T pins)")
+    print(f"wrote {OUT_SYM} ({len(model.symbols)} symbols)")
     print(f"wrote {OUT_JSON}")
     return 0
 

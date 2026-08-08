@@ -1,6 +1,54 @@
 {
   "generated_by": "tools/author_project_symbols.py",
-  "symbols": {
+  "upstream_library_revision": {
+    "symbols": {
+      "path": "/usr/share/kicad/symbols",
+      "repository": "https://gitlab.com/kicad/libraries/kicad-symbols.git",
+      "tag": "9.0.9.1",
+      "commit": "ad36cd14bcd1b1cd0484f629ccdd3481366f74f3",
+      "installed_by": "tools/install_kicad_libs.sh"
+    },
+    "footprints": {
+      "path": "/usr/share/kicad/footprints",
+      "repository": "https://gitlab.com/kicad/libraries/kicad-footprints.git",
+      "tag": "9.0.9.1",
+      "commit": "2b941bf1d97862be429793b46fd52a5add09a2fc",
+      "installed_by": "tools/install_kicad_libs.sh"
+    }
+  },
+  "symbol_sources": {
+    "upstream": [
+      "Amplifier_Instrumentation:INA128",
+      "Amplifier_Operational:OPA2277",
+      "Analog_DAC:DAC8552",
+      "Connector:Screw_Terminal_01x04",
+      "Connector:TestPoint",
+      "Connector:USB_C_Receptacle_USB2.0_16P",
+      "Connector_Generic:Conn_01x01",
+      "Connector_Generic:Conn_01x05",
+      "Device:C",
+      "Device:C_Polarized",
+      "Device:Crystal",
+      "Device:D",
+      "Device:D_TVS",
+      "Device:FerriteBead",
+      "Device:LED",
+      "Device:Polyfuse",
+      "Device:R",
+      "MCU_ST_STM32F4:STM32F411RETx",
+      "Power_Protection:USBLC6-2SC6",
+      "Reference_Voltage:REF5025ADGK",
+      "Regulator_Linear:LD1117S33TR_SOT223",
+      "Switch:SW_Push",
+      "power:PWR_FLAG"
+    ],
+    "datasheet_authored": [
+      "stage1_iv:ADS1256",
+      "stage1_iv:OPA548T"
+    ],
+    "committed_project_library_fallback": []
+  },
+  "authored": {
     "stage1_iv:ADS1256": {
       "provenance_class": "RESOLVED",
       "source_document": "Texas Instruments ADS1255/ADS1256 data sheet",
@@ -266,6 +314,939 @@
           "etype": "passive",
           "description": "",
           "source": "libraries/provenance/opa548t_akl_symbol.txt:152"
+        }
+      ]
+    }
+  },
+  "symbols": {
+    "ADS1256": {
+      "upstream_lib_id": "stage1_iv:ADS1256",
+      "symbol_source": "ads1256_sbas288k_terminal_functions.txt:1",
+      "pins_verified": "RESOLVED",
+      "pins": [
+        {
+          "number": "1",
+          "name": "AVDD"
+        },
+        {
+          "number": "10",
+          "name": "AIN4"
+        },
+        {
+          "number": "11",
+          "name": "AIN5"
+        },
+        {
+          "number": "12",
+          "name": "AIN6"
+        },
+        {
+          "number": "13",
+          "name": "AIN7"
+        },
+        {
+          "number": "14",
+          "name": "SYNC/PDWN"
+        },
+        {
+          "number": "15",
+          "name": "RESET"
+        },
+        {
+          "number": "16",
+          "name": "DVDD"
+        },
+        {
+          "number": "17",
+          "name": "DGND"
+        },
+        {
+          "number": "18",
+          "name": "XTAL2"
+        },
+        {
+          "number": "19",
+          "name": "XTAL1/CLKIN"
+        },
+        {
+          "number": "2",
+          "name": "AGND"
+        },
+        {
+          "number": "20",
+          "name": "CS"
+        },
+        {
+          "number": "21",
+          "name": "DRDY"
+        },
+        {
+          "number": "22",
+          "name": "DOUT"
+        },
+        {
+          "number": "23",
+          "name": "DIN"
+        },
+        {
+          "number": "24",
+          "name": "SCLK"
+        },
+        {
+          "number": "25",
+          "name": "D0/CLKOUT"
+        },
+        {
+          "number": "26",
+          "name": "D1"
+        },
+        {
+          "number": "27",
+          "name": "D2"
+        },
+        {
+          "number": "28",
+          "name": "D3"
+        },
+        {
+          "number": "3",
+          "name": "VREFN"
+        },
+        {
+          "number": "4",
+          "name": "VREFP"
+        },
+        {
+          "number": "5",
+          "name": "AINCOM"
+        },
+        {
+          "number": "6",
+          "name": "AIN0"
+        },
+        {
+          "number": "7",
+          "name": "AIN1"
+        },
+        {
+          "number": "8",
+          "name": "AIN2"
+        },
+        {
+          "number": "9",
+          "name": "AIN3"
+        }
+      ]
+    },
+    "C": {
+      "upstream_lib_id": "Device:C",
+      "symbol_source": "Device.kicad_sym:1761",
+      "pins_verified": "RESOLVED",
+      "pins": [
+        {
+          "number": "1",
+          "name": "~"
+        },
+        {
+          "number": "2",
+          "name": "~"
+        }
+      ]
+    },
+    "C_Polarized": {
+      "upstream_lib_id": "Device:C_Polarized",
+      "symbol_source": "Device.kicad_sym:5140",
+      "pins_verified": "RESOLVED",
+      "pins": [
+        {
+          "number": "1",
+          "name": "+"
+        },
+        {
+          "number": "2",
+          "name": "-"
+        }
+      ]
+    },
+    "Conn_01x01": {
+      "upstream_lib_id": "Connector_Generic:Conn_01x01",
+      "symbol_source": "Connector_Generic.kicad_sym:5",
+      "pins_verified": "RESOLVED",
+      "pins": [
+        {
+          "number": "1",
+          "name": "Pin_1"
+        }
+      ]
+    },
+    "Conn_01x05": {
+      "upstream_lib_id": "Connector_Generic:Conn_01x05",
+      "symbol_source": "Connector_Generic.kicad_sym:631",
+      "pins_verified": "RESOLVED",
+      "pins": [
+        {
+          "number": "1",
+          "name": "Pin_1"
+        },
+        {
+          "number": "2",
+          "name": "Pin_2"
+        },
+        {
+          "number": "3",
+          "name": "Pin_3"
+        },
+        {
+          "number": "4",
+          "name": "Pin_4"
+        },
+        {
+          "number": "5",
+          "name": "Pin_5"
+        }
+      ]
+    },
+    "Crystal": {
+      "upstream_lib_id": "Device:Crystal",
+      "symbol_source": "Device.kicad_sym:9588",
+      "pins_verified": "RESOLVED",
+      "pins": [
+        {
+          "number": "1",
+          "name": "1"
+        },
+        {
+          "number": "2",
+          "name": "2"
+        }
+      ]
+    },
+    "D": {
+      "upstream_lib_id": "Device:D",
+      "symbol_source": "Device.kicad_sym:11674",
+      "pins_verified": "RESOLVED",
+      "pins": [
+        {
+          "number": "1",
+          "name": "K"
+        },
+        {
+          "number": "2",
+          "name": "A"
+        }
+      ]
+    },
+    "DAC8552": {
+      "upstream_lib_id": "Analog_DAC:DAC8552",
+      "symbol_source": "Analog_DAC.kicad_sym:22608",
+      "pins_verified": "RESOLVED",
+      "pins": [
+        {
+          "number": "1",
+          "name": "VDD"
+        },
+        {
+          "number": "2",
+          "name": "VREF"
+        },
+        {
+          "number": "3",
+          "name": "VOUTB"
+        },
+        {
+          "number": "4",
+          "name": "VOUTA"
+        },
+        {
+          "number": "5",
+          "name": "SYNC"
+        },
+        {
+          "number": "6",
+          "name": "SCLK"
+        },
+        {
+          "number": "7",
+          "name": "DIN"
+        },
+        {
+          "number": "8",
+          "name": "GND"
+        }
+      ]
+    },
+    "D_TVS": {
+      "upstream_lib_id": "Device:D_TVS",
+      "symbol_source": "Device.kicad_sym:35674",
+      "pins_verified": "RESOLVED",
+      "pins": [
+        {
+          "number": "1",
+          "name": "A1"
+        },
+        {
+          "number": "2",
+          "name": "A2"
+        }
+      ]
+    },
+    "FerriteBead": {
+      "upstream_lib_id": "Device:FerriteBead",
+      "symbol_source": "Device.kicad_sym:42596",
+      "pins_verified": "RESOLVED",
+      "pins": [
+        {
+          "number": "1",
+          "name": "~"
+        },
+        {
+          "number": "2",
+          "name": "~"
+        }
+      ]
+    },
+    "INA128": {
+      "upstream_lib_id": "Amplifier_Instrumentation:INA128",
+      "symbol_source": "Amplifier_Instrumentation.kicad_sym:2285",
+      "pins_verified": "RESOLVED",
+      "pins": [
+        {
+          "number": "1",
+          "name": "RG1"
+        },
+        {
+          "number": "2",
+          "name": "-IN"
+        },
+        {
+          "number": "3",
+          "name": "+IN"
+        },
+        {
+          "number": "4",
+          "name": "V-"
+        },
+        {
+          "number": "5",
+          "name": "REF"
+        },
+        {
+          "number": "6",
+          "name": "OUT"
+        },
+        {
+          "number": "7",
+          "name": "V+"
+        },
+        {
+          "number": "8",
+          "name": "RG2"
+        }
+      ]
+    },
+    "LD1117S33TR_SOT223": {
+      "upstream_lib_id": "Regulator_Linear:LD1117S33TR_SOT223",
+      "symbol_source": "Regulator_Linear.kicad_sym:85573",
+      "pins_verified": "RESOLVED",
+      "pins": [
+        {
+          "number": "1",
+          "name": "GND"
+        },
+        {
+          "number": "2",
+          "name": "VOUT"
+        },
+        {
+          "number": "3",
+          "name": "VIN"
+        }
+      ]
+    },
+    "LED": {
+      "upstream_lib_id": "Device:LED",
+      "symbol_source": "Device.kicad_sym:48335",
+      "pins_verified": "RESOLVED",
+      "pins": [
+        {
+          "number": "1",
+          "name": "K"
+        },
+        {
+          "number": "2",
+          "name": "A"
+        }
+      ]
+    },
+    "OPA2277": {
+      "upstream_lib_id": "Amplifier_Operational:OPA2277",
+      "symbol_source": "Amplifier_Operational.kicad_sym:47360",
+      "pins_verified": "RESOLVED",
+      "pins": [
+        {
+          "number": "1",
+          "name": "OUTA"
+        },
+        {
+          "number": "2",
+          "name": "-INA"
+        },
+        {
+          "number": "3",
+          "name": "+INA"
+        },
+        {
+          "number": "4",
+          "name": "V-"
+        },
+        {
+          "number": "5",
+          "name": "+INB"
+        },
+        {
+          "number": "6",
+          "name": "-INB"
+        },
+        {
+          "number": "7",
+          "name": "OUTB"
+        },
+        {
+          "number": "8",
+          "name": "V+"
+        }
+      ]
+    },
+    "OPA548T": {
+      "upstream_lib_id": "stage1_iv:OPA548T",
+      "symbol_source": "opa548t_akl_symbol.txt:1",
+      "pins_verified": "VERIFY-DATASHEET",
+      "pins": [
+        {
+          "number": "1",
+          "name": "+IN"
+        },
+        {
+          "number": "2",
+          "name": "-IN"
+        },
+        {
+          "number": "3",
+          "name": "ILIM"
+        },
+        {
+          "number": "4",
+          "name": "V-"
+        },
+        {
+          "number": "5",
+          "name": "V+"
+        },
+        {
+          "number": "6",
+          "name": "OUT"
+        },
+        {
+          "number": "7",
+          "name": "E/S"
+        }
+      ]
+    },
+    "PWR_FLAG": {
+      "upstream_lib_id": "power:PWR_FLAG",
+      "symbol_source": "power.kicad_sym:9842",
+      "pins_verified": "RESOLVED",
+      "pins": [
+        {
+          "number": "1",
+          "name": "~"
+        }
+      ]
+    },
+    "Polyfuse": {
+      "upstream_lib_id": "Device:Polyfuse",
+      "symbol_source": "Device.kicad_sym:94206",
+      "pins_verified": "RESOLVED",
+      "pins": [
+        {
+          "number": "1",
+          "name": "~"
+        },
+        {
+          "number": "2",
+          "name": "~"
+        }
+      ]
+    },
+    "R": {
+      "upstream_lib_id": "Device:R",
+      "symbol_source": "Device.kicad_sym:104590",
+      "pins_verified": "RESOLVED",
+      "pins": [
+        {
+          "number": "1",
+          "name": "~"
+        },
+        {
+          "number": "2",
+          "name": "~"
+        }
+      ]
+    },
+    "REF5025ADGK": {
+      "upstream_lib_id": "Reference_Voltage:REF5025ADGK",
+      "symbol_source": "Reference_Voltage.kicad_sym:29304",
+      "pins_verified": "RESOLVED",
+      "pins": [
+        {
+          "number": "1",
+          "name": "NC1"
+        },
+        {
+          "number": "2",
+          "name": "VIN"
+        },
+        {
+          "number": "3",
+          "name": "TEMP"
+        },
+        {
+          "number": "4",
+          "name": "GND"
+        },
+        {
+          "number": "5",
+          "name": "TRIM/NR"
+        },
+        {
+          "number": "6",
+          "name": "VOUT"
+        },
+        {
+          "number": "7",
+          "name": "NC2"
+        },
+        {
+          "number": "8",
+          "name": "NC3"
+        }
+      ]
+    },
+    "STM32F411RETx": {
+      "upstream_lib_id": "MCU_ST_STM32F4:STM32F411RETx",
+      "symbol_source": "MCU_ST_STM32F4.kicad_sym:332580",
+      "pins_verified": "RESOLVED",
+      "pins": [
+        {
+          "number": "1",
+          "name": "VBAT"
+        },
+        {
+          "number": "10",
+          "name": "PC2"
+        },
+        {
+          "number": "11",
+          "name": "PC3"
+        },
+        {
+          "number": "12",
+          "name": "VSSA"
+        },
+        {
+          "number": "13",
+          "name": "VDDA"
+        },
+        {
+          "number": "14",
+          "name": "PA0"
+        },
+        {
+          "number": "15",
+          "name": "PA1"
+        },
+        {
+          "number": "16",
+          "name": "PA2"
+        },
+        {
+          "number": "17",
+          "name": "PA3"
+        },
+        {
+          "number": "18",
+          "name": "VSS"
+        },
+        {
+          "number": "19",
+          "name": "VDD"
+        },
+        {
+          "number": "2",
+          "name": "PC13"
+        },
+        {
+          "number": "20",
+          "name": "PA4"
+        },
+        {
+          "number": "21",
+          "name": "PA5"
+        },
+        {
+          "number": "22",
+          "name": "PA6"
+        },
+        {
+          "number": "23",
+          "name": "PA7"
+        },
+        {
+          "number": "24",
+          "name": "PC4"
+        },
+        {
+          "number": "25",
+          "name": "PC5"
+        },
+        {
+          "number": "26",
+          "name": "PB0"
+        },
+        {
+          "number": "27",
+          "name": "PB1"
+        },
+        {
+          "number": "28",
+          "name": "PB2"
+        },
+        {
+          "number": "29",
+          "name": "PB10"
+        },
+        {
+          "number": "3",
+          "name": "PC14"
+        },
+        {
+          "number": "30",
+          "name": "VCAP1"
+        },
+        {
+          "number": "31",
+          "name": "VSS"
+        },
+        {
+          "number": "32",
+          "name": "VDD"
+        },
+        {
+          "number": "33",
+          "name": "PB12"
+        },
+        {
+          "number": "34",
+          "name": "PB13"
+        },
+        {
+          "number": "35",
+          "name": "PB14"
+        },
+        {
+          "number": "36",
+          "name": "PB15"
+        },
+        {
+          "number": "37",
+          "name": "PC6"
+        },
+        {
+          "number": "38",
+          "name": "PC7"
+        },
+        {
+          "number": "39",
+          "name": "PC8"
+        },
+        {
+          "number": "4",
+          "name": "PC15"
+        },
+        {
+          "number": "40",
+          "name": "PC9"
+        },
+        {
+          "number": "41",
+          "name": "PA8"
+        },
+        {
+          "number": "42",
+          "name": "PA9"
+        },
+        {
+          "number": "43",
+          "name": "PA10"
+        },
+        {
+          "number": "44",
+          "name": "PA11"
+        },
+        {
+          "number": "45",
+          "name": "PA12"
+        },
+        {
+          "number": "46",
+          "name": "PA13"
+        },
+        {
+          "number": "47",
+          "name": "VSS"
+        },
+        {
+          "number": "48",
+          "name": "VDD"
+        },
+        {
+          "number": "49",
+          "name": "PA14"
+        },
+        {
+          "number": "5",
+          "name": "PH0"
+        },
+        {
+          "number": "50",
+          "name": "PA15"
+        },
+        {
+          "number": "51",
+          "name": "PC10"
+        },
+        {
+          "number": "52",
+          "name": "PC11"
+        },
+        {
+          "number": "53",
+          "name": "PC12"
+        },
+        {
+          "number": "54",
+          "name": "PD2"
+        },
+        {
+          "number": "55",
+          "name": "PB3"
+        },
+        {
+          "number": "56",
+          "name": "PB4"
+        },
+        {
+          "number": "57",
+          "name": "PB5"
+        },
+        {
+          "number": "58",
+          "name": "PB6"
+        },
+        {
+          "number": "59",
+          "name": "PB7"
+        },
+        {
+          "number": "6",
+          "name": "PH1"
+        },
+        {
+          "number": "60",
+          "name": "BOOT0"
+        },
+        {
+          "number": "61",
+          "name": "PB8"
+        },
+        {
+          "number": "62",
+          "name": "PB9"
+        },
+        {
+          "number": "63",
+          "name": "VSS"
+        },
+        {
+          "number": "64",
+          "name": "VDD"
+        },
+        {
+          "number": "7",
+          "name": "NRST"
+        },
+        {
+          "number": "8",
+          "name": "PC0"
+        },
+        {
+          "number": "9",
+          "name": "PC1"
+        }
+      ]
+    },
+    "SW_Push": {
+      "upstream_lib_id": "Switch:SW_Push",
+      "symbol_source": "Switch.kicad_sym:11011",
+      "pins_verified": "RESOLVED",
+      "pins": [
+        {
+          "number": "1",
+          "name": "1"
+        },
+        {
+          "number": "2",
+          "name": "2"
+        }
+      ]
+    },
+    "Screw_Terminal_01x04": {
+      "upstream_lib_id": "Connector:Screw_Terminal_01x04",
+      "symbol_source": "Connector.kicad_sym:326279",
+      "pins_verified": "RESOLVED",
+      "pins": [
+        {
+          "number": "1",
+          "name": "Pin_1"
+        },
+        {
+          "number": "2",
+          "name": "Pin_2"
+        },
+        {
+          "number": "3",
+          "name": "Pin_3"
+        },
+        {
+          "number": "4",
+          "name": "Pin_4"
+        }
+      ]
+    },
+    "TestPoint": {
+      "upstream_lib_id": "Connector:TestPoint",
+      "symbol_source": "Connector.kicad_sym:339728",
+      "pins_verified": "RESOLVED",
+      "pins": [
+        {
+          "number": "1",
+          "name": "1"
+        }
+      ]
+    },
+    "USBLC6-2SC6": {
+      "upstream_lib_id": "Power_Protection:USBLC6-2SC6",
+      "symbol_source": "Power_Protection.kicad_sym:35786",
+      "pins_verified": "RESOLVED",
+      "pins": [
+        {
+          "number": "1",
+          "name": "IO1"
+        },
+        {
+          "number": "2",
+          "name": "GND"
+        },
+        {
+          "number": "3",
+          "name": "IO2"
+        },
+        {
+          "number": "4",
+          "name": "IO2b"
+        },
+        {
+          "number": "5",
+          "name": "VBUS"
+        },
+        {
+          "number": "6",
+          "name": "IO1b"
+        }
+      ]
+    },
+    "USB_C_Receptacle_USB2.0_16P": {
+      "upstream_lib_id": "Connector:USB_C_Receptacle_USB2.0_16P",
+      "symbol_source": "Connector.kicad_sym:348661",
+      "pins_verified": "RESOLVED",
+      "pins": [
+        {
+          "number": "A1",
+          "name": "GND"
+        },
+        {
+          "number": "A12",
+          "name": "GND"
+        },
+        {
+          "number": "A4",
+          "name": "VBUS"
+        },
+        {
+          "number": "A5",
+          "name": "CC1"
+        },
+        {
+          "number": "A6",
+          "name": "DP"
+        },
+        {
+          "number": "A7",
+          "name": "DM"
+        },
+        {
+          "number": "A8",
+          "name": "SBU1"
+        },
+        {
+          "number": "A9",
+          "name": "VBUS"
+        },
+        {
+          "number": "B1",
+          "name": "GND"
+        },
+        {
+          "number": "B12",
+          "name": "GND"
+        },
+        {
+          "number": "B4",
+          "name": "VBUS"
+        },
+        {
+          "number": "B5",
+          "name": "CC2"
+        },
+        {
+          "number": "B6",
+          "name": "DP"
+        },
+        {
+          "number": "B7",
+          "name": "DM"
+        },
+        {
+          "number": "B8",
+          "name": "SBU2"
+        },
+        {
+          "number": "B9",
+          "name": "VBUS"
+        },
+        {
+          "number": "S1",
+          "name": "SHIELD"
         }
       ]
     }

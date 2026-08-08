@@ -209,9 +209,54 @@ unresolved_items:
       KiCad ERC reads. Measured 7 -> 0 power_pin_not_driven, 0 driver
       conflicts. This is a re-implementation of the rule, not a KiCad run,
       and is labelled as such wherever quoted.
-  - id: lib-symbol-issues
-    what: KiCad lib_symbol_issues "library not found" / lib_symbol_mismatch
-    why: out of scope per the brief; 12 libraries / 24 lib_ids, unchanged.
+  - id: kicad-erc-dialog-still-not-run
+    what: KiCad ERC violation counts from the ERC dialog itself
+    why: >
+      kicad-cli sch erc first shipped in KiCad 8 and KiCad 7.0.11 is the newest
+      installable version here. Every ERC number this project reports comes
+      from re-implementations of KiCad rules evaluated on the emitted
+      .kicad_sch files and is labelled as such. CI runs kicad-cli sch erc when
+      a runner provides it and prints SKIPPED otherwise.
+
+symbol_strategy_v2:
+  chosen: "Strategy 1 - own the symbols"
+  what_changed: >
+    Every schematic instance now names stage1_iv:<SymbolName> instead of the
+    official lib_id. libraries/stage1_iv.kicad_sym is a committed KiCad symbol
+    library holding all 25 symbols, and both it and the copy embedded in each
+    sheet's (lib_symbols) block are emitted from the SAME SymbolDef objects -
+    verified byte-identical for all 25 symbols across all 9 sheets. KiCad's
+    lib_symbol_mismatch cannot fire, and lib_symbol_issues cannot fire because
+    the only library the schematic needs ships with the repository.
+  measured:
+    lib_symbol_issues: {before: 105, after_library_repair: 0, after_strategy: 0}
+    lib_symbol_mismatch: {before: 2, after_library_repair: 46, after_strategy: 0}
+    external_lib_ids_referenced: {before: 24, after: 0}
+  given_up:
+    - "Generated rectangles instead of familiar KiCad symbol graphics."
+    - >
+      KiCad_Lib is no longer the link KiCad follows; it stays on every instance
+      and is still verified against the installed libraries by
+      validation/footprint_check.py whenever they are present.
+  build_without_kicad: >
+    Supported and CI-tested. Pin data falls back to the committed project
+    library and the build reports SKIPPED for every KiCad-conformance check.
+
+netlist_vs_schematic:
+  decision: "(b) the schematic is the single source of truth for KiCad"
+  netlist_role: documentation and validation input, NOT a PCB input
+  rationale: >
+    SKiDL's generate_netlist has no hierarchy model matching this design's
+    sheets, and netlist import into Pcbnew is the legacy path. Update the PCB
+    with "Update PCB from Schematic".
+  enforced_by: >
+    tools/kicad_roundtrip.py fails if any component in stage1_iv.net acquires a
+    non-"/" sheetpath, or if KiCad's reading of the schematic assigns any
+    component to a sheet other than the block it was built in.
+  migration:
+    - "Boards imported from the flat netlist get re-pathed on first Update PCB; footprints match by reference so layout survives."
+    - "J4 became J4..J7 in the identifier work - an older board has one 4-pin part where the schematic now has four 1-pin parts. Manual."
+    - "The eight #FLG power flags are schematic-only and never reach the board."
 
 added_beyond_source_bom:
   - ref: C43

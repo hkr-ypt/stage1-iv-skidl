@@ -1,0 +1,164 @@
+name: build
+
+# Everything here uses only environment variables and repo-relative paths.
+# There is no absolute path anywhere in this workflow, and no KiCad library is
+# vendored into the repository — they are cloned at the revision pinned in
+# docs/LIBRARY_DEPENDENCIES.md.
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  # The upstream library revision this design's pin numbers were read from.
+  # Keep in step with docs/LIBRARY_DEPENDENCIES.md (CI verifies the match).
+  KICAD_LIB_TAG: "9.0.9.1"
+  KICAD_LIB_ROOT: ${{ github.workspace }}/.kicad-libs
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install SKiDL and its import-time dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # SKiDL's optional PCB-placement extras are not needed and may fail
+          # to build, so install the core without them.
+          pip install --no-deps "skidl==2.2.3"
+          pip install graphviz future simp_sexp rich ply pyyaml
+          # kinparse's setup.py predates modern setuptools; build it with the
+          # stdlib distutils shim.
+          SETUPTOOLS_USE_DISTUTILS=stdlib pip install --no-build-isolation kinparse
+
+      - name: Cache the pinned KiCad libraries
+        id: libcache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.KICAD_LIB_ROOT }}
+          key: kicad-libs-${{ env.KICAD_LIB_TAG }}
+
+      - name: Install the pinned KiCad symbol and footprint libraries
+        if: steps.libcache.outputs.cache-hit != 'true'
+        run: sudo -E tools/install_kicad_libs.sh "$KICAD_LIB_ROOT" "$KICAD_LIB_TAG"
+
+      - name: Export the library locations
+        run: |
+          echo "KICAD9_SYMBOL_DIR=$KICAD_LIB_ROOT/symbols" >> "$GITHUB_ENV"
+          echo "KICAD9_FOOTPRINT_DIR=$KICAD_LIB_ROOT/footprints" >> "$GITHUB_ENV"
+
+      - name: Environment resolves, and the installation is complete
+        run: python3 tools/kicad_env.py --check --diagnose
+
+      - name: Build
+        run: python3 main.py
+
+      - name: Generated project library and config are current
+        run: |
+          python3 tools/author_project_symbols.py --check
+          python3 tools/gen_project_config.py --check
+
+      - name: Structural guard
+        run: python3 validation/footprint_check.py
+
+      - name: SKiDL ERC gate
+        run: python3 validation/erc.py
+
+      - name: Schematic <-> netlist consistency
+        run: python3 validation/schematic_check.py
+
+      - name: KiCad power-driver ERC rules
+        run: python3 tools/kicad_erc_power.py
+
+      - name: Identifier audit — fail on any unresolved identifier
+        run: |
+          python3 tools/audit_identifiers.py --json > /tmp/audit.json
+          python3 - <<'PY'
+          import json, sys
+          rows = json.load(open("/tmp/audit.json"))["parts"]
+          bad_sym = [r["ref"] for r in rows if not r["sym_ok"]]
+          bad_fp = [r["ref"] for r in rows
+                    if not r["fp_ok"] and not r["footprint"] == ""]
+          unaccounted = {r["ref"]: r["unnetted_pads"]
+                         for r in rows if r["unnetted_pads"]}
+          placeholder = [r["ref"] for r in rows
+                         if r["pins_verified"] == "PLACEHOLDER-REMAP"]
+          problems = []
+          if bad_sym: problems.append(f"unresolved symbols: {bad_sym}")
+          if bad_fp: problems.append(f"unresolved footprints: {bad_fp}")
+          if unaccounted: problems.append(f"unaccounted pads: {unaccounted}")
+          if placeholder: problems.append(f"placeholder provenance: {placeholder}")
+          if problems:
+              print("AUDIT FAILED:", "; ".join(problems)); sys.exit(1)
+          print(f"audit clean: {len(rows)} parts, 0 unresolved, 0 unaccounted pads")
+          PY
+
+      - name: Output is deterministic (build twice, compare)
+        run: |
+          mkdir -p /tmp/run-a /tmp/run-b
+          python3 main.py > /dev/null
+          cp ./*.kicad_sch component_manifest.md /tmp/run-a/
+          # The netlist header carries a generation timestamp; drop that one
+          # line so the comparison is about content, not wall-clock time.
+          sed '/(date /d' stage1_iv.net > /tmp/run-a/netlist
+          python3 main.py > /dev/null
+          cp ./*.kicad_sch component_manifest.md /tmp/run-b/
+          sed '/(date /d' stage1_iv.net > /tmp/run-b/netlist
+          diff -r /tmp/run-a /tmp/run-b
+          echo "output is byte-identical across runs"
+
+      - name: Nothing regenerated is dirty in git
+        run: |
+          git diff --stat -- ':!stage1_iv.net'
+          git diff --quiet -- ':!stage1_iv.net' || {
+            echo "::error::committed generated files are stale; run the generators and commit"
+            exit 1; }
+
+      - name: No absolute paths in committed files
+        run: python3 tools/check_no_abs_paths.py
+
+      - name: The guards actually fail on injected faults
+        run: tools/test_guard_fails.sh
+
+      - name: KiCad ERC (only if kicad-cli provides it)
+        run: |
+          if command -v kicad-cli >/dev/null 2>&1 && \
+             kicad-cli sch --help 2>&1 | grep -qw erc; then
+            kicad-cli sch erc --exit-code-violations \
+              --output /tmp/erc.rpt stage1_iv.kicad_sch
+          else
+            echo "kicad-cli sch erc unavailable on this runner "
+            echo "(it first shipped in KiCad 8) — KiCad ERC SKIPPED, not passed."
+          fi
+
+  build-without-kicad:
+    # The design must build with no KiCad at all, and must then say SKIPPED.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install SKiDL and its import-time dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install --no-deps "skidl==2.2.3"
+          pip install graphviz future simp_sexp rich ply pyyaml
+          SETUPTOOLS_USE_DISTUTILS=stdlib pip install --no-build-isolation kinparse
+      - name: Build with no KiCad libraries present
+        run: |
+          python3 main.py | tee /tmp/nokicad.log
+      - name: The build reported SKIPPED, not a KiCad-conformance pass
+        run: |
+          grep -q "KiCad libraries ....... NOT FOUND" /tmp/nokicad.log
+          grep -q "Symbol resolution ..... SKIPPED" /tmp/nokicad.log
+          grep -q "Footprint resolution .. SKIPPED" /tmp/nokicad.log
+          grep -q "KiCad ERC ............. NOT RUN" /tmp/nokicad.log
+          echo "no-KiCad build correctly reports SKIPPED"

@@ -7,3 +7,9 @@ __pycache__/
 *.erc
 *.log
 skidl_REPL.*
+
+# Machine-specific KiCad library paths. Never commit a path.
+kicad_paths.local.json
+
+# CI-side library checkout
+.kicad-libs/

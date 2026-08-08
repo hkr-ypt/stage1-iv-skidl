@@ -38,6 +38,9 @@ from validation.erc import run_erc
 from validation.assertions import run_assertions
 from validation.footprint_check import run_footprint_check, FootprintCheckError
 
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "tools"))
+import kicad_env  # noqa: E402
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 # Block build order == hierarchical sheet order (sheet 1..8). The block name is
@@ -174,22 +177,88 @@ def write_schematic(circuit):
     return sch_files
 
 
+def capability_banner(circuit=None, erc_summary=None, checks=None):
+    """State plainly what this run was able to verify, and what it was not.
+
+    The build deliberately runs on a machine with no KiCad installed — that is
+    a genuinely useful property — but a run that could not check anything
+    against KiCad must say SKIPPED. It must never print, or return, anything
+    that could be read as a KiCad-conformance pass.
+    """
+    env = kicad_env.diagnose()
+    checks = checks or {}
+    lines = []
+    A = lines.append
+    A("=" * 70)
+    A("BUILD CAPABILITY")
+    A("=" * 70)
+    if env["available"]:
+        A(f"  KiCad libraries ....... FOUND ({env['state']}) at "
+          f"{env['symbol_dir']}")
+        prov = env.get("provenance", {}).get("symbols", {})
+        if prov.get("tag"):
+            A(f"                          pinned {prov['tag']} @ "
+              f"{prov.get('commit', '')[:12]}")
+        if env["state"] == "INCOMPLETE":
+            A(f"                          MISSING: "
+              f"{env['required_symbols_missing']}")
+    else:
+        A("  KiCad libraries ....... NOT FOUND")
+        A("                          (run tools/kicad_env.py --diagnose)")
+
+    for label, key in (("Symbol resolution", "symbols"),
+                       ("Footprint resolution", "footprints")):
+        got = checks.get(key)
+        dots = "." * (22 - len(label))
+        if got is None:
+            A(f"  {label} {dots} SKIPPED (no KiCad libraries to check against)")
+        else:
+            A(f"  {label} {dots} VERIFIED ({got[0]}/{got[1]})")
+
+    if erc_summary is None:
+        A("  SKiDL ERC ............. not run")
+    else:
+        A(f"  SKiDL ERC ............. {erc_summary['erc_errors']} errors, "
+          f"{erc_summary['erc_warnings']} warnings")
+    A("  KiCad ERC ............. NOT RUN (open stage1_iv.kicad_sch in KiCad "
+      "and run ERC;")
+    A("                          see docs/LIBRARY_DEPENDENCIES.md)")
+    return "\n".join(lines), env
+
+
 def main():
     netlist_only = "--netlist-only" in sys.argv
     schematic_only = "--schematic-only" in sys.argv
 
     n, parts, circuit = build()
 
+    banner, env = capability_banner()
+    print(banner)
+
     # Structural guard FIRST: every symbol and footprint identifier must
     # resolve against the installed KiCad libraries, every declared pin must
     # correspond to a real pad, and every pad must be netted or explicitly
     # no-connect. Emitting a netlist that cannot be laid out is worse than
     # emitting nothing, so this aborts the build.
-    try:
-        run_footprint_check(circuit)
-    except FootprintCheckError as exc:
-        print(f"\nSTRUCTURAL CHECK: FAIL\n{exc}", file=sys.stderr)
-        return 1
+    # Without KiCad libraries there is nothing to check identifiers against.
+    # Skipping is legitimate; pretending to have checked is not.
+    checks = {}
+    if env["available"]:
+        try:
+            fp_summary = run_footprint_check(circuit)
+        except FootprintCheckError as exc:
+            print(f"\nSTRUCTURAL CHECK: FAIL\n{exc}", file=sys.stderr)
+            return 1
+        n_parts = fp_summary["parts"]
+        checks["symbols"] = (n_parts, n_parts)
+        checks["footprints"] = (n_parts - fp_summary["virtual_parts"],
+                                n_parts - fp_summary["virtual_parts"])
+    else:
+        print("\n" + "=" * 70)
+        print("STRUCTURAL CHECK: SKIPPED — no KiCad libraries on this machine.")
+        print("Symbol and footprint identifiers were NOT verified. This build")
+        print("has not been shown to be KiCad-conformant.")
+        print("=" * 70)
 
     if schematic_only:
         write_schematic(circuit)
@@ -233,11 +302,20 @@ def main():
           + (f" ({erc_allowed} allow-listed)" if erc_allowed else ""))
     print(f"  Power flags ........ {len(erc_summary['power_flag_nets'])} on "
           f"{', '.join(erc_summary['power_flag_nets'])}")
-    print("  Structural check ... PASS (identifiers, pads, provenance)")
-    print("  Assertions ......... PASS")
+    if checks:
+        print("  Structural check ... identifiers, pads and provenance "
+              "verified against the")
+        print("                       installed KiCad libraries")
+    else:
+        print("  Structural check ... SKIPPED — no KiCad libraries; identifiers")
+        print("                       and pads were NOT verified")
+    print("  Assertions ......... 9/9 connectivity assertions hold")
     print("\n  NOTE: SKiDL ERC and KiCad ERC are different checks with "
-          "different coverage.\n        See validation/erc.py — a pass here is "
-          "not evidence about KiCad ERC.")
+          "different coverage.\n        See validation/erc.py — a clean SKiDL "
+          "run is not evidence about KiCad ERC.")
+
+    print()
+    print(capability_banner(circuit, erc_summary, checks)[0])
 
     if erc_errors or erc_summary["erc_warnings_offending"]:
         print("\nDesign build FAILED on ERC.", file=sys.stderr)
