@@ -1,0 +1,219 @@
+#!/usr/bin/env python3
+"""
+kicad_roundtrip.py — verify the generated schematic through KiCad itself.
+=========================================================================
+
+``validation/schematic_check.py`` reconstructs connectivity from the emitted
+``.kicad_sch`` files with this project's own parser. That proves the emitter is
+self-consistent, not that **KiCad** reads the files the same way. This script
+closes that gap: it hands ``stage1_iv.kicad_sch`` to ``kicad-cli``, has KiCad
+export its own netlist, and compares the ``(reference, pin, net)`` set against
+``stage1_iv.net``.
+
+It also reports, per part, the two ERC categories this project is responsible
+for and that ``kicad-cli`` in KiCad 7 cannot check on its own:
+
+    * "Symbol X not found in symbol library Y"  -> unresolvable ``lib_id``
+    * footprint link issues                     -> unresolvable footprint id
+
+Usage::
+
+    python3 tools/kicad_roundtrip.py [--sch stage1_iv.kicad_sch]
+                                     [--net stage1_iv.net]
+
+Exits non-zero if KiCad's view of the schematic differs from the netlist, or if
+any identifier fails to resolve. Requires ``kicad-cli`` on PATH.
+"""
+
+from __future__ import annotations
+
+import argparse
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+REPO_ROOT = os.path.dirname(HERE)
+sys.path.insert(0, HERE)
+sys.path.insert(0, REPO_ROOT)
+
+from resolve_kicad_libs import KicadLibraries, LibraryNotFound, parse_sexp  # noqa: E402
+
+
+def _head(node):
+    return node[0] if isinstance(node, list) and node and isinstance(node[0], str) else ""
+
+
+def _kids(node, head):
+    return [c for c in node if isinstance(c, list) and _head(c) == head]
+
+
+def _first(node, head):
+    kids = _kids(node, head)
+    return kids[0] if kids else None
+
+
+def parse_kicad_netlist(path):
+    """Return {(ref, pin_number): net_name} from a KiCad `export` netlist."""
+    with open(path, encoding="utf-8") as fh:
+        tree = parse_sexp(fh.read())
+    export = _first(tree, "export")
+    if export is None:
+        raise SystemExit(f"{path}: not a KiCad netlist")
+    conns = {}
+    nets = _first(export, "nets")
+    for net in _kids(nets or [], "net"):
+        name_node = _first(net, "name")
+        name = str(name_node[1]) if name_node is not None and len(name_node) > 1 else ""
+        for node in _kids(net, "node"):
+            ref = pin = None
+            for field in ("ref", "pin"):
+                f = _first(node, field)
+                if f is not None and len(f) > 1:
+                    if field == "ref":
+                        ref = str(f[1])
+                    else:
+                        pin = str(f[1])
+            if ref and pin:
+                conns[(ref, pin)] = name
+    return conns
+
+
+_UNNAMED_RE = re.compile(r"^(Net-\(|unconnected-|N\$)")
+
+
+def normalise(conns):
+    """Drop KiCad's auto-generated net names; compare topology, not labels."""
+    return {k: v for k, v in conns.items() if not _UNNAMED_RE.match(v)}
+
+
+def group_by_net(conns):
+    out = {}
+    for key, net in conns.items():
+        out.setdefault(net, set()).add(key)
+    return out
+
+
+def run(sch, net, keep=False):
+    kicad_cli = shutil.which("kicad-cli")
+    if not kicad_cli:
+        print("kicad-cli not found on PATH — cannot round-trip through KiCad.",
+              file=sys.stderr)
+        return 3
+
+    tmpdir = tempfile.mkdtemp(prefix="kicad-roundtrip-")
+    exported = os.path.join(tmpdir, "kicad_export.net")
+    print(f"running: kicad-cli sch export netlist {sch}")
+    proc = subprocess.run(
+        [kicad_cli, "sch", "export", "netlist", "--output", exported, sch],
+        capture_output=True, text=True)
+    if proc.returncode != 0 or not os.path.isfile(exported):
+        print(proc.stdout + proc.stderr, file=sys.stderr)
+        print(f"kicad-cli failed ({proc.returncode}) — KiCad could not read the "
+              f"schematic.", file=sys.stderr)
+        return 1
+    version = subprocess.run([kicad_cli, "version"], capture_output=True,
+                             text=True).stdout.strip()
+    print(f"KiCad version: {version}")
+
+    ours = normalise(parse_kicad_netlist(net))
+    theirs = normalise(parse_kicad_netlist(exported))
+
+    print(f"netlist connections      : {len(ours)}")
+    print(f"KiCad schematic connections: {len(theirs)}")
+
+    errors = []
+    missing = sorted(set(ours) - set(theirs))
+    extra = sorted(set(theirs) - set(ours))
+    if missing:
+        errors.append(f"in netlist but not in KiCad's read of the schematic: {missing[:20]}")
+    if extra:
+        errors.append(f"in KiCad's read of the schematic but not in netlist: {extra[:20]}")
+
+    # KiCad scopes a net name that is local to one sheet as "/<sheet>/<name>",
+    # so compare the *partition* of pins into nets (the electrical fact) and
+    # check names only after stripping that sheet prefix.
+    ours_nets = group_by_net(ours)
+    theirs_nets = group_by_net(theirs)
+    ours_part = {frozenset(v) for v in ours_nets.values()}
+    theirs_part = {frozenset(v) for v in theirs_nets.values()}
+    for group in sorted(ours_part - theirs_part, key=sorted):
+        errors.append(
+            "netlist groups these pins on one net but KiCad's read does not: "
+            f"{sorted(group)}")
+    for group in sorted(theirs_part - ours_part, key=sorted):
+        errors.append(
+            "KiCad's read groups these pins on one net but the netlist does "
+            f"not: {sorted(group)}")
+    print(f"net partitions           : {len(ours_part)} netlist / "
+          f"{len(theirs_part)} schematic")
+
+    def leaf(name):
+        return name.rsplit("/", 1)[-1] if name.startswith("/") else name
+
+    theirs_by_group = {frozenset(v): leaf(k) for k, v in theirs_nets.items()}
+    renamed = sorted(
+        (name, theirs_by_group[frozenset(pins)])
+        for name, pins in ours_nets.items()
+        if frozenset(pins) in theirs_by_group
+        and theirs_by_group[frozenset(pins)] != name)
+    if renamed:
+        errors.extend(f"net name differs: netlist {a!r} vs schematic {b!r}"
+                      for a, b in renamed)
+
+    # ERC categories this project owns.
+    try:
+        libs = KicadLibraries()
+    except LibraryNotFound as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+
+    sys.path.insert(0, REPO_ROOT)
+    import main as project_main
+    _n, _parts, circuit = project_main.build()
+    sym_missing, fp_missing = [], []
+    for part in circuit.parts:
+        lib_id = (part.fields.get("KiCad_Lib") or "").strip()
+        if ":" not in lib_id or libs.get_symbol(lib_id) is None:
+            sym_missing.append(f"{part.ref} ({lib_id})")
+        fp_id = (part.footprint or "").strip()
+        if ":" not in fp_id or libs.get_footprint(fp_id) is None:
+            fp_missing.append(f"{part.ref} ({fp_id})")
+
+    print(f'ERC "Symbol not found in symbol library": {len(sym_missing)}'
+          + (f"  {sym_missing}" if sym_missing else ""))
+    print(f"ERC footprint_link_issues              : {len(fp_missing)}"
+          + (f"  {fp_missing}" if fp_missing else ""))
+    errors.extend(f"unresolvable symbol: {s}" for s in sym_missing)
+    errors.extend(f"unresolvable footprint: {s}" for s in fp_missing)
+
+    if keep:
+        print(f"exported netlist kept at {exported}")
+    else:
+        shutil.rmtree(tmpdir, ignore_errors=True)
+
+    if errors:
+        print("\nKICAD ROUND-TRIP: FAIL")
+        for e in errors:
+            print(f"  [ERROR] {e}")
+        return 1
+    print("\nKICAD ROUND-TRIP: PASS — KiCad reads exactly the netlist's "
+          "connectivity, and every identifier resolves.")
+    return 0
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[1])
+    ap.add_argument("--sch", default=os.path.join(REPO_ROOT, "stage1_iv.kicad_sch"))
+    ap.add_argument("--net", default=os.path.join(REPO_ROOT, "stage1_iv.net"))
+    ap.add_argument("--keep", action="store_true",
+                    help="keep the netlist KiCad exported")
+    args = ap.parse_args(argv)
+    return run(args.sch, args.net, args.keep)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

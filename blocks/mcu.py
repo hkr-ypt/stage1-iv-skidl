@@ -19,7 +19,7 @@ from libraries.custom_symbols import (
     Header_1x05, USB_C_Receptacle, USBLC6_2SC6,
 )
 from skidl import Net
-from .nets import nc
+from .nets import nc, nc_named
 
 
 def create_mcu_block(n):
@@ -56,6 +56,8 @@ def create_mcu_block(n):
     C42 = C()(ref="C42", tag="C42", value="100nF")
 
     # ---- power ----
+    # U9["VDD"] resolves to ALL FOUR VDD pads of the LQFP-64 (19/32/48/64) and
+    # U9["VSS"] to all four VSS pads (18/31/47/63); every rail pad is bonded.
     n.P3V3D += (U9["VDD"], U9["VBAT"], C34[1], C35[1], C36[1], C37[1],
                 C39[1], FB2[1], R21[1], J2["Pin_4"])
     n.DGND += (U9["VSS"], U9["VSSA"], C34[2], C35[2], C36[2], C37[2], C39[2])
@@ -102,6 +104,7 @@ def create_mcu_block(n):
     esd_dp = Net("USB_DP_ESD"); esd_dp += R27[2], U10["IO2b"]
     conn_dp = Net("USB_DP_CONN"); conn_dp += U10["IO2"], J3["DP"]
 
+    # J3["VBUS"] is all four VBUS pads (A4, A9, B4, B9) of the receptacle.
     n.VBUS += J3["VBUS"], U10["VBUS"], R28[1], C42[1]
     n.DGND += C42[2], U10["GND"]
     n.VBUS_SENSE += R28[2], R29[1], U9["PA0"]
@@ -111,13 +114,45 @@ def create_mcu_block(n):
     cc1 = Net("CC1"); cc1 += J3["CC1"], R24[1]
     cc2 = Net("CC2"); cc2 += J3["CC2"], R25[1]
     n.DGND += R24[2], R25[2]
-    # USB-C GND + shield to DGND only (no analog return routed via USB)
-    n.DGND += J3["GND"], J3["SHIELD"]
+
+    # USB-C ground: all four GND pads (A1, A12, B1, B12).
+    n.DGND += J3["GND"]
+
+    # USB-C shield (pad S1, four physical shell tabs): tied DIRECTLY to DGND.
+    # This is a deliberate choice, not an omission. The board is bus-powered
+    # and single-enclosure, so there is no chassis/signal-ground potential
+    # difference for an RC or ferrite path to manage; a direct tie gives the
+    # lowest-impedance return for cable-shield ESD and CM currents and keeps
+    # the shell from floating. The analog ground is unaffected: AGND reaches
+    # DGND only through the R31 star point (see blocks/power.py).
+    n.DGND += J3["SHIELD"]
+
+    # SBU1/SBU2 (pads A8/B8) carry no sideband signalling in this design.
+    nc_named(J3, "SBU1", "SBU2")
 
     # ---- status LED ----
     n.LED_STATUS += U9["PC13"], R23[1]
     led_a = Net("LED_A"); led_a += R23[2], LED1["A"]
     n.DGND += LED1["K"]
+
+    # ---- unused MCU pins: explicit no-connects ----
+    # The LQFP-64 has 64 pads. 31 are used above; the remaining 33 GPIOs are
+    # deliberately unpopulated in Stage 1 and are declared here so that no pad
+    # is silently absent from the netlist (validation/footprint_check.py
+    # errors on any pad that is neither netted nor listed here).
+    nc_named(
+        U9,
+        "PC14", "PC15",                                  # LSE oscillator (unused)
+        "PC0", "PC1", "PC2", "PC3",                      # port C low
+        "PA1", "PA2", "PA3", "PA6",                      # port A spares
+        "PC4", "PC5",
+        "PB0", "PB1", "PB2", "PB10",                     # port B spares
+        "PC6", "PC7", "PC8", "PC9",
+        "PA10",                                          # USB_ID (device only)
+        "PA15",
+        "PC10", "PC11", "PC12", "PD2",
+        "PB3", "PB4", "PB5", "PB6", "PB7", "PB8", "PB9",
+    )
 
     return {
         "U9": U9, "Y2": Y2, "C32": C32, "C33": C33, "C34": C34, "C35": C35,
