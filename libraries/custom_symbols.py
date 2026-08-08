@@ -99,7 +99,7 @@ _ETYPE = {
 
 def _part(lib_id, ref_prefix, footprint, mpn, pins_verified, description,
           aliases=None, extra_aliases=None, keywords="", datasheet="",
-          name=None):
+          name=None, symbol_class=""):
     """Build a TEMPLATE SKiDL part whose pins come from an installed symbol.
 
     ``aliases`` maps a design-facing pin name to the official pin *number* it
@@ -113,6 +113,11 @@ def _part(lib_id, ref_prefix, footprint, mpn, pins_verified, description,
     ``extra_aliases`` adds further names without changing the pin's name; use
     it when the official name is already the one the blocks should read
     (ADS1256 ``XTAL1/CLKIN`` is one pad addressable as ``XTAL1`` or ``CLKIN``).
+
+    ``symbol_class`` marks a **virtual** symbol — one that exists only in the
+    schematic and never reaches the board (currently ``"power"``, i.e.
+    PWR_FLAG). Virtual parts carry no footprint by design; the footprint checks
+    exempt exactly the parts carrying this field rather than being loosened.
     """
     sym = libs().get_symbol(lib_id)
     if sym is None:
@@ -171,7 +176,47 @@ def _part(lib_id, ref_prefix, footprint, mpn, pins_verified, description,
     p.fields["Pins_Verified"] = pins_verified
     # Machine-checkable provenance: exactly where these pin numbers were read.
     p.fields["Symbol_Source"] = f"{os.path.basename(sym.file)}:{sym.line}"
+    if symbol_class:
+        p.fields["Symbol_Class"] = symbol_class
     return p
+
+
+def is_virtual(part):
+    """True for schematic-only symbols that never reach the board (PWR_FLAG).
+
+    The footprint checks call this instead of special-casing an empty
+    footprint string, so a *real* part that lost its footprint is still an
+    error while a virtual symbol is legitimately exempt.
+    """
+    return bool(part.fields.get("Symbol_Class"))
+
+
+# =====================================================================
+#  POWER FLAG  (virtual — schematic only, never on the board)
+# =====================================================================
+
+def PWR_FLAG():
+    """KiCad's PWR_FLAG: declares a net as driven when nothing on the board drives it.
+
+    KiCad ERC's ``power_pin_not_driven`` rule fires on any net that has a
+    power-input pin but no power-output pin. Rails fed from outside the board
+    — the bench supply, the USB host — legitimately have no on-board driver,
+    and PWR_FLAG is the mechanism KiCad provides to say so. Its single pin is
+    ``power_out``, which is exactly what satisfies both KiCad's rule and
+    SKiDL's "insufficient drive current" check.
+
+    This is a *real symbol with a real pin* that is serialised into the netlist
+    and the schematic — unlike the ``Net.drive = POWER`` attribute it replaces,
+    which existed only inside the Python process and silenced SKiDL's ERC
+    without telling KiCad anything. See blocks/nets.py.
+    """
+    # Pins_Verified is "RESOLVED", not the "STD" of the pre-resolver vocabulary:
+    # this symbol's single pin number is read from power.kicad_sym like every
+    # other pin in the design, and "STD" no longer exists as a provenance class.
+    return _part("power:PWR_FLAG", "FLG", "", "n/a", "RESOLVED",
+                 "Power flag: declares an externally-sourced net as driven",
+                 keywords="power flag pwr_flag virtual",
+                 symbol_class="power")
 
 
 # =====================================================================

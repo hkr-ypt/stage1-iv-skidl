@@ -25,8 +25,9 @@ Design (documented in SCHEMATIC.md and manifest.yaml -> schematic_assumptions):
 
 * Connectivity is expressed by name-matched labels at short wire stubs on
   every connected pin (no rat's-nest routing):
-    - GLOBAL_POWER nets (drive == POWER, plus the shared-reference group from
-      blocks/nets.py NET_MANIFEST["power"])           -> (global_label ...)
+    - GLOBAL_POWER nets (rails carrying a PWR_FLAG, plus the shared power/
+      reference group blocks/nets.py NET_MANIFEST["power"])
+                                                      -> (global_label ...)
     - HIER_SIGNAL nets (span >= 2 blocks, not power)  -> (hierarchical_label)
       in children, matched by (sheet ... (pin ...)) on the top sheet, tied
       together there with stubs + local (label ...)s
@@ -54,7 +55,7 @@ Entry point:  generate_schematic(circuit, out_dir=".") -> list[pathlib.Path]
 import uuid
 from pathlib import Path
 
-from skidl import POWER, Pin
+from skidl import Pin
 
 from blocks.nets import NET_MANIFEST
 
@@ -63,6 +64,7 @@ from blocks.nets import NET_MANIFEST
 # ---------------------------------------------------------------------------
 
 PROJECT = "stage1_iv"
+PWR_FLAG_LIB_ID = "power:PWR_FLAG"
 SCHEMA_VERSION = "20230121"          # KiCad 7 .kicad_sch schema
 GENERATOR_NAME = "stage1_iv_skidl"
 
@@ -176,6 +178,13 @@ class SymbolDef:
         self.name = lib_id.split(":", 1)[1] if ":" in lib_id else lib_id
         self.ref_prefix = template_part.ref_prefix
         self.description = getattr(template_part, "description", "") or ""
+        # Virtual, schematic-only symbols (PWR_FLAG) are emitted as KiCad
+        # power symbols: (power), matching the attributes of the upstream
+        # power:PWR_FLAG symbol exactly. What keeps them off the board and out
+        # of the netlist is the "#" reference prefix KiCad reserves for power
+        # symbols (upstream's own Reference default is "#FLG"), not an
+        # on_board override.
+        self.is_power = template_part.fields.get("Symbol_Class") == "power"
         pins = list(template_part.pins)
         self.signature = tuple(
             (str(p.num), str(p.name), PIN_TYPE_MAP[p.func]) for p in pins)
@@ -214,7 +223,9 @@ class SymbolDef:
     def sexpr(self):
         w2, h2 = self.width // 2, self.height // 2
         out = []
-        out.append(f'    (symbol {q(self.lib_id)} (pin_names (offset 0.508)) '
+        power = "(power) " if self.is_power else ""
+        out.append(f'    (symbol {q(self.lib_id)} {power}'
+                   f'(pin_names (offset 0.508)) '
                    f'(in_bom yes) (on_board yes)')
         out.append(f'      (property "Reference" {q(self.ref_prefix)} '
                    f'(at {U(-w2)} {U(h2 + 1)} 0) '
@@ -277,12 +288,24 @@ class CircuitModel:
         self.block_parts = {b: [p for p in self.parts if p.skidl_block == b]
                             for b in BLOCK_ORDER}
 
+        # Nets carrying a PWR_FLAG. These are the board's externally-sourced
+        # supply rails (blocks/nets.py::EXTERNALLY_SOURCED_RAILS), so they get
+        # global power labels exactly like the NET_MANIFEST power group. This
+        # replaces the old `net.drive == POWER` test, which only ever answered
+        # True because blocks/nets.py stamped the attribute by hand.
+        self.power_flag_nets = set()
+        for part in self.parts:
+            if part.fields.get("KiCad_Lib") != PWR_FLAG_LIB_ID:
+                continue
+            for pin in part.pins:
+                for net in pin.get_nets():
+                    if type(net).__name__ != "NCNet":
+                        self.power_flag_nets.add(net.name)
+
         # (ref, pin_num) -> net name, and net name -> set of blocks touched.
         self.pin_net = {}
         self.net_blocks = {}
-        self.net_drive_power = {}
         for net in sorted(circuit.get_nets(), key=lambda x: x.name):
-            self.net_drive_power[net.name] = (net.drive == POWER)
             blocks = set()
             for pin in net.get_pins():
                 self.pin_net[(pin.part.ref, str(pin.num))] = net.name
@@ -294,10 +317,10 @@ class CircuitModel:
                         for pin in circuit.NC.get_pins()}
 
         # Net classification (documented in SCHEMATIC.md).
-        power_group = set(NET_MANIFEST["power"])
+        power_group = set(NET_MANIFEST["power"]) | self.power_flag_nets
         self.net_class = {}
         for name, blocks in self.net_blocks.items():
-            if self.net_drive_power[name] or name in power_group:
+            if name in power_group:
                 self.net_class[name] = "GLOBAL_POWER"
             elif len(blocks) >= 2:
                 self.net_class[name] = "HIER_SIGNAL"

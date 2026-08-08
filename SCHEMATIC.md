@@ -54,7 +54,11 @@ synthesized generic rectangle:
   half down the left side, second half down the right, 2.54 mm pitch.
 - Properties on every instance: `Reference`, `Value` (visible),
   `Footprint`, `Datasheet`, `MPN`, `KiCad_Lib`, `Sheet` (owning block) and
-  `Pins_Verified`. The emitter hides this property only when its value is the
+  `Pins_Verified`. Virtual `power:PWR_FLAG` symbols are emitted with KiCad's
+  `(power)` attribute and a `#`-prefixed reference (`#FLG1`..`#FLG8`), matching
+  the upstream symbol; KiCad therefore keeps them out of the netlist export and
+  off the board, while ERC still counts their `power_out` pin as a driver.
+  The emitter hides this property only when its value is the
   literal `STD`; since every part now carries `RESOLVED` or
   `VERIFY-DATASHEET`, the flag is drawn **visible on every symbol**, stating on
   the sheet itself where that part's pin numbers came from. `VERIFY-DATASHEET`

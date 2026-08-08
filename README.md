@@ -155,6 +155,13 @@ python3 validation/schematic_check.py
 # floating pads, no placeholder provenance (also run from main.py)
 python3 validation/footprint_check.py
 
+# ERC gate standalone: hard-fails on any error, any un-allow-listed warning,
+# or any PWR_FLAG invariant violation
+python3 validation/erc.py
+
+# KiCad's power-driver ERC rules, evaluated on the emitted .kicad_sch files
+python3 tools/kicad_erc_power.py
+
 # Audit every part against the installed libraries
 python3 tools/audit_identifiers.py > docs/audit_identifiers_after.md
 
@@ -165,7 +172,14 @@ python3 tools/kicad_roundtrip.py
 tools/test_guard_fails.sh
 ```
 
-Expected result: **0 ERC errors, 0 ERC warnings, 9/9 assertions PASS, 0 unresolved identifiers, 0 unaccounted pads**, and:
+Expected result: **0 SKiDL ERC errors, 0 SKiDL ERC warnings, 9/9 assertions
+PASS, 0 unresolved identifiers, 0 unaccounted pads**, and:
+
+> **SKiDL ERC is not KiCad ERC.** They are different checks with different
+> coverage — see [Validation](#validation) below for exactly what each one does
+> and does not cover. A clean SKiDL ERC run is evidence about the SKiDL
+> circuit; it says nothing about the KiCad ERC dialog.
+
 
 - `stage1_iv.net` — KiCad netlist
 - `stage1_iv.kicad_sch` + 8 child `.kicad_sch` — hierarchical KiCad schematic
@@ -193,10 +207,52 @@ Expected result: **0 ERC errors, 0 ERC warnings, 9/9 assertions PASS, 0 unresolv
 
 ## Validation
 
-**ERC (`validation/erc.py`)** runs SKiDL's built-in ERC (unconnected pins,
-driver conflicts, missing power flags) plus structural checks: missing
-footprints, duplicate references, and a pin-number-provenance report. Result:
+**ERC (`validation/erc.py`)** — and the first thing to know is that **SKiDL ERC
+and KiCad ERC are different checks with different coverage. A pass here is not
+evidence about KiCad ERC.**
+
+SKiDL's ERC covers: pins connected to nothing; pins on the no-connect net that
+also carry a real net; nets with fewer than two pins; pin-type conflicts; and
+insufficient drive — a net whose maximum pin drive is below what some pin on it
+requires. That last one is SKiDL's analogue of KiCad's `power_pin_not_driven`,
+and the `PWR_FLAG` parts on the eight externally-sourced rails satisfy both.
+
+SKiDL's ERC does **not** cover, and KiCad's does: symbol and library resolution
+(`lib_symbol_issues`, `lib_symbol_mismatch`, "symbol not found in library");
+footprint link resolution (`footprint_link_issues`); and everything geometric —
+wire/label/pin overlap, dangling wire ends, bus definition errors, sheet-pin
+mismatch. The first two are covered instead by
+[`validation/footprint_check.py`](validation/footprint_check.py) and
+[`tools/audit_identifiers.py`](tools/audit_identifiers.py); the geometric rules
+are not checked anywhere in this repository.
+
+The gate is real: `run_erc` reads `skidl.erc_logger`'s counters around the
+`ERC()` call, cross-checks them against the captured message texts, and
+**raises** on any error, on any warning not in an explicitly justified
+allow-list (currently empty), and on any violation of the `PWR_FLAG` invariant.
+`main.py` prints the actual counts and exits non-zero. Current result:
 **0 errors, 0 warnings**.
+
+**Power flags.** Eight rails have no on-board driver because their energy comes
+from outside the board, and each carries one `power:PWR_FLAG` instantiated at
+its physical point of entry:
+
+| Net | Physical source | Flag | Attached in |
+|---|---|---|---|
+| `+15VA` | bench supply, J1 pin 1 | `#FLG1` | `blocks/power.py` |
+| `-15VA` | bench supply, J1 pin 2 | `#FLG2` | `blocks/power.py` |
+| `+5V_RAW` | bench supply, J1 pin 3 | `#FLG3` | `blocks/power.py` |
+| `DGND` | bench supply return, J1 pin 4 | `#FLG4` | `blocks/power.py` |
+| `+5VA` | `+5V_RAW` through ferrite bead FB1 | `#FLG5` | `blocks/power.py` |
+| `AGND` | analog return; separate net from DGND (R31 star) | `#FLG6` | `blocks/power.py` |
+| `VBUS` | USB host, through J3 | `#FLG7` | `blocks/mcu.py` |
+| `VDDA` | `+3V3D` through ferrite bead FB2 | `#FLG8` | `blocks/mcu.py` |
+
+`+3V3D` and `VREF_2V5` are deliberately **not** flagged: U1.VOUT and U2.Vout
+genuinely drive them, and a flag there would mask a future regulator wiring
+error. `validation/erc.py::check_power_flags` enforces all of this — a missing
+flag, a flag on an undeclared net, and a flag on a net that already has a real
+driver are each a hard failure.
 
 **Structural guard (`validation/footprint_check.py`)** — wired into `main.py`,
 so the build **aborts** on any failure. Five hard checks:

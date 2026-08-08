@@ -16,7 +16,7 @@ Key topology points enforced here:
 """
 
 from libraries.custom_symbols import (
-    TerminalBlock_4, LD1117S33, REF5025, L_FerriteBead, R, C, C_POL,
+    TerminalBlock_4, LD1117S33, REF5025, L_FerriteBead, R, C, C_POL, PWR_FLAG,
 )
 from .nets import nc
 
@@ -82,8 +82,44 @@ def create_power_block(n):
     n.AGND += R31[1]
     n.DGND += R31[2]
 
+    # ---- POWER-SOURCE FLAGS -------------------------------------------
+    # Nothing on this board drives these rails; the energy enters from
+    # outside it. A PWR_FLAG at the point of entry is how that fact is
+    # stated to ERC — see blocks/nets.py for why Net.drive was not.
+    #
+    # J1 is the 4-position screw terminal fed by the bench supply. Its pins
+    # are PASSIVE (it is a connector, not a regulator), so each of the three
+    # rails and the ground return it brings in needs its own flag.
+    FLG1 = PWR_FLAG()(ref="#FLG1", tag="FLG1", value="+15VA")
+    FLG2 = PWR_FLAG()(ref="#FLG2", tag="FLG2", value="-15VA")
+    FLG3 = PWR_FLAG()(ref="#FLG3", tag="FLG3", value="+5V_RAW")
+    FLG4 = PWR_FLAG()(ref="#FLG4", tag="FLG4", value="DGND")
+    n.P15VA += FLG1[1]        # source: bench supply +15 V, enters at J1 pin 1
+    n.N15VA += FLG2[1]        # source: bench supply -15 V, enters at J1 pin 2
+    n.P5V_RAW += FLG3[1]      # source: bench supply +5 V,  enters at J1 pin 3
+    n.DGND += FLG4[1]         # source: bench supply return, enters at J1 pin 4
+
+    # +5VA is +5V_RAW after ferrite bead FB1. FB1 is a passive two-terminal
+    # part, so KiCad treats +5VA as a net with no driver of its own even
+    # though +5V_RAW is flagged. Its source is still the bench supply, reached
+    # through FB1.
+    FLG5 = PWR_FLAG()(ref="#FLG5", tag="FLG5", value="+5VA")
+    n.P5VA += FLG5[1]
+
+    # AGND is galvanically a SEPARATE NET from DGND: the two planes meet only
+    # at the R31 0-ohm star point, and R31 is a passive resistor, so KiCad
+    # (correctly) does not propagate DGND's flag across it. The analog return
+    # therefore needs its own flag, placed here at the star point — the single
+    # physical location where the analog ground is referenced to the supply
+    # return. Flagging it does NOT merge the planes; the star topology and its
+    # assertion in validation/assertions.py are unchanged.
+    FLG6 = PWR_FLAG()(ref="#FLG6", tag="FLG6", value="AGND")
+    n.AGND += FLG6[1]
+
     return {
         "J1": J1, "U1": U1, "U2": U2, "FB1": FB1, "R31": R31,
         "C1": C1, "C2": C2, "C3": C3, "C4": C4, "C5": C5, "C6": C6,
         "C7": C7, "C8": C8, "C9": C9, "C10": C10,
+        "FLG1": FLG1, "FLG2": FLG2, "FLG3": FLG3, "FLG4": FLG4,
+        "FLG5": FLG5, "FLG6": FLG6,
     }
