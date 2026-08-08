@@ -117,7 +117,7 @@ Total components: **118**
 | U5 | OPA548T | OPA548T | stage1_iv:OPA548T | Package_TO_SOT_THT:TO-220-7_P2.54x3.7mm_StaggerOdd_Lead3.8mm_Vertical | 4 Power Buffer | VERIFY pin#s @ datasheet |
 | U6 | INA128P | INA128P | Amplifier_Instrumentation:INA128 | Package_DIP:DIP-8_W7.62mm | 5 Current Sense | OK — pin numbers read from Amplifier_Instrumentation.kicad_sym:2285 |
 | U7 | INA128P | INA128P | Amplifier_Instrumentation:INA128 | Package_DIP:DIP-8_W7.62mm | 6 Voltage Sense | OK — pin numbers read from Amplifier_Instrumentation.kicad_sym:2285 |
-| U8 | ADS1256IDBR | ADS1256IDBR | stage1_iv:ADS1256 | Package_SO:SSOP-28_5.3x10.2mm_P0.65mm | 7 ADC | OK — pin numbers read from stage1_iv.kicad_sym:15 |
+| U8 | ADS1256IDBR | ADS1256IDBR | stage1_iv:ADS1256 | Package_SO:SSOP-28_5.3x10.2mm_P0.65mm | 7 ADC | OK — pin numbers read from ads1256_sbas288k_terminal_functions.txt:1 |
 | U9 | STM32F411RET6 | STM32F411RET6 | MCU_ST_STM32F4:STM32F411RETx | Package_QFP:LQFP-64_10x10mm_P0.5mm | 2 MCU | OK — pin numbers read from MCU_ST_STM32F4.kicad_sym:332580 |
 | U10 | USBLC6-2SC6 | USBLC6-2SC6 | Power_Protection:USBLC6-2SC6 | Package_TO_SOT_SMD:SOT-23-6 | 2 MCU | OK — pin numbers read from Power_Protection.kicad_sym:35786 |
 | Y1 | 7.6800MHz | generic | Device:Crystal | Crystal:Crystal_SMD_HC49-SD | 7 ADC | OK — pin numbers read from Device.kicad_sym:9588 |

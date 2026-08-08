@@ -61,23 +61,132 @@ from resolve_kicad_libs import KicadLibraries, LibraryNotFound  # noqa: E402
 
 
 class SymbolResolutionError(RuntimeError):
-    """A declared lib_id does not exist in the installed libraries."""
+    """A declared lib_id could not be resolved from any source."""
 
+
+PROJECT_LIB_NICK = "stage1_iv"
+PROJECT_LIB_PATH = os.path.join(_REPO_ROOT, "libraries", "stage1_iv.kicad_sym")
 
 _LIBS = None
+_PROJECT_LIB = None
+_UPSTREAM_STATE = {"available": None, "origin": None, "used": set(),
+                   "fallback_used": set(), "authored_used": set()}
 
 
 def libs():
-    """The shared, lazily-built view of the installed KiCad libraries."""
+    """View of the installed upstream KiCad libraries, or None if absent.
+
+    Returns None rather than raising: the design must still build on a machine
+    with no KiCad, falling back to the committed project library. What must
+    never happen is a *silent* fallback, so :func:`upstream_state` records
+    exactly which source every symbol came from and the build banner prints it.
+    """
     global _LIBS
-    if _LIBS is None:
+    if _UPSTREAM_STATE["available"] is None:
         try:
             _LIBS = KicadLibraries()
+            _UPSTREAM_STATE["available"] = True
+            _UPSTREAM_STATE["origin"] = _LIBS.origin
         except LibraryNotFound as exc:
-            raise SymbolResolutionError(
-                "This design reads every pin number from the installed KiCad "
-                "libraries and refuses to guess.\n\n" + str(exc)) from exc
+            _LIBS = None
+            _UPSTREAM_STATE["available"] = False
+            _UPSTREAM_STATE["origin"] = str(exc).splitlines()[0]
     return _LIBS
+
+
+def project_lib():
+    """The committed project symbol library, used when upstream is absent."""
+    global _PROJECT_LIB
+    if _PROJECT_LIB is None:
+        if not os.path.isfile(PROJECT_LIB_PATH):
+            raise SymbolResolutionError(
+                f"neither the installed KiCad libraries nor the committed "
+                f"project library {PROJECT_LIB_PATH} is available; there is "
+                f"no source for pin numbers and this design will not guess.")
+        _PROJECT_LIB = _parse_project_lib(PROJECT_LIB_PATH)
+    return _PROJECT_LIB
+
+
+def _parse_project_lib(path):
+    """{symbol_name: SimpleSymbol} from a .kicad_sym, without needing KiCad."""
+    from resolve_kicad_libs import KicadLibraries as _K
+    with open(path, encoding="utf-8") as fh:
+        from resolve_kicad_libs import parse_sexp
+        tree = parse_sexp(fh.read())
+    out = {}
+    for node in tree:
+        if not isinstance(node, list) or not node or node[0] != "kicad_symbol_lib":
+            continue
+        for child in node:
+            if isinstance(child, list) and child and child[0] == "symbol":
+                sym = _K._build_symbol(PROJECT_LIB_NICK, path, child)
+                out[sym.name] = sym
+    return out
+
+
+def upstream_state():
+    """Report which symbol source was used, for the build capability banner."""
+    return dict(_UPSTREAM_STATE)
+
+
+def _authored_pins(symbol_name):
+    """Pins of a datasheet-authored symbol, parsed from libraries/provenance/.
+
+    ADS1256 and OPA548T have no upstream symbol. Their pins are read from the
+    committed provenance excerpts rather than from the generated project
+    library, so ``tools/author_project_symbols.py --check`` is an independent
+    check and not a comparison of the library against itself.
+    """
+    import author_project_symbols as authored
+    return {"ADS1256": authored.parse_ads1256,
+            "OPA548T": authored.parse_opa548t}[symbol_name]()
+
+
+AUTHORED_SYMBOLS = ("ADS1256", "OPA548T")
+
+
+class _Sym:
+    """Minimal symbol record, shaped like resolve_kicad_libs.Symbol."""
+
+    def __init__(self, lib, name, file, line, pins):
+        self.lib, self.name, self.file, self.line = lib, name, file, line
+        self.pins = pins
+        self.properties = {}
+
+
+class _SymPin:
+    def __init__(self, number, name, etype):
+        self.number, self.name, self.etype = number, name, etype
+
+
+def resolve_symbol(lib_id):
+    """Resolve a lib_id to a symbol, recording which source answered.
+
+    Order: datasheet-authored provenance -> installed upstream library ->
+    committed project library. Every outcome is recorded in
+    :func:`upstream_state`; nothing resolves silently.
+    """
+    nick, _, name = lib_id.partition(":")
+
+    if nick == PROJECT_LIB_NICK and name in AUTHORED_SYMBOLS:
+        rows = sorted(_authored_pins(name), key=lambda r: int(r["number"]))
+        _UPSTREAM_STATE["authored_used"].add(lib_id)
+        src = rows[0]["source"].split(":")[0] if rows else "libraries/provenance"
+        return _Sym(PROJECT_LIB_NICK, name, os.path.join(_REPO_ROOT, src), 1,
+                    [_SymPin(r["number"], r["name"], r["etype"]) for r in rows])
+
+    installed = libs()
+    if installed is not None:
+        sym = installed.get_symbol(lib_id)
+        if sym is not None:
+            _UPSTREAM_STATE["used"].add(lib_id)
+            return sym
+
+    sym = project_lib().get(name)
+    if sym is not None:
+        _UPSTREAM_STATE["fallback_used"].add(lib_id)
+        return sym
+    return None
 
 
 # KiCad electrical-type string -> SKiDL pin function.
@@ -119,13 +228,15 @@ def _part(lib_id, ref_prefix, footprint, mpn, pins_verified, description,
     PWR_FLAG). Virtual parts carry no footprint by design; the footprint checks
     exempt exactly the parts carrying this field rather than being loosened.
     """
-    sym = libs().get_symbol(lib_id)
+    sym = resolve_symbol(lib_id)
     if sym is None:
+        installed = libs()
         nick = lib_id.split(":", 1)[0] if ":" in lib_id else lib_id
-        known = libs().has_symbol_library(nick)
+        known = installed is not None and installed.has_symbol_library(nick)
         raise SymbolResolutionError(
-            f"symbol {lib_id!r} does not exist "
-            f"({'library found, symbol missing' if known else 'library not found'}). "
+            f"symbol {lib_id!r} does not exist in the installed KiCad "
+            f"libraries ({'library found, symbol missing' if known else 'library not found'}) "
+            f"nor in the committed project library {PROJECT_LIB_PATH}.\n"
             f"Resolve the correct name with:\n"
             f"    python3 tools/resolve_kicad_libs.py --find-symbol "
             f"'{lib_id.split(':')[-1]}*'")
@@ -176,6 +287,9 @@ def _part(lib_id, ref_prefix, footprint, mpn, pins_verified, description,
     p.fields["Pins_Verified"] = pins_verified
     # Machine-checkable provenance: exactly where these pin numbers were read.
     p.fields["Symbol_Source"] = f"{os.path.basename(sym.file)}:{sym.line}"
+    # The project-library symbol every schematic instance points at. See
+    # generators/schematic.py::lib_id_for and docs/LIBRARY_DEPENDENCIES.md.
+    p.fields["Project_Symbol"] = f"{PROJECT_LIB_NICK}:{sym.name}"
     if symbol_class:
         p.fields["Symbol_Class"] = symbol_class
     return p

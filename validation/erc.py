@@ -334,7 +334,10 @@ def main():
     except AssertionError as exc:
         print(f"\nERC GATE: FAIL\n{exc}", file=sys.stderr)
         return 1
-    print("ERC GATE: PASS")
+    # Qualified deliberately: this gate covers SKiDL ERC only. KiCad ERC is a
+    # different check and has not been run here.
+    print("SKiDL ERC gate: 0 errors, 0 un-allow-listed warnings. "
+          "KiCad ERC: NOT RUN.")
     return 0
 
 

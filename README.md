@@ -129,15 +129,26 @@ and connects them to the shared global nets. `main.py` builds all eight sheets.
 ## Install & run
 
 ```bash
-# SKiDL's optional PCB-placement extras (kinet2pcb, hierplace) may fail to build
-# and are NOT needed here, so install the core + import-time deps directly:
-pip install skidl --no-deps
-pip install graphviz future kinparse simp_sexp rich ply
+# 1. SKiDL and its import-time dependencies. The optional PCB-placement extras
+#    (kinet2pcb, hierplace) are not needed and may fail to build, so skip them.
+pip install --no-deps skidl==2.2.3
+pip install graphviz future simp_sexp rich ply pyyaml
+#    kinparse's setup.py predates modern setuptools:
+SETUPTOOLS_USE_DISTUTILS=stdlib pip install --no-build-isolation kinparse
 
-# The KiCad symbol + footprint libraries are REQUIRED: the design reads its pin
-# numbers out of them and refuses to guess. Install a pinned revision with
-sudo tools/install_kicad_libs.sh          # -> /usr/share/kicad/{symbols,footprints}
-python3 tools/resolve_kicad_libs.py --paths   # confirm they resolve
+# 2. Check what KiCad libraries this machine has, if any. ALWAYS START HERE:
+#    a partially-copied symbols directory looks like a working install until
+#    ERC reports a hundred "library not found" errors.
+python3 tools/kicad_env.py --check --diagnose
+#      exit 0 = complete, 2 = none found, 3 = INCOMPLETE (and it names what is
+#      missing). KiCad is OPTIONAL — see "Building without KiCad" below.
+
+# 3. Optional: install exactly the pinned library revision this design was
+#    resolved against (see docs/LIBRARY_DEPENDENCIES.md).
+tools/install_kicad_libs.sh "$HOME/.local/share/kicad" 9.0.9.1
+export KICAD9_SYMBOL_DIR="$HOME/.local/share/kicad/symbols"
+export KICAD9_FOOTPRINT_DIR="$HOME/.local/share/kicad/footprints"
+#    or write your paths into kicad_paths.local.json (gitignored).
 
 # Build: validate + emit netlist + schematic + manifests
 python3 main.py
@@ -170,7 +181,44 @@ python3 tools/kicad_roundtrip.py
 
 # Prove the guard fails when a bad identifier is reintroduced
 tools/test_guard_fails.sh
+
+# Regenerated files are current (project symbol library, lib tables, deps doc)
+python3 tools/author_project_symbols.py --check
+python3 tools/gen_project_config.py --check
+
+# No committed file contains a machine-specific absolute path
+python3 tools/check_no_abs_paths.py
 ```
+
+### Building without KiCad
+
+`python3 main.py` runs with no KiCad installed: pin data falls back to the
+committed project symbol library `libraries/stage1_iv.kicad_sym`. The build then
+reports **SKIPPED** for every KiCad-conformance check and never anything
+resembling a pass:
+
+```
+  KiCad libraries ....... NOT FOUND
+  Symbol resolution ..... SKIPPED (no KiCad libraries to check against)
+  Footprint resolution .. SKIPPED (no KiCad libraries to check against)
+  SKiDL ERC ............. 0 errors, 0 warnings
+  KiCad ERC ............. NOT RUN
+```
+
+### Opening in KiCad
+
+`stage1_iv.kicad_pro`, `sym-lib-table` and `fp-lib-table` are committed and
+contain **no absolute paths** — only `${KIPRJMOD}` and KiCad's own
+`${KICAD9_SYMBOL_DIR}` / `${KICAD9_FOOTPRINT_DIR}`. Open `stage1_iv.kicad_pro`
+and every symbol resolves from `libraries/stage1_iv.kicad_sym` inside the
+repository, so the schematic opens correctly even on a machine whose stock
+libraries are missing or incomplete.
+
+**Update the PCB with "Update PCB from Schematic", never by importing
+`stage1_iv.net`** — the schematic is the single source of truth for KiCad and
+the netlist is intentionally flat. See
+[`docs/library_strategy.md`](docs/library_strategy.md) §4 for the decision and
+its consequences for an existing board.
 
 Expected result: **0 SKiDL ERC errors, 0 SKiDL ERC warnings, 9/9 assertions
 PASS, 0 unresolved identifiers, 0 unaccounted pads**, and:
