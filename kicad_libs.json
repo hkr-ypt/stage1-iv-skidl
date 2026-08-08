@@ -1,0 +1,13 @@
+{
+  "_comment": [
+    "Explicit KiCad library locations for tools/resolve_kicad_libs.py.",
+    "Resolution order is: KICAD{9,8,7}_SYMBOL_DIR/_FOOTPRINT_DIR env vars, then",
+    "this file, then per-platform defaults. If the paths below do not exist on",
+    "your machine the resolver falls through to the platform defaults, so this",
+    "file is safe to commit. Override it with $STAGE1_IV_KICAD_CONFIG.",
+    "Install a pinned library revision with: tools/install_kicad_libs.sh"
+  ],
+  "symbol_dir": "/usr/share/kicad/symbols",
+  "footprint_dir": "/usr/share/kicad/footprints",
+  "pinned_upstream_tag": "9.0.9.1"
+}
