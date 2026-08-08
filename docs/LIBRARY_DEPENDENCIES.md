@@ -5,7 +5,7 @@ Regenerate with `python3 tools/gen_project_config.py`; verify with
 `python3 tools/gen_project_config.py --check`. It is built from the live
 circuit, so it cannot describe anything the design does not actually use.
 
-Resolved on **2026-08-08** against:
+Resolved against:
 
 | | repository | pinned revision | commit |
 |---|---|---|---|

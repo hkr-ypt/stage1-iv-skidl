@@ -305,7 +305,64 @@ committed project library — but nothing claims KiCad conformance. The
 
 ---
 
-## 6. What was not done
+## 6. Follow-up: KiCad could not load the project library (fixed)
+
+The first version of this change produced a `libraries/stage1_iv.kicad_sym`
+that **KiCad refused to load**, so every one of the 118 symbol lookups reported
+*"The symbol library 'stage1_iv' was not found"*. Three defects, all in the file
+header:
+
+| defect | why it breaks | affects |
+|---|---|---|
+| leading `;` comment block | a `.kicad_sym` must begin with `(kicad_symbol_lib`; KiCad's reader rejects anything before it | KiCad 7 and 9 |
+| `(generator_version "9.0")` | a KiCad 9 field | KiCad 7 |
+| `(version 20241209)` over v6/v7 symbol bodies | the v9 stamp makes KiCad 9 apply v9 parsing rules, which require `(hide yes)` rather than a bare `hide` | KiCad 9 |
+
+The library is now emitted in the **KiCad 6/7 symbol schema**
+(`(version 20211014)`, bare `generator` token, no `generator_version`, no
+leading comments) — read natively by KiCad 7 and migrated on load by KiCad 9,
+and therefore verifiable with the KiCad available in CI. The "generated file"
+banner moved to [`libraries/README.md`](../libraries/README.md), since it
+cannot live inside the file.
+
+### The missing check, now added
+
+Every other check in this repository validates the output with *this project's*
+parser. That proves the emitter is self-consistent; it does not prove KiCad
+accepts the result — and it did not. `tools/check_kicad_loads.py` closes that
+gap by handing the artifacts to `kicad-cli` and believing it:
+
+```
+  kicad-cli 7.0.11
+  [ OK ] KiCad loaded libraries/stage1_iv.kicad_sym and rendered all 25 symbols
+  [ OK ] KiCad read stage1_iv.kicad_sch (110 components)
+```
+
+and against the regression it exists to catch:
+
+```
+  [FAIL] KiCad could NOT load /tmp/broken.kicad_sym
+         kicad-cli said: Unable to load library
+```
+
+It runs in CI, after a step that installs `kicad-cli` so it is a real check
+rather than a skip. `kicad-cli` was available in this environment the whole
+time; not using it earlier is why this reached review.
+
+### Two CI failures fixed at the same time
+
+Both were generated files that could not match across machines, so the
+`--check` gates were unsatisfiable by construction:
+
+* `libraries/provenance/stage1_iv_pin_provenance.json` embedded the absolute
+  path of the library directory. It now records repository, tag and commit
+  only — *which* revision, never *where* it sits.
+* `docs/LIBRARY_DEPENDENCIES.md` embedded the generation date, so it went stale
+  the next day. The pinned tag and commit are the meaningful "when".
+
+---
+
+## 7. What was not done
 
 **KiCad's ERC dialog was not run, on any machine reachable from here.**
 `kicad-cli sch erc` first shipped in KiCad 8; KiCad 7.0.11 is the newest

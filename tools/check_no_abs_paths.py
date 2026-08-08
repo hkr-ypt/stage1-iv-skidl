@@ -47,8 +47,6 @@ EXEMPT_FILES = {
     # machine a value came from. Regenerated, never read back as a path.
     "docs/audit_identifiers_before.md",
     "docs/audit_identifiers_after.md",
-    "docs/LIBRARY_DEPENDENCIES.md",
-    "libraries/provenance/stage1_iv_pin_provenance.json",
     "libraries/provenance/opa548t_akl_symbol.txt",
     # Narrative documents quoting diagnostic transcripts verbatim.
     "docs/identifier_resolution.md",

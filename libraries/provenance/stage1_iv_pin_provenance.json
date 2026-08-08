@@ -2,14 +2,12 @@
   "generated_by": "tools/author_project_symbols.py",
   "upstream_library_revision": {
     "symbols": {
-      "path": "/usr/share/kicad/symbols",
       "repository": "https://gitlab.com/kicad/libraries/kicad-symbols.git",
       "tag": "9.0.9.1",
       "commit": "ad36cd14bcd1b1cd0484f629ccdd3481366f74f3",
       "installed_by": "tools/install_kicad_libs.sh"
     },
     "footprints": {
-      "path": "/usr/share/kicad/footprints",
       "repository": "https://gitlab.com/kicad/libraries/kicad-footprints.git",
       "tag": "9.0.9.1",
       "commit": "2b941bf1d97862be429793b46fd52a5add09a2fc",

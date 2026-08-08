@@ -1,23 +1,4 @@
-; stage1_iv.kicad_sym — project symbol library for the Stage 1 I–V
-; Characterization System.
-;
-; GENERATED FILE — do not edit by hand.
-;   regenerate with:  python3 tools/author_project_symbols.py
-;   verify with:      python3 tools/author_project_symbols.py --check
-;
-; Every symbol the schematic instantiates lives here, and the bodies below are
-; produced by the SAME generators/schematic.py::SymbolDef objects the schematic
-; embeds in its (lib_symbols) block — so the schematic's cache and this library
-; are byte-identical and KiCad's lib_symbol_mismatch cannot fire.
-;
-; Pin provenance per symbol is in provenance/stage1_iv_pin_provenance.json:
-; ADS1256 and OPA548T are parsed from committed datasheet/library excerpts;
-; every other symbol is read from the installed upstream KiCad libraries at
-; generation time (version recorded in that same file).
-(kicad_symbol_lib
-	(version 20241209)
-	(generator "stage1_iv:tools/author_project_symbols.py")
-	(generator_version "9.0")
+(kicad_symbol_lib (version 20211014) (generator stage1_iv_author_project_symbols)
     (symbol "ADS1256" (pin_names (offset 0.508)) (in_bom yes) (on_board yes)
       (property "Reference" "U" (at -13.97 20.32 0) (effects (font (size 1.27 1.27)) (justify left)))
       (property "Value" "ADS1256" (at -13.97 -20.32 0) (effects (font (size 1.27 1.27)) (justify left)))

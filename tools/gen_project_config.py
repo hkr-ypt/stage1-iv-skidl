@@ -26,7 +26,6 @@ Usage::
 from __future__ import annotations
 
 import argparse
-import datetime
 import json
 import os
 import sys
@@ -104,9 +103,12 @@ def fp_lib_table(footprints):
 
 def deps_doc(upstream_symbols, project_symbols, footprints, provenance, libs):
     """docs/LIBRARY_DEPENDENCIES.md — generated, never hand-written."""
-    sym = provenance.get("symbols", {})
-    fpv = provenance.get("footprints", {})
-    stamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
+    # Deliberately NO generation timestamp and NO machine paths: this file is
+    # regenerated in CI and compared byte-for-byte against the committed copy,
+    # so anything that varies by day or by machine makes --check unsatisfiable.
+    # The pinned tag and commit below are the meaningful "when".
+    sym = {k: v for k, v in provenance.get("symbols", {}).items() if k != "path"}
+    fpv = {k: v for k, v in provenance.get("footprints", {}).items() if k != "path"}
 
     out = []
     A = out.append
@@ -117,7 +119,7 @@ def deps_doc(upstream_symbols, project_symbols, footprints, provenance, libs):
     A("`python3 tools/gen_project_config.py --check`. It is built from the live")
     A("circuit, so it cannot describe anything the design does not actually use.")
     A("")
-    A(f"Resolved on **{stamp}** against:")
+    A("Resolved against:")
     A("")
     A("| | repository | pinned revision | commit |")
     A("|---|---|---|---|")

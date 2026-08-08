@@ -170,24 +170,24 @@ def parse_opa548t(path=OPA_SRC):
 #  emit: the project symbol library
 # =====================================================================
 
-HEADER_COMMENT = """\
-; stage1_iv.kicad_sym — project symbol library for the Stage 1 I–V
-; Characterization System.
-;
-; GENERATED FILE — do not edit by hand.
-;   regenerate with:  python3 tools/author_project_symbols.py
-;   verify with:      python3 tools/author_project_symbols.py --check
-;
-; Every symbol the schematic instantiates lives here, and the bodies below are
-; produced by the SAME generators/schematic.py::SymbolDef objects the schematic
-; embeds in its (lib_symbols) block — so the schematic's cache and this library
-; are byte-identical and KiCad's lib_symbol_mismatch cannot fire.
-;
-; Pin provenance per symbol is in provenance/stage1_iv_pin_provenance.json:
-; ADS1256 and OPA548T are parsed from committed datasheet/library excerpts;
-; every other symbol is read from the installed upstream KiCad libraries at
-; generation time (version recorded in that same file).
-"""
+# KiCad's s-expression reader for .kicad_sym is STRICT. Two things it rejects
+# that this generator originally emitted, both found by handing the file to
+# kicad-cli (see tools/check_kicad_loads.py, which now runs in CI):
+#
+#   * a leading ";" comment block — the file must begin with (kicad_symbol_lib
+#   * (generator_version ...) — a KiCad 9 field
+#
+# and a third that only bites on KiCad 9: stamping (version 20241209), the v9
+# schema, over symbol bodies written in v6/v7 syntax (bare `hide` rather than
+# `(hide yes)`). KiCad 9 then applies v9 parsing rules and rejects the file,
+# the library fails to load, and every symbol lookup reports "not found".
+#
+# So the library is emitted in the KiCad 6/7 symbol schema, which KiCad 7 reads
+# natively and KiCad 9 migrates on load, and which can therefore be verified
+# with the KiCad available in CI. The schematic's embedded (lib_symbols) uses
+# the same bodies, so the two still cannot disagree.
+LIB_VERSION = "20211014"        # KiCad 6/7 .kicad_sym schema
+LIB_GENERATOR = "stage1_iv_author_project_symbols"
 
 
 def collect_symbols():
@@ -203,10 +203,8 @@ def collect_symbols():
 
 def library_text(model):
     """Render the full .kicad_sym from the model's SymbolDefs."""
-    out = [HEADER_COMMENT.rstrip(), "(kicad_symbol_lib",
-           "\t(version 20241209)",
-           '\t(generator "stage1_iv:tools/author_project_symbols.py")',
-           '\t(generator_version "9.0")']
+    out = [f"(kicad_symbol_lib (version {LIB_VERSION}) "
+           f"(generator {LIB_GENERATOR})"]
     for lib_id in sorted(model.symbols):
         sym = model.symbols[lib_id]
         lines = sym.sexpr()
@@ -227,10 +225,16 @@ def provenance_record(model, circuit):
     sys.path.insert(0, REPO_ROOT)
     from libraries.custom_symbols import upstream_state
 
+    # Record WHICH upstream revision, never WHERE it sits on this machine: a
+    # path here makes the file differ on every checkout and the --check gate
+    # unsatisfiable (it broke CI exactly this way).
     libs_info = {}
     try:
         from resolve_kicad_libs import KicadLibraries
-        libs_info = KicadLibraries().provenance()
+        libs_info = {
+            label: {k: v for k, v in info.items() if k != "path"}
+            for label, info in KicadLibraries().provenance().items()
+        }
     except Exception:                                    # noqa: BLE001
         libs_info = {}
 
