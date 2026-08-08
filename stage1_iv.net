@@ -2,7 +2,7 @@
   (version "D")
   (design
     (source "main.py")
-    (date "07/15/2026 01:36 PM")
+    (date "08/08/2026 02:49 AM")
     (tool "SKiDL (2.2.3)")
     (sheet
       (number 1)
@@ -51,22 +51,24 @@
         (field
           (name "MPN") "generic")
         (field
-          (name "KiCad_Lib") "Device:CP")
+          (name "KiCad_Lib") "Device:C_Polarized")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:5140")
         (field
           (name "Description") "Polarized capacitor")
         (field
           (name "Footprint") "Capacitor_Tantalum_SMD:CP_EIA-3528-21_Kemet-B")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "C1")
         (field
           (name "SKiDL Line") "blocks/power.py:36"))
       (libsource
         (lib "NO_LIB")
-        (part "CP"))
+        (part "C_Polarized"))
       (sheetpath
         (names "/")
         (tstamps "/"))
@@ -83,13 +85,15 @@
         (field
           (name "KiCad_Lib") "Device:C")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:1761")
         (field
           (name "Description") "Unpolarized capacitor")
         (field
           (name "Footprint") "Capacitor_SMD:C_0603_1608Metric")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "C10")
         (field
@@ -113,13 +117,15 @@
         (field
           (name "KiCad_Lib") "Device:C")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:1761")
         (field
           (name "Description") "Unpolarized capacitor")
         (field
           (name "Footprint") "Capacitor_SMD:C_0603_1608Metric")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "C11")
         (field
@@ -143,13 +149,15 @@
         (field
           (name "KiCad_Lib") "Device:C")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:1761")
         (field
           (name "Description") "Unpolarized capacitor")
         (field
           (name "Footprint") "Capacitor_SMD:C_0603_1608Metric")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "C12")
         (field
@@ -173,13 +181,15 @@
         (field
           (name "KiCad_Lib") "Device:C")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:1761")
         (field
           (name "Description") "Unpolarized capacitor")
         (field
           (name "Footprint") "Capacitor_SMD:C_0603_1608Metric")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "C13")
         (field
@@ -203,13 +213,15 @@
         (field
           (name "KiCad_Lib") "Device:C")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:1761")
         (field
           (name "Description") "Unpolarized capacitor")
         (field
           (name "Footprint") "Capacitor_SMD:C_0805_2012Metric")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "C14")
         (field
@@ -233,13 +245,15 @@
         (field
           (name "KiCad_Lib") "Device:C")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:1761")
         (field
           (name "Description") "Unpolarized capacitor")
         (field
           (name "Footprint") "Capacitor_SMD:C_0805_2012Metric")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "C15")
         (field
@@ -263,13 +277,15 @@
         (field
           (name "KiCad_Lib") "Device:C")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:1761")
         (field
           (name "Description") "Unpolarized capacitor")
         (field
           (name "Footprint") "Capacitor_SMD:C_0805_2012Metric")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "C16")
         (field
@@ -291,22 +307,24 @@
         (field
           (name "MPN") "generic")
         (field
-          (name "KiCad_Lib") "Device:CP")
+          (name "KiCad_Lib") "Device:C_Polarized")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:5140")
         (field
           (name "Description") "Polarized capacitor")
         (field
           (name "Footprint") "Capacitor_Tantalum_SMD:CP_EIA-3528-21_Kemet-B")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "C17")
         (field
           (name "SKiDL Line") "blocks/output_buffer.py:31"))
       (libsource
         (lib "NO_LIB")
-        (part "CP"))
+        (part "C_Polarized"))
       (sheetpath
         (names "/")
         (tstamps "/"))
@@ -321,22 +339,24 @@
         (field
           (name "MPN") "generic")
         (field
-          (name "KiCad_Lib") "Device:CP")
+          (name "KiCad_Lib") "Device:C_Polarized")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:5140")
         (field
           (name "Description") "Polarized capacitor")
         (field
           (name "Footprint") "Capacitor_Tantalum_SMD:CP_EIA-3528-21_Kemet-B")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "C18")
         (field
           (name "SKiDL Line") "blocks/output_buffer.py:33"))
       (libsource
         (lib "NO_LIB")
-        (part "CP"))
+        (part "C_Polarized"))
       (sheetpath
         (names "/")
         (tstamps "/"))
@@ -353,13 +373,15 @@
         (field
           (name "KiCad_Lib") "Device:C")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:1761")
         (field
           (name "Description") "Unpolarized capacitor")
         (field
           (name "Footprint") "Capacitor_SMD:C_0603_1608Metric")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "C19")
         (field
@@ -381,22 +403,24 @@
         (field
           (name "MPN") "generic")
         (field
-          (name "KiCad_Lib") "Device:CP")
+          (name "KiCad_Lib") "Device:C_Polarized")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:5140")
         (field
           (name "Description") "Polarized capacitor")
         (field
           (name "Footprint") "Capacitor_Tantalum_SMD:CP_EIA-3528-21_Kemet-B")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "C2")
         (field
           (name "SKiDL Line") "blocks/power.py:38"))
       (libsource
         (lib "NO_LIB")
-        (part "CP"))
+        (part "C_Polarized"))
       (sheetpath
         (names "/")
         (tstamps "/"))
@@ -413,13 +437,15 @@
         (field
           (name "KiCad_Lib") "Device:C")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:1761")
         (field
           (name "Description") "Unpolarized capacitor")
         (field
           (name "Footprint") "Capacitor_SMD:C_0603_1608Metric")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "C20")
         (field
@@ -443,13 +469,15 @@
         (field
           (name "KiCad_Lib") "Device:C")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:1761")
         (field
           (name "Description") "Unpolarized capacitor")
         (field
           (name "Footprint") "Capacitor_SMD:C_0603_1608Metric")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "C21")
         (field
@@ -473,13 +501,15 @@
         (field
           (name "KiCad_Lib") "Device:C")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:1761")
         (field
           (name "Description") "Unpolarized capacitor")
         (field
           (name "Footprint") "Capacitor_SMD:C_0603_1608Metric")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "C22")
         (field
@@ -503,13 +533,15 @@
         (field
           (name "KiCad_Lib") "Device:C")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:1761")
         (field
           (name "Description") "Unpolarized capacitor")
         (field
           (name "Footprint") "Capacitor_SMD:C_0603_1608Metric")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "C23")
         (field
@@ -533,17 +565,19 @@
         (field
           (name "KiCad_Lib") "Device:C")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:1761")
         (field
           (name "Description") "Unpolarized capacitor")
         (field
           (name "Footprint") "Capacitor_SMD:C_0603_1608Metric")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "C24")
         (field
-          (name "SKiDL Line") "blocks/adc.py:37"))
+          (name "SKiDL Line") "blocks/adc.py:38"))
       (libsource
         (lib "NO_LIB")
         (part "C"))
@@ -563,17 +597,19 @@
         (field
           (name "KiCad_Lib") "Device:C")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:1761")
         (field
           (name "Description") "Unpolarized capacitor")
         (field
           (name "Footprint") "Capacitor_SMD:C_0603_1608Metric")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "C25")
         (field
-          (name "SKiDL Line") "blocks/adc.py:38"))
+          (name "SKiDL Line") "blocks/adc.py:39"))
       (libsource
         (lib "NO_LIB")
         (part "C"))
@@ -593,17 +629,19 @@
         (field
           (name "KiCad_Lib") "Device:C")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:1761")
         (field
           (name "Description") "Unpolarized capacitor")
         (field
           (name "Footprint") "Capacitor_SMD:C_0603_1608Metric")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "C26")
         (field
-          (name "SKiDL Line") "blocks/adc.py:25"))
+          (name "SKiDL Line") "blocks/adc.py:26"))
       (libsource
         (lib "NO_LIB")
         (part "C"))
@@ -623,17 +661,19 @@
         (field
           (name "KiCad_Lib") "Device:C")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:1761")
         (field
           (name "Description") "Unpolarized capacitor")
         (field
           (name "Footprint") "Capacitor_SMD:C_0603_1608Metric")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "C27")
         (field
-          (name "SKiDL Line") "blocks/adc.py:26"))
+          (name "SKiDL Line") "blocks/adc.py:27"))
       (libsource
         (lib "NO_LIB")
         (part "C"))
@@ -653,17 +693,19 @@
         (field
           (name "KiCad_Lib") "Device:C")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:1761")
         (field
           (name "Description") "Unpolarized capacitor")
         (field
           (name "Footprint") "Capacitor_SMD:C_0603_1608Metric")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "C28")
         (field
-          (name "SKiDL Line") "blocks/adc.py:27"))
+          (name "SKiDL Line") "blocks/adc.py:28"))
       (libsource
         (lib "NO_LIB")
         (part "C"))
@@ -681,22 +723,24 @@
         (field
           (name "MPN") "generic")
         (field
-          (name "KiCad_Lib") "Device:CP")
+          (name "KiCad_Lib") "Device:C_Polarized")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:5140")
         (field
           (name "Description") "Polarized capacitor")
         (field
           (name "Footprint") "Capacitor_Tantalum_SMD:CP_EIA-3528-21_Kemet-B")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "C29")
         (field
-          (name "SKiDL Line") "blocks/adc.py:28"))
+          (name "SKiDL Line") "blocks/adc.py:29"))
       (libsource
         (lib "NO_LIB")
-        (part "CP"))
+        (part "C_Polarized"))
       (sheetpath
         (names "/")
         (tstamps "/"))
@@ -713,13 +757,15 @@
         (field
           (name "KiCad_Lib") "Device:C")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:1761")
         (field
           (name "Description") "Unpolarized capacitor")
         (field
           (name "Footprint") "Capacitor_SMD:C_0805_2012Metric")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "C3")
         (field
@@ -743,17 +789,19 @@
         (field
           (name "KiCad_Lib") "Device:C")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:1761")
         (field
           (name "Description") "Unpolarized capacitor")
         (field
           (name "Footprint") "Capacitor_SMD:C_0603_1608Metric")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "C30")
         (field
-          (name "SKiDL Line") "blocks/adc.py:30"))
+          (name "SKiDL Line") "blocks/adc.py:31"))
       (libsource
         (lib "NO_LIB")
         (part "C"))
@@ -773,13 +821,15 @@
         (field
           (name "KiCad_Lib") "Device:C")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:1761")
         (field
           (name "Description") "Unpolarized capacitor")
         (field
           (name "Footprint") "Capacitor_SMD:C_0603_1608Metric")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "C32")
         (field
@@ -803,13 +853,15 @@
         (field
           (name "KiCad_Lib") "Device:C")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:1761")
         (field
           (name "Description") "Unpolarized capacitor")
         (field
           (name "Footprint") "Capacitor_SMD:C_0603_1608Metric")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "C33")
         (field
@@ -833,13 +885,15 @@
         (field
           (name "KiCad_Lib") "Device:C")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:1761")
         (field
           (name "Description") "Unpolarized capacitor")
         (field
           (name "Footprint") "Capacitor_SMD:C_0603_1608Metric")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "C34")
         (field
@@ -863,13 +917,15 @@
         (field
           (name "KiCad_Lib") "Device:C")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:1761")
         (field
           (name "Description") "Unpolarized capacitor")
         (field
           (name "Footprint") "Capacitor_SMD:C_0603_1608Metric")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "C35")
         (field
@@ -893,13 +949,15 @@
         (field
           (name "KiCad_Lib") "Device:C")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:1761")
         (field
           (name "Description") "Unpolarized capacitor")
         (field
           (name "Footprint") "Capacitor_SMD:C_0603_1608Metric")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "C36")
         (field
@@ -923,13 +981,15 @@
         (field
           (name "KiCad_Lib") "Device:C")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:1761")
         (field
           (name "Description") "Unpolarized capacitor")
         (field
           (name "Footprint") "Capacitor_SMD:C_0603_1608Metric")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "C37")
         (field
@@ -953,13 +1013,15 @@
         (field
           (name "KiCad_Lib") "Device:C")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:1761")
         (field
           (name "Description") "Unpolarized capacitor")
         (field
           (name "Footprint") "Capacitor_SMD:C_0603_1608Metric")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "C38")
         (field
@@ -983,13 +1045,15 @@
         (field
           (name "KiCad_Lib") "Device:C")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:1761")
         (field
           (name "Description") "Unpolarized capacitor")
         (field
           (name "Footprint") "Capacitor_SMD:C_0805_2012Metric")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "C39")
         (field
@@ -1013,13 +1077,15 @@
         (field
           (name "KiCad_Lib") "Device:C")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:1761")
         (field
           (name "Description") "Unpolarized capacitor")
         (field
           (name "Footprint") "Capacitor_SMD:C_0805_2012Metric")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "C4")
         (field
@@ -1043,13 +1109,15 @@
         (field
           (name "KiCad_Lib") "Device:C")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:1761")
         (field
           (name "Description") "Unpolarized capacitor")
         (field
           (name "Footprint") "Capacitor_SMD:C_0603_1608Metric")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "C40")
         (field
@@ -1073,13 +1141,15 @@
         (field
           (name "KiCad_Lib") "Device:C")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:1761")
         (field
           (name "Description") "Unpolarized capacitor")
         (field
           (name "Footprint") "Capacitor_SMD:C_0603_1608Metric")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "C41")
         (field
@@ -1103,13 +1173,15 @@
         (field
           (name "KiCad_Lib") "Device:C")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:1761")
         (field
           (name "Description") "Unpolarized capacitor")
         (field
           (name "Footprint") "Capacitor_SMD:C_0603_1608Metric")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "C42")
         (field
@@ -1133,13 +1205,15 @@
         (field
           (name "KiCad_Lib") "Device:C")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:1761")
         (field
           (name "Description") "Unpolarized capacitor")
         (field
           (name "Footprint") "Capacitor_SMD:C_0603_1608Metric")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "C43")
         (field
@@ -1161,22 +1235,24 @@
         (field
           (name "MPN") "generic")
         (field
-          (name "KiCad_Lib") "Device:CP")
+          (name "KiCad_Lib") "Device:C_Polarized")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:5140")
         (field
           (name "Description") "Polarized capacitor")
         (field
           (name "Footprint") "Capacitor_THT:CP_Radial_D8.0mm_P3.50mm")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "C5")
         (field
           (name "SKiDL Line") "blocks/power.py:44"))
       (libsource
         (lib "NO_LIB")
-        (part "CP"))
+        (part "C_Polarized"))
       (sheetpath
         (names "/")
         (tstamps "/"))
@@ -1191,22 +1267,24 @@
         (field
           (name "MPN") "generic")
         (field
-          (name "KiCad_Lib") "Device:CP")
+          (name "KiCad_Lib") "Device:C_Polarized")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:5140")
         (field
           (name "Description") "Polarized capacitor")
         (field
           (name "Footprint") "Capacitor_THT:CP_Radial_D8.0mm_P3.50mm")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "C6")
         (field
           (name "SKiDL Line") "blocks/power.py:45"))
       (libsource
         (lib "NO_LIB")
-        (part "CP"))
+        (part "C_Polarized"))
       (sheetpath
         (names "/")
         (tstamps "/"))
@@ -1221,22 +1299,24 @@
         (field
           (name "MPN") "generic")
         (field
-          (name "KiCad_Lib") "Device:CP")
+          (name "KiCad_Lib") "Device:C_Polarized")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:5140")
         (field
           (name "Description") "Polarized capacitor")
         (field
           (name "Footprint") "Capacitor_THT:CP_Radial_D8.0mm_P3.50mm")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "C7")
         (field
           (name "SKiDL Line") "blocks/power.py:46"))
       (libsource
         (lib "NO_LIB")
-        (part "CP"))
+        (part "C_Polarized"))
       (sheetpath
         (names "/")
         (tstamps "/"))
@@ -1251,22 +1331,24 @@
         (field
           (name "MPN") "generic")
         (field
-          (name "KiCad_Lib") "Device:CP")
+          (name "KiCad_Lib") "Device:C_Polarized")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:5140")
         (field
           (name "Description") "Polarized capacitor")
         (field
           (name "Footprint") "Capacitor_THT:CP_Radial_D8.0mm_P3.50mm")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "C8")
         (field
           (name "SKiDL Line") "blocks/power.py:47"))
       (libsource
         (lib "NO_LIB")
-        (part "CP"))
+        (part "C_Polarized"))
       (sheetpath
         (names "/")
         (tstamps "/"))
@@ -1283,13 +1365,15 @@
         (field
           (name "KiCad_Lib") "Device:C")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:1761")
         (field
           (name "Description") "Unpolarized capacitor")
         (field
           (name "Footprint") "Capacitor_SMD:C_0603_1608Metric")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "C9")
         (field
@@ -1305,7 +1389,7 @@
     (comp
       (ref "D1")
       (value "1N4148")
-      (description "Diode (cathode=pad1)")
+      (description "Diode (cathode = pin K)")
       (footprint "Diode_SMD:D_SOD-123")
       (fields
         (field
@@ -1313,13 +1397,15 @@
         (field
           (name "KiCad_Lib") "Device:D")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
         (field
-          (name "Description") "Diode (cathode=pad1)")
+          (name "Symbol_Source") "Device.kicad_sym:11674")
+        (field
+          (name "Description") "Diode (cathode = pin K)")
         (field
           (name "Footprint") "Diode_SMD:D_SOD-123")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "D1")
         (field
@@ -1335,7 +1421,7 @@
     (comp
       (ref "D2")
       (value "1N4148")
-      (description "Diode (cathode=pad1)")
+      (description "Diode (cathode = pin K)")
       (footprint "Diode_SMD:D_SOD-123")
       (fields
         (field
@@ -1343,13 +1429,15 @@
         (field
           (name "KiCad_Lib") "Device:D")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
         (field
-          (name "Description") "Diode (cathode=pad1)")
+          (name "Symbol_Source") "Device.kicad_sym:11674")
+        (field
+          (name "Description") "Diode (cathode = pin K)")
         (field
           (name "Footprint") "Diode_SMD:D_SOD-123")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "D2")
         (field
@@ -1365,7 +1453,7 @@
     (comp
       (ref "D3")
       (value "1N4148")
-      (description "Diode (cathode=pad1)")
+      (description "Diode (cathode = pin K)")
       (footprint "Diode_SMD:D_SOD-123")
       (fields
         (field
@@ -1373,13 +1461,15 @@
         (field
           (name "KiCad_Lib") "Device:D")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
         (field
-          (name "Description") "Diode (cathode=pad1)")
+          (name "Symbol_Source") "Device.kicad_sym:11674")
+        (field
+          (name "Description") "Diode (cathode = pin K)")
         (field
           (name "Footprint") "Diode_SMD:D_SOD-123")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "D3")
         (field
@@ -1395,7 +1485,7 @@
     (comp
       (ref "D4")
       (value "1N4148")
-      (description "Diode (cathode=pad1)")
+      (description "Diode (cathode = pin K)")
       (footprint "Diode_SMD:D_SOD-123")
       (fields
         (field
@@ -1403,13 +1493,15 @@
         (field
           (name "KiCad_Lib") "Device:D")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
         (field
-          (name "Description") "Diode (cathode=pad1)")
+          (name "Symbol_Source") "Device.kicad_sym:11674")
+        (field
+          (name "Description") "Diode (cathode = pin K)")
         (field
           (name "Footprint") "Diode_SMD:D_SOD-123")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "D4")
         (field
@@ -1433,17 +1525,19 @@
         (field
           (name "KiCad_Lib") "Device:D_TVS")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:35674")
         (field
           (name "Description") "Bidirectional TVS diode")
         (field
           (name "Footprint") "Diode_SMD:D_SMB")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "D5")
         (field
-          (name "SKiDL Line") "blocks/protection.py:27"))
+          (name "SKiDL Line") "blocks/protection.py:37"))
       (libsource
         (lib "NO_LIB")
         (part "D_TVS"))
@@ -1455,25 +1549,27 @@
     (comp
       (ref "F1")
       (value "0ZRM0010FF1E")
-      (description "PTC resettable fuse, 100mA hold")
-      (footprint "Fuse:Fuse_Bourns-MF-RG300")
+      (description "PTC resettable fuse")
+      (footprint "Fuse:Fuse_Bourns_MF-RG300")
       (fields
         (field
           (name "MPN") "0ZRM0010FF1E")
         (field
           (name "KiCad_Lib") "Device:Polyfuse")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
         (field
-          (name "Description") "PTC resettable fuse, 100mA hold")
+          (name "Symbol_Source") "Device.kicad_sym:94206")
         (field
-          (name "Footprint") "Fuse:Fuse_Bourns-MF-RG300")
+          (name "Description") "PTC resettable fuse")
         (field
-          (name "Datasheet"))
+          (name "Footprint") "Fuse:Fuse_Bourns_MF-RG300")
+        (field
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "F1")
         (field
-          (name "SKiDL Line") "blocks/protection.py:23"))
+          (name "SKiDL Line") "blocks/protection.py:34"))
       (libsource
         (lib "NO_LIB")
         (part "Polyfuse"))
@@ -1493,13 +1589,15 @@
         (field
           (name "KiCad_Lib") "Device:FerriteBead")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:42596")
         (field
           (name "Description") "Ferrite bead, 220R @ 100MHz")
         (field
           (name "Footprint") "Inductor_SMD:L_0805_2012Metric")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "FB1")
         (field
@@ -1523,13 +1621,15 @@
         (field
           (name "KiCad_Lib") "Device:FerriteBead")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:42596")
         (field
           (name "Description") "Ferrite bead, 220R @ 100MHz")
         (field
           (name "Footprint") "Inductor_SMD:L_0805_2012Metric")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "FB2")
         (field
@@ -1546,20 +1646,22 @@
       (ref "J1")
       (value "+15V_RAW/-15V_RAW/+5V_RAW/GND")
       (description "4-pos terminal block: +15V_RAW,-15V_RAW,+5V_RAW,GND")
-      (footprint "TerminalBlock:TerminalBlock_bornier-4_P5.08mm")
+      (footprint "TerminalBlock_Phoenix:TerminalBlock_Phoenix_MKDS-1,5-4-5.08_1x04_P5.08mm_Horizontal")
       (fields
         (field
-          (name "MPN") "generic-5.08mm")
+          (name "MPN") "MKDS 1,5/4-5,08")
         (field
           (name "KiCad_Lib") "Connector:Screw_Terminal_01x04")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Connector.kicad_sym:326279")
         (field
           (name "Description") "4-pos terminal block: +15V_RAW,-15V_RAW,+5V_RAW,GND")
         (field
-          (name "Footprint") "TerminalBlock:TerminalBlock_bornier-4_P5.08mm")
+          (name "Footprint") "TerminalBlock_Phoenix:TerminalBlock_Phoenix_MKDS-1,5-4-5.08_1x04_P5.08mm_Horizontal")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "J1")
         (field
@@ -1583,13 +1685,15 @@
         (field
           (name "KiCad_Lib") "Connector_Generic:Conn_01x05")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Connector_Generic.kicad_sym:631")
         (field
           (name "Description") "SWD header: SWDIO,SWCLK,GND,3V3,NRST")
         (field
           (name "Footprint") "Connector_PinHeader_2.54mm:PinHeader_1x05_P2.54mm_Vertical")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "J2")
         (field
@@ -1605,28 +1709,30 @@
     (comp
       (ref "J3")
       (value "USB-C")
-      (description "USB-C receptacle (USB2.0 subset: VBUS,GND,CC1,CC2,DP,DM,SHIELD)")
+      (description "USB-C receptacle, USB 2.0, 16 signal pins + shield")
       (footprint "Connector_USB:USB_C_Receptacle_GCT_USB4085")
       (fields
         (field
-          (name "MPN") "USB-C 2.0 SMD")
+          (name "MPN") "GCT USB4085")
         (field
-          (name "KiCad_Lib") "Connector:USB_C_Receptacle_USB2.0")
+          (name "KiCad_Lib") "Connector:USB_C_Receptacle_USB2.0_16P")
         (field
-          (name "Pins_Verified") "VERIFY-DATASHEET")
+          (name "Pins_Verified") "RESOLVED")
         (field
-          (name "Description") "USB-C receptacle (USB2.0 subset: VBUS,GND,CC1,CC2,DP,DM,SHIELD)")
+          (name "Symbol_Source") "Connector.kicad_sym:348661")
+        (field
+          (name "Description") "USB-C receptacle, USB 2.0, 16 signal pins + shield")
         (field
           (name "Footprint") "Connector_USB:USB_C_Receptacle_GCT_USB4085")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "https://www.usb.org/sites/default/files/documents/usb_type-c.zip")
         (field
           (name "SKiDL Tag") "J3")
         (field
           (name "SKiDL Line") "blocks/mcu.py:48"))
       (libsource
         (lib "NO_LIB")
-        (part "USB_C_Receptacle_USB2.0"))
+        (part "USB_C_Receptacle_USB2.0_16P"))
       (sheetpath
         (names "/")
         (tstamps "/"))
@@ -1634,38 +1740,136 @@
       (tstamps "feeefe1a-2e42-5bb8-adfa-cd7486f50a6d"))
     (comp
       (ref "J4")
-      (value "DUT")
-      (description "DUT connector: FORCE+,SENSE+,SENSE-,FORCE-")
-      (footprint "Connector:Banana_Jack_1x04")
+      (value "DUT FORCE+")
+      (description "DUT banana jack: FORCE+")
+      (footprint "Connector:Banana_Jack_1Pin")
       (fields
         (field
-          (name "MPN") "panel-mount-banana")
+          (name "MPN") "panel-mount-banana-4mm")
         (field
-          (name "KiCad_Lib") "Connector_Generic:Conn_01x04")
+          (name "KiCad_Lib") "Connector_Generic:Conn_01x01")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
         (field
-          (name "Description") "DUT connector: FORCE+,SENSE+,SENSE-,FORCE-")
+          (name "Symbol_Source") "Connector_Generic.kicad_sym:5")
         (field
-          (name "Footprint") "Connector:Banana_Jack_1x04")
+          (name "Description") "DUT banana jack: FORCE+")
         (field
-          (name "Datasheet"))
+          (name "Footprint") "Connector:Banana_Jack_1Pin")
+        (field
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "J4")
         (field
-          (name "SKiDL Line") "blocks/protection.py:28"))
+          (name "SKiDL Line") "blocks/protection.py:40"))
       (libsource
         (lib "NO_LIB")
-        (part "Conn_01x04"))
+        (part "Conn_01x01"))
       (sheetpath
         (names "/")
         (tstamps "/"))
       (component_classes)
       (tstamps "c449faf0-e5d1-5f09-ba34-b969c94251c8"))
     (comp
+      (ref "J5")
+      (value "DUT SENSE+")
+      (description "DUT banana jack: SENSE+")
+      (footprint "Connector:Banana_Jack_1Pin")
+      (fields
+        (field
+          (name "MPN") "panel-mount-banana-4mm")
+        (field
+          (name "KiCad_Lib") "Connector_Generic:Conn_01x01")
+        (field
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Connector_Generic.kicad_sym:5")
+        (field
+          (name "Description") "DUT banana jack: SENSE+")
+        (field
+          (name "Footprint") "Connector:Banana_Jack_1Pin")
+        (field
+          (name "Datasheet") "~")
+        (field
+          (name "SKiDL Tag") "J5")
+        (field
+          (name "SKiDL Line") "blocks/protection.py:41"))
+      (libsource
+        (lib "NO_LIB")
+        (part "Conn_01x01"))
+      (sheetpath
+        (names "/")
+        (tstamps "/"))
+      (component_classes)
+      (tstamps "f5689b7a-fac2-5a8c-aa11-b3b9d837b29f"))
+    (comp
+      (ref "J6")
+      (value "DUT SENSE-")
+      (description "DUT banana jack: SENSE-")
+      (footprint "Connector:Banana_Jack_1Pin")
+      (fields
+        (field
+          (name "MPN") "panel-mount-banana-4mm")
+        (field
+          (name "KiCad_Lib") "Connector_Generic:Conn_01x01")
+        (field
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Connector_Generic.kicad_sym:5")
+        (field
+          (name "Description") "DUT banana jack: SENSE-")
+        (field
+          (name "Footprint") "Connector:Banana_Jack_1Pin")
+        (field
+          (name "Datasheet") "~")
+        (field
+          (name "SKiDL Tag") "J6")
+        (field
+          (name "SKiDL Line") "blocks/protection.py:42"))
+      (libsource
+        (lib "NO_LIB")
+        (part "Conn_01x01"))
+      (sheetpath
+        (names "/")
+        (tstamps "/"))
+      (component_classes)
+      (tstamps "0e3756c0-0751-5147-8013-57cbcb656651"))
+    (comp
+      (ref "J7")
+      (value "DUT FORCE-")
+      (description "DUT banana jack: FORCE-")
+      (footprint "Connector:Banana_Jack_1Pin")
+      (fields
+        (field
+          (name "MPN") "panel-mount-banana-4mm")
+        (field
+          (name "KiCad_Lib") "Connector_Generic:Conn_01x01")
+        (field
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Connector_Generic.kicad_sym:5")
+        (field
+          (name "Description") "DUT banana jack: FORCE-")
+        (field
+          (name "Footprint") "Connector:Banana_Jack_1Pin")
+        (field
+          (name "Datasheet") "~")
+        (field
+          (name "SKiDL Tag") "J7")
+        (field
+          (name "SKiDL Line") "blocks/protection.py:43"))
+      (libsource
+        (lib "NO_LIB")
+        (part "Conn_01x01"))
+      (sheetpath
+        (names "/")
+        (tstamps "/"))
+      (component_classes)
+      (tstamps "d3f28a6c-17c1-5c6b-aaa4-b24b96f23d33"))
+    (comp
       (ref "LED1")
       (value "GREEN")
-      (description "Light emitting diode (cathode=pad1)")
+      (description "Light emitting diode")
       (footprint "LED_SMD:LED_0805_2012Metric")
       (fields
         (field
@@ -1673,13 +1877,15 @@
         (field
           (name "KiCad_Lib") "Device:LED")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
         (field
-          (name "Description") "Light emitting diode (cathode=pad1)")
+          (name "Symbol_Source") "Device.kicad_sym:48335")
+        (field
+          (name "Description") "Light emitting diode")
         (field
           (name "Footprint") "LED_SMD:LED_0805_2012Metric")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "LED1")
         (field
@@ -1703,13 +1909,15 @@
         (field
           (name "KiCad_Lib") "Device:R")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:104590")
         (field
           (name "Description") "Resistor")
         (field
           (name "Footprint") "Resistor_SMD:R_0603_1608Metric")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "R1")
         (field
@@ -1733,13 +1941,15 @@
         (field
           (name "KiCad_Lib") "Device:R")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:104590")
         (field
           (name "Description") "Resistor")
         (field
           (name "Footprint") "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P10.16mm_Horizontal")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "R10")
         (field
@@ -1763,13 +1973,15 @@
         (field
           (name "KiCad_Lib") "Device:R")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:104590")
         (field
           (name "Description") "Resistor")
         (field
           (name "Footprint") "Resistor_SMD:R_0603_1608Metric")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "R11")
         (field
@@ -1793,13 +2005,15 @@
         (field
           (name "KiCad_Lib") "Device:R")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:104590")
         (field
           (name "Description") "Resistor")
         (field
           (name "Footprint") "Resistor_SMD:R_0603_1608Metric")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "R12")
         (field
@@ -1823,13 +2037,15 @@
         (field
           (name "KiCad_Lib") "Device:R")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:104590")
         (field
           (name "Description") "Resistor")
         (field
           (name "Footprint") "Resistor_SMD:R_0603_1608Metric")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "R13")
         (field
@@ -1853,13 +2069,15 @@
         (field
           (name "KiCad_Lib") "Device:R")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:104590")
         (field
           (name "Description") "Resistor")
         (field
           (name "Footprint") "Resistor_SMD:R_0603_1608Metric")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "R14")
         (field
@@ -1883,17 +2101,19 @@
         (field
           (name "KiCad_Lib") "Device:R")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:104590")
         (field
           (name "Description") "Resistor")
         (field
           (name "Footprint") "Resistor_SMD:R_0603_1608Metric")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "R15")
         (field
-          (name "SKiDL Line") "blocks/adc.py:33"))
+          (name "SKiDL Line") "blocks/adc.py:34"))
       (libsource
         (lib "NO_LIB")
         (part "R"))
@@ -1913,17 +2133,19 @@
         (field
           (name "KiCad_Lib") "Device:R")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:104590")
         (field
           (name "Description") "Resistor")
         (field
           (name "Footprint") "Resistor_SMD:R_0603_1608Metric")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "R16")
         (field
-          (name "SKiDL Line") "blocks/adc.py:34"))
+          (name "SKiDL Line") "blocks/adc.py:35"))
       (libsource
         (lib "NO_LIB")
         (part "R"))
@@ -1943,17 +2165,19 @@
         (field
           (name "KiCad_Lib") "Device:R")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:104590")
         (field
           (name "Description") "Resistor")
         (field
           (name "Footprint") "Resistor_SMD:R_0603_1608Metric")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "R17")
         (field
-          (name "SKiDL Line") "blocks/adc.py:35"))
+          (name "SKiDL Line") "blocks/adc.py:36"))
       (libsource
         (lib "NO_LIB")
         (part "R"))
@@ -1973,17 +2197,19 @@
         (field
           (name "KiCad_Lib") "Device:R")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:104590")
         (field
           (name "Description") "Resistor")
         (field
           (name "Footprint") "Resistor_SMD:R_0603_1608Metric")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "R18")
         (field
-          (name "SKiDL Line") "blocks/adc.py:36"))
+          (name "SKiDL Line") "blocks/adc.py:37"))
       (libsource
         (lib "NO_LIB")
         (part "R"))
@@ -2003,17 +2229,19 @@
         (field
           (name "KiCad_Lib") "Device:R")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:104590")
         (field
           (name "Description") "Resistor")
         (field
           (name "Footprint") "Resistor_SMD:R_0603_1608Metric")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "R19")
         (field
-          (name "SKiDL Line") "blocks/adc.py:31"))
+          (name "SKiDL Line") "blocks/adc.py:32"))
       (libsource
         (lib "NO_LIB")
         (part "R"))
@@ -2033,13 +2261,15 @@
         (field
           (name "KiCad_Lib") "Device:R")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:104590")
         (field
           (name "Description") "Resistor")
         (field
           (name "Footprint") "Resistor_SMD:R_0603_1608Metric")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "R2")
         (field
@@ -2063,17 +2293,19 @@
         (field
           (name "KiCad_Lib") "Device:R")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:104590")
         (field
           (name "Description") "Resistor")
         (field
           (name "Footprint") "Resistor_SMD:R_0603_1608Metric")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "R20")
         (field
-          (name "SKiDL Line") "blocks/adc.py:32"))
+          (name "SKiDL Line") "blocks/adc.py:33"))
       (libsource
         (lib "NO_LIB")
         (part "R"))
@@ -2093,13 +2325,15 @@
         (field
           (name "KiCad_Lib") "Device:R")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:104590")
         (field
           (name "Description") "Resistor")
         (field
           (name "Footprint") "Resistor_SMD:R_0603_1608Metric")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "R21")
         (field
@@ -2123,13 +2357,15 @@
         (field
           (name "KiCad_Lib") "Device:R")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:104590")
         (field
           (name "Description") "Resistor")
         (field
           (name "Footprint") "Resistor_SMD:R_0603_1608Metric")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "R22")
         (field
@@ -2153,13 +2389,15 @@
         (field
           (name "KiCad_Lib") "Device:R")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:104590")
         (field
           (name "Description") "Resistor")
         (field
           (name "Footprint") "Resistor_SMD:R_0603_1608Metric")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "R23")
         (field
@@ -2183,13 +2421,15 @@
         (field
           (name "KiCad_Lib") "Device:R")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:104590")
         (field
           (name "Description") "Resistor")
         (field
           (name "Footprint") "Resistor_SMD:R_0603_1608Metric")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "R24")
         (field
@@ -2213,13 +2453,15 @@
         (field
           (name "KiCad_Lib") "Device:R")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:104590")
         (field
           (name "Description") "Resistor")
         (field
           (name "Footprint") "Resistor_SMD:R_0603_1608Metric")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "R25")
         (field
@@ -2243,13 +2485,15 @@
         (field
           (name "KiCad_Lib") "Device:R")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:104590")
         (field
           (name "Description") "Resistor")
         (field
           (name "Footprint") "Resistor_SMD:R_0603_1608Metric")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "R26")
         (field
@@ -2273,13 +2517,15 @@
         (field
           (name "KiCad_Lib") "Device:R")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:104590")
         (field
           (name "Description") "Resistor")
         (field
           (name "Footprint") "Resistor_SMD:R_0603_1608Metric")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "R27")
         (field
@@ -2303,13 +2549,15 @@
         (field
           (name "KiCad_Lib") "Device:R")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:104590")
         (field
           (name "Description") "Resistor")
         (field
           (name "Footprint") "Resistor_SMD:R_0603_1608Metric")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "R28")
         (field
@@ -2333,13 +2581,15 @@
         (field
           (name "KiCad_Lib") "Device:R")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:104590")
         (field
           (name "Description") "Resistor")
         (field
           (name "Footprint") "Resistor_SMD:R_0603_1608Metric")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "R29")
         (field
@@ -2363,13 +2613,15 @@
         (field
           (name "KiCad_Lib") "Device:R")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:104590")
         (field
           (name "Description") "Resistor")
         (field
           (name "Footprint") "Resistor_SMD:R_0603_1608Metric")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "R3")
         (field
@@ -2393,17 +2645,19 @@
         (field
           (name "KiCad_Lib") "Device:R")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:104590")
         (field
           (name "Description") "Resistor")
         (field
           (name "Footprint") "Resistor_SMD:R_1206_3216Metric")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "R30")
         (field
-          (name "SKiDL Line") "blocks/protection.py:25"))
+          (name "SKiDL Line") "blocks/protection.py:35"))
       (libsource
         (lib "NO_LIB")
         (part "R"))
@@ -2423,13 +2677,15 @@
         (field
           (name "KiCad_Lib") "Device:R")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:104590")
         (field
           (name "Description") "Resistor")
         (field
           (name "Footprint") "Resistor_SMD:R_0805_2012Metric")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "R31")
         (field
@@ -2453,13 +2709,15 @@
         (field
           (name "KiCad_Lib") "Device:R")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:104590")
         (field
           (name "Description") "Resistor")
         (field
           (name "Footprint") "Resistor_SMD:R_0603_1608Metric")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "R4")
         (field
@@ -2483,13 +2741,15 @@
         (field
           (name "KiCad_Lib") "Device:R")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:104590")
         (field
           (name "Description") "Resistor")
         (field
           (name "Footprint") "Resistor_SMD:R_0603_1608Metric")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "R5")
         (field
@@ -2513,13 +2773,15 @@
         (field
           (name "KiCad_Lib") "Device:R")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:104590")
         (field
           (name "Description") "Resistor")
         (field
           (name "Footprint") "Resistor_SMD:R_0603_1608Metric")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "R6")
         (field
@@ -2543,13 +2805,15 @@
         (field
           (name "KiCad_Lib") "Device:R")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:104590")
         (field
           (name "Description") "Resistor")
         (field
           (name "Footprint") "Resistor_SMD:R_1206_3216Metric")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "R7")
         (field
@@ -2573,13 +2837,15 @@
         (field
           (name "KiCad_Lib") "Device:R")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:104590")
         (field
           (name "Description") "Resistor")
         (field
           (name "Footprint") "Resistor_SMD:R_0603_1608Metric")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "R8")
         (field
@@ -2603,13 +2869,15 @@
         (field
           (name "KiCad_Lib") "Device:R")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:104590")
         (field
           (name "Description") "Resistor")
         (field
           (name "Footprint") "Resistor_SMD:R_1206_3216Metric")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "R9")
         (field
@@ -2633,13 +2901,15 @@
         (field
           (name "KiCad_Lib") "Switch:SW_Push")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Switch.kicad_sym:11011")
         (field
           (name "Description") "Momentary push switch")
         (field
           (name "Footprint") "Button_Switch_THT:SW_PUSH_6mm")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "SW1")
         (field
@@ -2663,13 +2933,15 @@
         (field
           (name "KiCad_Lib") "Connector:TestPoint")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Connector.kicad_sym:339728")
         (field
           (name "Description") "Test point")
         (field
           (name "Footprint") "TestPoint:TestPoint_Pad_D1.5mm")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "TP1")
         (field
@@ -2693,13 +2965,15 @@
         (field
           (name "KiCad_Lib") "Connector:TestPoint")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Connector.kicad_sym:339728")
         (field
           (name "Description") "Test point")
         (field
           (name "Footprint") "TestPoint:TestPoint_Pad_D1.5mm")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "TP2")
         (field
@@ -2723,13 +2997,15 @@
         (field
           (name "KiCad_Lib") "Connector:TestPoint")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Connector.kicad_sym:339728")
         (field
           (name "Description") "Test point")
         (field
           (name "Footprint") "TestPoint:TestPoint_Pad_D1.5mm")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "TP3")
         (field
@@ -2753,13 +3029,15 @@
         (field
           (name "KiCad_Lib") "Connector:TestPoint")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Connector.kicad_sym:339728")
         (field
           (name "Description") "Test point")
         (field
           (name "Footprint") "TestPoint:TestPoint_Pad_D1.5mm")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "TP4")
         (field
@@ -2783,13 +3061,15 @@
         (field
           (name "KiCad_Lib") "Connector:TestPoint")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Connector.kicad_sym:339728")
         (field
           (name "Description") "Test point")
         (field
           (name "Footprint") "TestPoint:TestPoint_Pad_D1.5mm")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "TP5")
         (field
@@ -2813,13 +3093,15 @@
         (field
           (name "KiCad_Lib") "Connector:TestPoint")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Connector.kicad_sym:339728")
         (field
           (name "Description") "Test point")
         (field
           (name "Footprint") "TestPoint:TestPoint_Pad_D1.5mm")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "TP6")
         (field
@@ -2843,13 +3125,15 @@
         (field
           (name "KiCad_Lib") "Connector:TestPoint")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Connector.kicad_sym:339728")
         (field
           (name "Description") "Test point")
         (field
           (name "Footprint") "TestPoint:TestPoint_Pad_D1.5mm")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "TP7")
         (field
@@ -2873,17 +3157,19 @@
         (field
           (name "KiCad_Lib") "Connector:TestPoint")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Connector.kicad_sym:339728")
         (field
           (name "Description") "Test point")
         (field
           (name "Footprint") "TestPoint:TestPoint_Pad_D1.5mm")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "TP8")
         (field
-          (name "SKiDL Line") "blocks/adc.py:39"))
+          (name "SKiDL Line") "blocks/adc.py:40"))
       (libsource
         (lib "NO_LIB")
         (part "TestPoint"))
@@ -2903,20 +3189,22 @@
         (field
           (name "KiCad_Lib") "Regulator_Linear:LD1117S33TR_SOT223")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Regulator_Linear.kicad_sym:85573")
         (field
           (name "Description") "3.3V 800mA LDO")
         (field
           (name "Footprint") "Package_TO_SOT_SMD:SOT-223-3_TabPin2")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "http://www.st.com/st-web-ui/static/active/en/resource/technical/document/datasheet/CD00000544.pdf")
         (field
           (name "SKiDL Tag") "U1")
         (field
           (name "SKiDL Line") "blocks/power.py:30"))
       (libsource
         (lib "NO_LIB")
-        (part "LD1117S33"))
+        (part "LD1117S33TR_SOT223"))
       (sheetpath
         (names "/")
         (tstamps "/"))
@@ -2933,13 +3221,15 @@
         (field
           (name "KiCad_Lib") "Power_Protection:USBLC6-2SC6")
         (field
-          (name "Pins_Verified") "VERIFY-DATASHEET")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Power_Protection.kicad_sym:35786")
         (field
           (name "Description") "USB ESD protection array")
         (field
           (name "Footprint") "Package_TO_SOT_SMD:SOT-23-6")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "https://www.st.com/resource/en/datasheet/usblc6-2.pdf")
         (field
           (name "SKiDL Tag") "U10")
         (field
@@ -2961,22 +3251,24 @@
         (field
           (name "MPN") "REF5025AIDGKT")
         (field
-          (name "KiCad_Lib") "Reference_Voltage:REF5025AID")
+          (name "KiCad_Lib") "Reference_Voltage:REF5025ADGK")
         (field
-          (name "Pins_Verified") "VERIFY-DATASHEET")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Reference_Voltage.kicad_sym:29304")
         (field
           (name "Description") "2.500V precision voltage reference")
         (field
           (name "Footprint") "Package_SO:VSSOP-8_3x3mm_P0.65mm")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "https://www.ti.com/lit/ds/symlink/ref5030a-q1.pdf")
         (field
           (name "SKiDL Tag") "U2")
         (field
           (name "SKiDL Line") "blocks/power.py:31"))
       (libsource
         (lib "NO_LIB")
-        (part "REF5025"))
+        (part "REF5025ADGK"))
       (sheetpath
         (names "/")
         (tstamps "/"))
@@ -2993,13 +3285,15 @@
         (field
           (name "KiCad_Lib") "Amplifier_Operational:OPA2277")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Amplifier_Operational.kicad_sym:47360")
         (field
           (name "Description") "Dual precision op-amp")
         (field
           (name "Footprint") "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "https://www.ti.com/lit/ds/symlink/opa2277.pdf")
         (field
           (name "SKiDL Tag") "U3")
         (field
@@ -3023,13 +3317,15 @@
         (field
           (name "KiCad_Lib") "Analog_DAC:DAC8552")
         (field
-          (name "Pins_Verified") "VERIFY-DATASHEET")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Analog_DAC.kicad_sym:22608")
         (field
           (name "Description") "16-bit dual voltage-output DAC, SPI")
         (field
           (name "Footprint") "Package_SO:VSSOP-8_3x3mm_P0.65mm")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "https://www.ti.com/lit/ds/symlink/dac8552.pdf")
         (field
           (name "SKiDL Tag") "U4")
         (field
@@ -3046,27 +3342,29 @@
       (ref "U5")
       (value "OPA548T")
       (description "High-current power op-amp with current limit")
-      (footprint "Package_TO_SOT_THT:TO-220-7_Vertical")
+      (footprint "Package_TO_SOT_THT:TO-220-7_P2.54x3.7mm_StaggerOdd_Lead3.8mm_Vertical")
       (fields
         (field
           (name "MPN") "OPA548T")
         (field
-          (name "KiCad_Lib") "Amplifier_Operational:OPA548T")
+          (name "KiCad_Lib") "stage1_iv:OPA548T")
         (field
           (name "Pins_Verified") "VERIFY-DATASHEET")
         (field
+          (name "Symbol_Source") "stage1_iv.kicad_sym:595")
+        (field
           (name "Description") "High-current power op-amp with current limit")
         (field
-          (name "Footprint") "Package_TO_SOT_THT:TO-220-7_Vertical")
+          (name "Footprint") "Package_TO_SOT_THT:TO-220-7_P2.54x3.7mm_StaggerOdd_Lead3.8mm_Vertical")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "https://www.ti.com/lit/ds/symlink/opa548.pdf")
         (field
           (name "SKiDL Tag") "U5")
         (field
           (name "SKiDL Line") "blocks/output_buffer.py:21"))
       (libsource
         (lib "NO_LIB")
-        (part "OPA548"))
+        (part "OPA548T"))
       (sheetpath
         (names "/")
         (tstamps "/"))
@@ -3081,22 +3379,24 @@
         (field
           (name "MPN") "INA128P")
         (field
-          (name "KiCad_Lib") "Amplifier_Instrumentation:INA128P")
+          (name "KiCad_Lib") "Amplifier_Instrumentation:INA128")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Amplifier_Instrumentation.kicad_sym:2285")
         (field
           (name "Description") "Instrumentation amplifier, G=1+50k/RG")
         (field
           (name "Footprint") "Package_DIP:DIP-8_W7.62mm")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "http://www.ti.com/lit/ds/symlink/ina128.pdf")
         (field
           (name "SKiDL Tag") "U6")
         (field
           (name "SKiDL Line") "blocks/current_sense.py:23"))
       (libsource
         (lib "NO_LIB")
-        (part "INA128P"))
+        (part "INA128"))
       (sheetpath
         (names "/")
         (tstamps "/"))
@@ -3111,22 +3411,24 @@
         (field
           (name "MPN") "INA128P")
         (field
-          (name "KiCad_Lib") "Amplifier_Instrumentation:INA128P")
+          (name "KiCad_Lib") "Amplifier_Instrumentation:INA128")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Amplifier_Instrumentation.kicad_sym:2285")
         (field
           (name "Description") "Instrumentation amplifier, G=1+50k/RG")
         (field
           (name "Footprint") "Package_DIP:DIP-8_W7.62mm")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "http://www.ti.com/lit/ds/symlink/ina128.pdf")
         (field
           (name "SKiDL Tag") "U7")
         (field
           (name "SKiDL Line") "blocks/voltage_sense.py:21"))
       (libsource
         (lib "NO_LIB")
-        (part "INA128P"))
+        (part "INA128"))
       (sheetpath
         (names "/")
         (tstamps "/"))
@@ -3136,24 +3438,26 @@
       (ref "U8")
       (value "ADS1256IDBR")
       (description "24-bit delta-sigma ADC, 8ch, PGA, SPI")
-      (footprint "Package_SO:TSSOP-28_4.4x9.7mm_P0.65mm")
+      (footprint "Package_SO:SSOP-28_5.3x10.2mm_P0.65mm")
       (fields
         (field
           (name "MPN") "ADS1256IDBR")
         (field
-          (name "KiCad_Lib") "Analog_ADC:ADS1256")
+          (name "KiCad_Lib") "stage1_iv:ADS1256")
         (field
-          (name "Pins_Verified") "PLACEHOLDER-REMAP")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "stage1_iv.kicad_sym:15")
         (field
           (name "Description") "24-bit delta-sigma ADC, 8ch, PGA, SPI")
         (field
-          (name "Footprint") "Package_SO:TSSOP-28_4.4x9.7mm_P0.65mm")
+          (name "Footprint") "Package_SO:SSOP-28_5.3x10.2mm_P0.65mm")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "https://www.ti.com/lit/ds/symlink/ads1256.pdf")
         (field
           (name "SKiDL Tag") "U8")
         (field
-          (name "SKiDL Line") "blocks/adc.py:22"))
+          (name "SKiDL Line") "blocks/adc.py:23"))
       (libsource
         (lib "NO_LIB")
         (part "ADS1256"))
@@ -3173,13 +3477,15 @@
         (field
           (name "KiCad_Lib") "MCU_ST_STM32F4:STM32F411RETx")
         (field
-          (name "Pins_Verified") "PLACEHOLDER-REMAP")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "MCU_ST_STM32F4.kicad_sym:332580")
         (field
           (name "Description") "ARM Cortex-M4 MCU, 2x SPI, USB OTG FS")
         (field
           (name "Footprint") "Package_QFP:LQFP-64_10x10mm_P0.5mm")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "https://www.st.com/resource/en/datasheet/stm32f411re.pdf")
         (field
           (name "SKiDL Tag") "U9")
         (field
@@ -3203,17 +3509,19 @@
         (field
           (name "KiCad_Lib") "Device:Crystal")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:9588")
         (field
           (name "Description") "Two pin crystal")
         (field
           (name "Footprint") "Crystal:Crystal_SMD_HC49-SD")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "Y1")
         (field
-          (name "SKiDL Line") "blocks/adc.py:23"))
+          (name "SKiDL Line") "blocks/adc.py:24"))
       (libsource
         (lib "NO_LIB")
         (part "Crystal"))
@@ -3233,13 +3541,15 @@
         (field
           (name "KiCad_Lib") "Device:Crystal")
         (field
-          (name "Pins_Verified") "STD")
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:9588")
         (field
           (name "Description") "Two pin crystal")
         (field
           (name "Footprint") "Crystal:Crystal_SMD_HC49-SD")
         (field
-          (name "Datasheet"))
+          (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "Y2")
         (field
@@ -3303,7 +3613,7 @@
         (pintype "POWER-IN"))
       (node
         (ref "U5")
-        (pin "6")
+        (pin "5")
         (pintype "POWER-IN"))
       (node
         (ref "U6")
@@ -3379,15 +3689,11 @@
         (pintype "POWER-OUT"))
       (node
         (ref "U8")
-        (pin "21")
+        (pin "14")
         (pintype "INPUT"))
       (node
         (ref "U8")
-        (pin "22")
-        (pintype "INPUT"))
-      (node
-        (ref "U8")
-        (pin "3")
+        (pin "16")
         (pintype "POWER-IN"))
       (node
         (ref "U9")
@@ -3395,7 +3701,19 @@
         (pintype "POWER-IN"))
       (node
         (ref "U9")
-        (pin "2")
+        (pin "19")
+        (pintype "POWER-IN"))
+      (node
+        (ref "U9")
+        (pin "32")
+        (pintype "POWER-IN"))
+      (node
+        (ref "U9")
+        (pin "48")
+        (pintype "POWER-IN"))
+      (node
+        (ref "U9")
+        (pin "64")
         (pintype "POWER-IN")))
     (net
       (code 3)
@@ -3515,7 +3833,7 @@
         (pintype "POWER-IN"))
       (node
         (ref "U5")
-        (pin "2")
+        (pin "4")
         (pintype "POWER-IN"))
       (node
         (ref "U6")
@@ -3539,7 +3857,7 @@
         (pintype "PASSIVE"))
       (node
         (ref "U8")
-        (pin "7")
+        (pin "6")
         (pintype "INPUT")))
     (net
       (code 7)
@@ -3555,7 +3873,7 @@
         (pintype "PASSIVE"))
       (node
         (ref "U8")
-        (pin "8")
+        (pin "7")
         (pintype "INPUT")))
     (net
       (code 8)
@@ -3571,7 +3889,7 @@
         (pintype "PASSIVE"))
       (node
         (ref "U8")
-        (pin "9")
+        (pin "8")
         (pintype "INPUT")))
     (net
       (code 9)
@@ -3587,7 +3905,7 @@
         (pintype "PASSIVE"))
       (node
         (ref "U8")
-        (pin "10")
+        (pin "9")
         (pintype "INPUT")))
     (net
       (code 10)
@@ -3599,11 +3917,7 @@
         (pintype "PASSIVE"))
       (node
         (ref "U8")
-        (pin "12")
-        (pintype "INPUT"))
-      (node
-        (ref "U8")
-        (pin "14")
+        (pin "19")
         (pintype "INPUT"))
       (node
         (ref "Y1")
@@ -3619,7 +3933,7 @@
         (pintype "PASSIVE"))
       (node
         (ref "U8")
-        (pin "13")
+        (pin "18")
         (pintype "OUTPUT"))
       (node
         (ref "Y1")
@@ -3743,7 +4057,7 @@
         (pintype "POWER-IN"))
       (node
         (ref "U4")
-        (pin "5")
+        (pin "8")
         (pintype "POWER-IN"))
       (node
         (ref "U6")
@@ -3759,15 +4073,15 @@
         (pintype "INPUT"))
       (node
         (ref "U8")
-        (pin "11")
-        (pintype "INPUT"))
-      (node
-        (ref "U8")
         (pin "2")
         (pintype "POWER-IN"))
       (node
         (ref "U8")
-        (pin "6")
+        (pin "3")
+        (pintype "INPUT"))
+      (node
+        (ref "U8")
+        (pin "5")
         (pintype "INPUT")))
     (net
       (code 13)
@@ -3779,7 +4093,7 @@
         (pintype "PASSIVE"))
       (node
         (ref "U9")
-        (pin "8")
+        (pin "60")
         (pintype "INPUT")))
     (net
       (code 14)
@@ -3811,24 +4125,24 @@
       (class "Default")
       (node
         (ref "U8")
-        (pin "15")
+        (pin "20")
         (pintype "INPUT"))
       (node
         (ref "U9")
-        (pin "14")
-        (pintype "OUTPUT")))
+        (pin "33")
+        (pintype "BIDIRECTIONAL")))
     (net
       (code 17)
       (name "CS_DAC")
       (class "Default")
       (node
         (ref "U4")
-        (pin "6")
+        (pin "5")
         (pintype "INPUT"))
       (node
         (ref "U9")
-        (pin "11")
-        (pintype "OUTPUT")))
+        (pin "20")
+        (pintype "BIDIRECTIONAL")))
     (net
       (code 18)
       (name "DGND")
@@ -3916,7 +4230,19 @@
       (node
         (ref "J3")
         (pin "A1")
-        (pintype "POWER-IN"))
+        (pintype "PASSIVE"))
+      (node
+        (ref "J3")
+        (pin "A12")
+        (pintype "PASSIVE"))
+      (node
+        (ref "J3")
+        (pin "B1")
+        (pintype "PASSIVE"))
+      (node
+        (ref "J3")
+        (pin "B12")
+        (pintype "PASSIVE"))
       (node
         (ref "J3")
         (pin "S1")
@@ -3956,19 +4282,31 @@
       (node
         (ref "U10")
         (pin "2")
-        (pintype "POWER-IN"))
+        (pintype "PASSIVE"))
       (node
         (ref "U8")
-        (pin "4")
+        (pin "17")
         (pintype "POWER-IN"))
       (node
         (ref "U9")
-        (pin "4")
+        (pin "12")
         (pintype "POWER-IN"))
       (node
         (ref "U9")
-        (pin "5")
-        (pintype "POWER-IN")))
+        (pin "18")
+        (pintype "POWER-IN"))
+      (node
+        (ref "U9")
+        (pin "31")
+        (pintype "PASSIVE"))
+      (node
+        (ref "U9")
+        (pin "47")
+        (pintype "PASSIVE"))
+      (node
+        (ref "U9")
+        (pin "63")
+        (pintype "PASSIVE")))
     (net
       (code 19)
       (name "DIFF_N")
@@ -4011,12 +4349,12 @@
         (pintype "PASSIVE"))
       (node
         (ref "U8")
-        (pin "19")
+        (pin "21")
         (pintype "OUTPUT"))
       (node
         (ref "U9")
-        (pin "18")
-        (pintype "INPUT")))
+        (pin "41")
+        (pintype "BIDIRECTIONAL")))
     (net
       (code 22)
       (name "F1_MID")
@@ -4050,8 +4388,8 @@
       (name "FORCE-")
       (class "Default")
       (node
-        (ref "J4")
-        (pin "4")
+        (ref "J7")
+        (pin "1")
         (pintype "PASSIVE"))
       (node
         (ref "R10")
@@ -4103,44 +4441,44 @@
         (pintype "PASSIVE"))
       (node
         (ref "U9")
-        (pin "25")
-        (pintype "OUTPUT")))
+        (pin "2")
+        (pintype "BIDIRECTIONAL")))
     (net
       (code 28)
       (name "MISO2")
       (class "Default")
       (node
         (ref "U8")
-        (pin "18")
-        (pintype "TRISTATE"))
+        (pin "22")
+        (pintype "OUTPUT"))
       (node
         (ref "U9")
-        (pin "16")
-        (pintype "INPUT")))
+        (pin "35")
+        (pintype "BIDIRECTIONAL")))
     (net
       (code 29)
       (name "MOSI1")
       (class "Default")
       (node
         (ref "U4")
-        (pin "8")
+        (pin "7")
         (pintype "INPUT"))
       (node
         (ref "U9")
-        (pin "13")
-        (pintype "OUTPUT")))
+        (pin "23")
+        (pintype "BIDIRECTIONAL")))
     (net
       (code 30)
       (name "MOSI2")
       (class "Default")
       (node
         (ref "U8")
-        (pin "17")
+        (pin "23")
         (pintype "INPUT"))
       (node
         (ref "U9")
-        (pin "17")
-        (pintype "OUTPUT")))
+        (pin "36")
+        (pintype "BIDIRECTIONAL")))
     (net
       (code 31)
       (name "NRST")
@@ -4175,8 +4513,8 @@
         (pintype "PASSIVE"))
       (node
         (ref "U5")
-        (pin "1")
-        (pintype "INPUT")))
+        (pin "7")
+        (pintype "PASSIVE")))
     (net
       (code 33)
       (name "OPA548_ILIM")
@@ -4191,8 +4529,8 @@
         (pintype "PASSIVE"))
       (node
         (ref "U5")
-        (pin "5")
-        (pintype "INPUT")))
+        (pin "3")
+        (pintype "PASSIVE")))
     (net
       (code 34)
       (name "OSC_IN")
@@ -4203,8 +4541,8 @@
         (pintype "PASSIVE"))
       (node
         (ref "U9")
-        (pin "9")
-        (pintype "INPUT"))
+        (pin "5")
+        (pintype "BIDIRECTIONAL"))
       (node
         (ref "Y2")
         (pin "1")
@@ -4219,8 +4557,8 @@
         (pintype "PASSIVE"))
       (node
         (ref "U9")
-        (pin "10")
-        (pintype "OUTPUT"))
+        (pin "6")
+        (pintype "BIDIRECTIONAL"))
       (node
         (ref "Y2")
         (pin "2")
@@ -4235,36 +4573,36 @@
         (pintype "PASSIVE"))
       (node
         (ref "U8")
-        (pin "20")
+        (pin "15")
         (pintype "INPUT"))
       (node
         (ref "U9")
-        (pin "19")
-        (pintype "OUTPUT")))
+        (pin "42")
+        (pintype "BIDIRECTIONAL")))
     (net
       (code 37)
       (name "SCK1")
       (class "Default")
       (node
         (ref "U4")
-        (pin "7")
+        (pin "6")
         (pintype "INPUT"))
       (node
         (ref "U9")
-        (pin "12")
-        (pintype "OUTPUT")))
+        (pin "21")
+        (pintype "BIDIRECTIONAL")))
     (net
       (code 38)
       (name "SCK2")
       (class "Default")
       (node
         (ref "U8")
-        (pin "16")
+        (pin "24")
         (pintype "INPUT"))
       (node
         (ref "U9")
-        (pin "15")
-        (pintype "OUTPUT")))
+        (pin "34")
+        (pintype "BIDIRECTIONAL")))
     (net
       (code 39)
       (name "SENSE+")
@@ -4278,8 +4616,8 @@
         (pin "1")
         (pintype "PASSIVE"))
       (node
-        (ref "J4")
-        (pin "2")
+        (ref "J5")
+        (pin "1")
         (pintype "PASSIVE"))
       (node
         (ref "R12")
@@ -4302,8 +4640,8 @@
         (pin "1")
         (pintype "PASSIVE"))
       (node
-        (ref "J4")
-        (pin "3")
+        (ref "J6")
+        (pin "1")
         (pintype "PASSIVE"))
       (node
         (ref "R13")
@@ -4347,8 +4685,8 @@
         (pintype "PASSIVE"))
       (node
         (ref "U9")
-        (pin "23")
-        (pintype "INPUT")))
+        (pin "49")
+        (pintype "BIDIRECTIONAL")))
     (net
       (code 44)
       (name "SWDIO")
@@ -4359,7 +4697,7 @@
         (pintype "PASSIVE"))
       (node
         (ref "U9")
-        (pin "22")
+        (pin "46")
         (pintype "BIDIRECTIONAL")))
     (net
       (code 45)
@@ -4419,7 +4757,7 @@
         (pintype "PASSIVE"))
       (node
         (ref "U9")
-        (pin "20")
+        (pin "44")
         (pintype "BIDIRECTIONAL")))
     (net
       (code 50)
@@ -4430,9 +4768,13 @@
         (pin "A7")
         (pintype "BIDIRECTIONAL"))
       (node
+        (ref "J3")
+        (pin "B7")
+        (pintype "BIDIRECTIONAL"))
+      (node
         (ref "U10")
         (pin "1")
-        (pintype "BIDIRECTIONAL")))
+        (pintype "PASSIVE")))
     (net
       (code 51)
       (name "USB_DM_ESD")
@@ -4444,7 +4786,7 @@
       (node
         (ref "U10")
         (pin "6")
-        (pintype "BIDIRECTIONAL")))
+        (pintype "PASSIVE")))
     (net
       (code 52)
       (name "USB_DP")
@@ -4455,7 +4797,7 @@
         (pintype "PASSIVE"))
       (node
         (ref "U9")
-        (pin "21")
+        (pin "45")
         (pintype "BIDIRECTIONAL")))
     (net
       (code 53)
@@ -4466,9 +4808,13 @@
         (pin "A6")
         (pintype "BIDIRECTIONAL"))
       (node
+        (ref "J3")
+        (pin "B6")
+        (pintype "BIDIRECTIONAL"))
+      (node
         (ref "U10")
         (pin "3")
-        (pintype "BIDIRECTIONAL")))
+        (pintype "PASSIVE")))
     (net
       (code 54)
       (name "USB_DP_ESD")
@@ -4480,7 +4826,7 @@
       (node
         (ref "U10")
         (pin "4")
-        (pintype "BIDIRECTIONAL")))
+        (pintype "PASSIVE")))
     (net
       (code 55)
       (name "VBUS")
@@ -4492,7 +4838,19 @@
       (node
         (ref "J3")
         (pin "A4")
-        (pintype "POWER-IN"))
+        (pintype "PASSIVE"))
+      (node
+        (ref "J3")
+        (pin "A9")
+        (pintype "PASSIVE"))
+      (node
+        (ref "J3")
+        (pin "B4")
+        (pintype "PASSIVE"))
+      (node
+        (ref "J3")
+        (pin "B9")
+        (pintype "PASSIVE"))
       (node
         (ref "R28")
         (pin "1")
@@ -4500,7 +4858,7 @@
       (node
         (ref "U10")
         (pin "5")
-        (pintype "POWER-IN")))
+        (pintype "PASSIVE")))
     (net
       (code 56)
       (name "VBUS_SENSE")
@@ -4515,8 +4873,8 @@
         (pintype "PASSIVE"))
       (node
         (ref "U9")
-        (pin "24")
-        (pintype "INPUT")))
+        (pin "14")
+        (pintype "BIDIRECTIONAL")))
     (net
       (code 57)
       (name "VCAP1")
@@ -4527,8 +4885,8 @@
         (pintype "PASSIVE"))
       (node
         (ref "U9")
-        (pin "6")
-        (pintype "PASSIVE")))
+        (pin "30")
+        (pintype "POWER-OUT")))
     (net
       (code 58)
       (name "VDDA")
@@ -4547,7 +4905,7 @@
         (pintype "PASSIVE"))
       (node
         (ref "U9")
-        (pin "3")
+        (pin "13")
         (pintype "POWER-IN")))
     (net
       (code 59)
@@ -4563,8 +4921,8 @@
         (pintype "PASSIVE"))
       (node
         (ref "U5")
-        (pin "7")
-        (pintype "POWER-OUT")))
+        (pin "6")
+        (pintype "OUTPUT")))
     (net
       (code 60)
       (name "VO_SENSE")
@@ -4587,7 +4945,7 @@
         (pintype "PASSIVE"))
       (node
         (ref "U5")
-        (pin "3")
+        (pin "2")
         (pintype "INPUT")))
     (net
       (code 61)
@@ -4607,15 +4965,15 @@
         (pintype "PASSIVE"))
       (node
         (ref "U2")
-        (pin "5")
-        (pintype "OUTPUT"))
+        (pin "6")
+        (pintype "POWER-OUT"))
       (node
         (ref "U4")
-        (pin "4")
-        (pintype "INPUT"))
+        (pin "2")
+        (pintype "POWER-IN"))
       (node
         (ref "U8")
-        (pin "5")
+        (pin "4")
         (pintype "INPUT")))
     (net
       (code 62)
@@ -4659,7 +5017,7 @@
         (pintype "PASSIVE"))
       (node
         (ref "U4")
-        (pin "2")
+        (pin "4")
         (pintype "OUTPUT")))
     (net
       (code 65)
@@ -4695,5 +5053,5 @@
         (pintype "OUTPUT"))
       (node
         (ref "U5")
-        (pin "4")
+        (pin "1")
         (pintype "INPUT")))))

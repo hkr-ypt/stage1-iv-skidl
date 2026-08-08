@@ -1,0 +1,45 @@
+SOURCE      : Texas Instruments ADS1255/ADS1256 data sheet
+DOCUMENT    : SBAS288K - JUNE 2003 - REVISED SEPTEMBER 2013
+SECTION     : "PIN ASSIGNMENTS" / "Terminal Functions", data-sheet page 5
+PDF SHA256  : 30a54f54486d97a00965572a9bc1c0cd3f5a6568e3fb5e0f3059db2c2e1d02a6
+EXTRACTED BY: pdftotext -layout ads1256_revK.pdf  (poppler), lines 271-305
+COLUMN USED : "TERMINAL NO. / ADS1256" (the 2nd numeric column)
+NOTE        : verbatim excerpt, retained solely as the provenance record
+              for the pin numbers in libraries/stage1_iv.kicad_sym.
+---------------- BEGIN VERBATIM EXCERPT ----------------
+                                                            Terminal Functions
+                             TERMINAL NO.                ANALOG/DIGITAL
+NAME                      ADS1255     ADS1256             INPUT/OUTPUT                                          DESCRIPTION
+AVDD                             1        1                   Analog                   Analog power supply
+AGND                             2        2                     Analog                 Analog ground
+VREFN                            3        3                  Analog input              Negative reference input
+VREFP                            4        4                  Analog input              Positive reference input
+AINCOM                           5        5                  Analog input              Analog input common
+AIN0                             6        6                  Analog input              Analog input 0
+AIN1                             7        7                  Analog input              Analog input 1
+AIN2                             —        8                  Analog input              Analog input 2
+AIN3                             —        9                  Analog input              Analog input 3
+AIN4                             —        10                 Analog input              Analog input 4
+AIN5                             —        11                 Analog input              Analog input 5
+AIN6                             —        12                 Analog input              Analog input 6
+AIN7                             —        13                 Analog input              Analog input 7
+SYNC/PDWN                        8        14         Digital input(1)(2): active low   Synchronization / power down input
+RESET                            9        15         Digital input(1)(2): active low   Reset input
+DVDD                             10       16                     Digital               Digital power supply
+DGND                             11       17                    Digital                Digital ground
+XTAL2                            12       18                   Digital(3)              Crystal oscillator connection
+XTAL1/CLKIN                      13       19            Digital/Digital input(2)       Crystal oscillator connection / external clock input
+CS                               14       20         Digital input(1)(2): active low   Chip select
+DRDY                             15       21          Digital output: active low       Data ready output
+DOUT                             16       22                 Digital output            Serial data output
+DIN                              17       23               Digital input(1)(2)         Serial data input
+SCLK                             18       24               Digital input(1)(2)         Serial clock input
+D0/CLKOUT                        19       25                  Digital IO(4)            Digital I/O 0 / clock output
+D1                               20       26                  Digital IO(4)            Digital I/O 1
+D2                               —        27                  Digital IO(4)            Digital I/O 2
+D3                               —        28                  Digital IO(4)            Digital I/O 3
+(1) Schmitt-Trigger digital input.
+(2) 5V tolerant digital input.
+(3) Leave disconnected if external clock input is applied to XTAL1/CLKIN.
+(4) Schmitt-Trigger digital input when the digital I/O is configured as an input.
+----------------- END VERBATIM EXCERPT -----------------

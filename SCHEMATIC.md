@@ -54,9 +54,11 @@ synthesized generic rectangle:
   half down the left side, second half down the right, 2.54 mm pitch.
 - Properties on every instance: `Reference`, `Value` (visible),
   `Footprint`, `Datasheet`, `MPN`, `KiCad_Lib`, `Sheet` (owning block) and
-  `Pins_Verified` (hidden for `STD` parts, **visible** on
-  `VERIFY-DATASHEET` / `PLACEHOLDER-REMAP` parts so unverified pin numbering
-  stays flagged on the schematic itself).
+  `Pins_Verified`. The emitter hides this property only when its value is the
+  literal `STD`; since every part now carries `RESOLVED` or
+  `VERIFY-DATASHEET`, the flag is drawn **visible on every symbol**, stating on
+  the sheet itself where that part's pin numbers came from. `VERIFY-DATASHEET`
+  (currently U5/OPA548T only) is the one that still needs action.
 
 ## Connectivity model (label classes)
 

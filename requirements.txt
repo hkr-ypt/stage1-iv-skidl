@@ -12,12 +12,25 @@ future>=0.18
 kinparse>=0.1.2
 simp_sexp>=0.3.1
 rich>=13.0
+ply>=3.11
 #
 # Recommended install (skip the optional extras that pull in PCB placement):
 #   pip install skidl --no-deps
-#   pip install graphviz future kinparse simp_sexp rich
+#   pip install graphviz future kinparse simp_sexp rich ply
 #
-# To later import/visualize in KiCad you also need KiCad 7/8/9 installed with
-# its standard symbol + footprint libraries (set KICADn_SYMBOL_DIR). The design
-# runs fully WITHOUT KiCad libraries present, because every part is declared as
-# a SKiDL-native symbol (see libraries/custom_symbols.py).
+# REQUIRED, not optional: the KiCad symbol + footprint libraries.
+# This design reads every pin number, symbol name and footprint name out of the
+# installed libraries at build time (tools/resolve_kicad_libs.py) and refuses to
+# guess, so main.py will not run without them. Install a pinned revision with
+#
+#   sudo tools/install_kicad_libs.sh          # -> /usr/share/kicad/{symbols,footprints}
+#
+# or point KICAD9_SYMBOL_DIR / KICAD9_FOOTPRINT_DIR (or kicad_libs.json) at an
+# existing KiCad 7/8/9 installation. Verify with:
+#
+#   python3 tools/resolve_kicad_libs.py --paths
+#
+# Pinned revision used for the committed outputs: kicad-symbols / kicad-footprints
+# tag 9.0.9.1.
+#
+# tools/kicad_roundtrip.py additionally needs `kicad-cli` on PATH (optional).

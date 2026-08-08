@@ -1,0 +1,4 @@
+(sym_lib_table
+  (version 7)
+  (lib (name "stage1_iv")(type "KiCad")(uri "${KIPRJMOD}/libraries/stage1_iv.kicad_sym")(options "")(descr "Stage 1 I-V project symbols: parts with no official KiCad equivalent (ADS1256, OPA548T)"))
+)

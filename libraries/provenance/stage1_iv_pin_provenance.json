@@ -1,0 +1,273 @@
+{
+  "generated_by": "tools/author_project_symbols.py",
+  "symbols": {
+    "stage1_iv:ADS1256": {
+      "provenance_class": "RESOLVED",
+      "source_document": "Texas Instruments ADS1255/ADS1256 data sheet",
+      "document_number": "SBAS288K",
+      "revision": "K \u2014 JUNE 2003, revised SEPTEMBER 2013",
+      "table": "PIN ASSIGNMENTS / Terminal Functions, page 5, column 'TERMINAL NO. / ADS1256'",
+      "excerpt_file": "libraries/provenance/ads1256_sbas288k_terminal_functions.txt",
+      "excerpt_sha256": "90b63f3f1672f6d35a4b5e8059743f884b82e0eaa2f58311daf384d7e153bed1",
+      "pins": [
+        {
+          "number": "1",
+          "name": "AVDD",
+          "etype": "power_in",
+          "description": "Analog power supply",
+          "source": "libraries/provenance/ads1256_sbas288k_terminal_functions.txt:13"
+        },
+        {
+          "number": "2",
+          "name": "AGND",
+          "etype": "power_in",
+          "description": "Analog ground",
+          "source": "libraries/provenance/ads1256_sbas288k_terminal_functions.txt:14"
+        },
+        {
+          "number": "3",
+          "name": "VREFN",
+          "etype": "input",
+          "description": "Negative reference input",
+          "source": "libraries/provenance/ads1256_sbas288k_terminal_functions.txt:15"
+        },
+        {
+          "number": "4",
+          "name": "VREFP",
+          "etype": "input",
+          "description": "Positive reference input",
+          "source": "libraries/provenance/ads1256_sbas288k_terminal_functions.txt:16"
+        },
+        {
+          "number": "5",
+          "name": "AINCOM",
+          "etype": "input",
+          "description": "Analog input common",
+          "source": "libraries/provenance/ads1256_sbas288k_terminal_functions.txt:17"
+        },
+        {
+          "number": "6",
+          "name": "AIN0",
+          "etype": "input",
+          "description": "Analog input 0",
+          "source": "libraries/provenance/ads1256_sbas288k_terminal_functions.txt:18"
+        },
+        {
+          "number": "7",
+          "name": "AIN1",
+          "etype": "input",
+          "description": "Analog input 1",
+          "source": "libraries/provenance/ads1256_sbas288k_terminal_functions.txt:19"
+        },
+        {
+          "number": "8",
+          "name": "AIN2",
+          "etype": "input",
+          "description": "Analog input 2",
+          "source": "libraries/provenance/ads1256_sbas288k_terminal_functions.txt:20"
+        },
+        {
+          "number": "9",
+          "name": "AIN3",
+          "etype": "input",
+          "description": "Analog input 3",
+          "source": "libraries/provenance/ads1256_sbas288k_terminal_functions.txt:21"
+        },
+        {
+          "number": "10",
+          "name": "AIN4",
+          "etype": "input",
+          "description": "Analog input 4",
+          "source": "libraries/provenance/ads1256_sbas288k_terminal_functions.txt:22"
+        },
+        {
+          "number": "11",
+          "name": "AIN5",
+          "etype": "input",
+          "description": "Analog input 5",
+          "source": "libraries/provenance/ads1256_sbas288k_terminal_functions.txt:23"
+        },
+        {
+          "number": "12",
+          "name": "AIN6",
+          "etype": "input",
+          "description": "Analog input 6",
+          "source": "libraries/provenance/ads1256_sbas288k_terminal_functions.txt:24"
+        },
+        {
+          "number": "13",
+          "name": "AIN7",
+          "etype": "input",
+          "description": "Analog input 7",
+          "source": "libraries/provenance/ads1256_sbas288k_terminal_functions.txt:25"
+        },
+        {
+          "number": "14",
+          "name": "SYNC/PDWN",
+          "etype": "input",
+          "description": "Synchronization / power down input",
+          "source": "libraries/provenance/ads1256_sbas288k_terminal_functions.txt:26"
+        },
+        {
+          "number": "15",
+          "name": "RESET",
+          "etype": "input",
+          "description": "Reset input",
+          "source": "libraries/provenance/ads1256_sbas288k_terminal_functions.txt:27"
+        },
+        {
+          "number": "16",
+          "name": "DVDD",
+          "etype": "power_in",
+          "description": "Digital power supply",
+          "source": "libraries/provenance/ads1256_sbas288k_terminal_functions.txt:28"
+        },
+        {
+          "number": "17",
+          "name": "DGND",
+          "etype": "power_in",
+          "description": "Digital ground",
+          "source": "libraries/provenance/ads1256_sbas288k_terminal_functions.txt:29"
+        },
+        {
+          "number": "18",
+          "name": "XTAL2",
+          "etype": "output",
+          "description": "Crystal oscillator connection",
+          "source": "libraries/provenance/ads1256_sbas288k_terminal_functions.txt:30"
+        },
+        {
+          "number": "19",
+          "name": "XTAL1/CLKIN",
+          "etype": "input",
+          "description": "Crystal oscillator connection / external clock input",
+          "source": "libraries/provenance/ads1256_sbas288k_terminal_functions.txt:31"
+        },
+        {
+          "number": "20",
+          "name": "CS",
+          "etype": "input",
+          "description": "Chip select",
+          "source": "libraries/provenance/ads1256_sbas288k_terminal_functions.txt:32"
+        },
+        {
+          "number": "21",
+          "name": "DRDY",
+          "etype": "output",
+          "description": "Data ready output",
+          "source": "libraries/provenance/ads1256_sbas288k_terminal_functions.txt:33"
+        },
+        {
+          "number": "22",
+          "name": "DOUT",
+          "etype": "output",
+          "description": "Serial data output",
+          "source": "libraries/provenance/ads1256_sbas288k_terminal_functions.txt:34"
+        },
+        {
+          "number": "23",
+          "name": "DIN",
+          "etype": "input",
+          "description": "Serial data input",
+          "source": "libraries/provenance/ads1256_sbas288k_terminal_functions.txt:35"
+        },
+        {
+          "number": "24",
+          "name": "SCLK",
+          "etype": "input",
+          "description": "Serial clock input",
+          "source": "libraries/provenance/ads1256_sbas288k_terminal_functions.txt:36"
+        },
+        {
+          "number": "25",
+          "name": "D0/CLKOUT",
+          "etype": "bidirectional",
+          "description": "Digital I/O 0 / clock output",
+          "source": "libraries/provenance/ads1256_sbas288k_terminal_functions.txt:37"
+        },
+        {
+          "number": "26",
+          "name": "D1",
+          "etype": "bidirectional",
+          "description": "Digital I/O 1",
+          "source": "libraries/provenance/ads1256_sbas288k_terminal_functions.txt:38"
+        },
+        {
+          "number": "27",
+          "name": "D2",
+          "etype": "bidirectional",
+          "description": "Digital I/O 2",
+          "source": "libraries/provenance/ads1256_sbas288k_terminal_functions.txt:39"
+        },
+        {
+          "number": "28",
+          "name": "D3",
+          "etype": "bidirectional",
+          "description": "Digital I/O 3",
+          "source": "libraries/provenance/ads1256_sbas288k_terminal_functions.txt:40"
+        }
+      ]
+    },
+    "stage1_iv:OPA548T": {
+      "provenance_class": "VERIFY-DATASHEET",
+      "source_document": "Alternate KiCad Library (community), symbols/Amplifier_Operational_AKL.kicad_sym",
+      "document_number": "n/a \u2014 third-party KiCad library, not a data sheet",
+      "revision": "git cf93181d5934eca1b0560f66895f1b06958700f7",
+      "table": "symbol OPA548T, pin definitions",
+      "excerpt_file": "libraries/provenance/opa548t_akl_symbol.txt",
+      "excerpt_sha256": "fc6d33267077e788cfad18608862650fc5d22faa9a61798a4a42cb5ba148827f",
+      "limitation": "The TI OPA548 data sheet (SBOS070) could not be retrieved: www.ti.com and every datasheet mirror are refused by this environment's network egress policy. These pin numbers MUST be re-verified against SBOS070 before fabrication.",
+      "pins": [
+        {
+          "number": "1",
+          "name": "+",
+          "etype": "input",
+          "description": "",
+          "source": "libraries/provenance/opa548t_akl_symbol.txt:44"
+        },
+        {
+          "number": "2",
+          "name": "-",
+          "etype": "input",
+          "description": "",
+          "source": "libraries/provenance/opa548t_akl_symbol.txt:62"
+        },
+        {
+          "number": "3",
+          "name": "CS",
+          "etype": "passive",
+          "description": "",
+          "source": "libraries/provenance/opa548t_akl_symbol.txt:80"
+        },
+        {
+          "number": "4",
+          "name": "V-",
+          "etype": "power_in",
+          "description": "",
+          "source": "libraries/provenance/opa548t_akl_symbol.txt:98"
+        },
+        {
+          "number": "5",
+          "name": "V+",
+          "etype": "power_in",
+          "description": "",
+          "source": "libraries/provenance/opa548t_akl_symbol.txt:116"
+        },
+        {
+          "number": "6",
+          "name": "~",
+          "etype": "output",
+          "description": "",
+          "source": "libraries/provenance/opa548t_akl_symbol.txt:134"
+        },
+        {
+          "number": "7",
+          "name": "E/S",
+          "etype": "passive",
+          "description": "",
+          "source": "libraries/provenance/opa548t_akl_symbol.txt:152"
+        }
+      ]
+    }
+  }
+}

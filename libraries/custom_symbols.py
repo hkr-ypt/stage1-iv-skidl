@@ -1,161 +1,240 @@
 """
-custom_symbols.py — SKiDL-native symbol library for the Stage 1 I–V Characterization System
-============================================================================================
+custom_symbols.py — part factories for the Stage 1 I–V Characterization System
+==============================================================================
 
 WHY THIS FILE EXISTS
 --------------------
-The generation environment used to produce this project does **not** have the
-official KiCad symbol/footprint libraries installed (no ``KICADn_SYMBOL_DIR``,
-no ``fp-lib-table``). To keep the design *fully executable* — able to run ERC,
-build the netlist, and validate connectivity — every component is declared here
-as a **SKiDL-native part** (``tool=SKIDL``) with explicit pins.
+Every part in this design is a SKiDL-native part (``tool=SKIDL``) so the design
+stays fully executable — ERC, netlist, schematic, validation — without KiCad
+itself. What changed: **the pins are no longer written here.** Each factory
+names an official KiCad ``lib_id`` and the pin numbers, pin names and pin
+electrical types are *read out of the installed KiCad symbol library at build
+time* by :mod:`tools.resolve_kicad_libs`.
 
-Each factory records, as component *fields*, the **intended official KiCad
-library identifier** and the manufacturer part number, so that when this design
-is later opened in KiCad the parts map cleanly onto the real symbols.
+That means:
 
-PIN-NUMBER HONESTY POLICY  (see project spec: "Never guess package pin numbers")
---------------------------------------------------------------------------------
-Connectivity in the block files is expressed **exclusively by pin function
-name** (e.g. ``dac['VREF'] += VREF_2V5``), never by raw pin number. Pin numbers
-exist here only so a KiCad netlist can be emitted and mapped to footprint pads.
+  * no pin number in this project can be stale, invented, or remembered — it is
+    whatever the symbol file on disk says, and the audit tool prints the file
+    and line every value came from;
+  * a symbol that does not exist upstream fails the build immediately instead
+    of silently producing a netlist that maps nets onto pads that do not exist.
 
-Every part carries a ``Pins_Verified`` field describing the provenance of its
-pin *numbers*:
+Building therefore requires the KiCad libraries to be installed. See
+``tools/install_kicad_libs.sh`` and ``kicad_libs.json``.
 
-    "STD"                 Universal / jelly-bean pinout, physically standard for
-                          the package (R, C, D, LED, INA128 DIP-8, dual-op-amp
-                          SOIC-8, LD1117 SOT-223). Safe to fabricate.
-    "VERIFY-DATASHEET"    Pin *names* are authoritative; pin *numbers* are the
-                          best-known datasheet mapping but MUST be checked
-                          against the manufacturer datasheet / official KiCad
-                          symbol before fabrication (multi-config small ICs:
-                          DAC8552, REF5025, OPA548, USBLC6).
-    "PLACEHOLDER-REMAP"   Fine-pitch part whose exact pin numbers are explicitly
-                          NOT asserted from memory (per spec §0.7). Numbers here
-                          are sequential placeholders. The pin NAME/NET mapping
-                          is complete and correct; pull real pad numbers from the
-                          official KiCad symbol at layout time. (STM32F411RET6
-                          LQFP-64, ADS1256 TSSOP-28.)
+PIN NAMES AND THE ALIAS LAYER
+-----------------------------
+Blocks connect **by pin function name** (``dac["VREF"] += VREF_2V5``), never by
+raw pin number. The official symbols sometimes spell a pin differently from the
+design (``V_{REF}`` vs ``VREF``; INA128 names both gain pins ``Rg``). We do
+**not** rename the official pin. Instead each factory declares an ``aliases``
+map ``{design_name: pin_number}`` and the design name is added to that pin's
+SKiDL aliases, so the block files keep reading naturally while the netlist
+carries the official name and the official number.
 
-Anything marked PLACEHOLDER-REMAP or VERIFY-DATASHEET is surfaced again in
-``manifest.yaml`` and the component manifest table so it cannot be missed.
+Every alias is listed in ``ALIAS_DOCUMENTATION`` at the bottom of this file.
+
+PIN-NUMBER PROVENANCE (``Pins_Verified`` field)
+-----------------------------------------------
+    "RESOLVED"          Pin numbers were read from an official KiCad symbol
+                        library file, or from a project symbol authored
+                        directly from the manufacturer data sheet. Fabrication
+                        safe.
+    "VERIFY-DATASHEET"  Pin numbers were read from a real library file, but
+                        that file is not the manufacturer data sheet (see
+                        libraries/provenance/). Confirm before fabrication.
+
+``PLACEHOLDER-REMAP`` no longer exists anywhere in this project;
+``validation/footprint_check.py`` hard-fails if it reappears.
 """
+
+import os
+import sys
 
 from skidl import Part, Pin, SKIDL, TEMPLATE
 
-# Convenient aliases for pin electrical types.
-_IN = Pin.types.INPUT
-_OUT = Pin.types.OUTPUT
-_BIDIR = Pin.types.BIDIR
-_TRI = Pin.types.TRISTATE
-_PAS = Pin.types.PASSIVE
-_PWRIN = Pin.types.PWRIN
-_PWROUT = Pin.types.PWROUT
-_NC = Pin.types.NOCONNECT
-_OC = Pin.types.OPENCOLL
-_UNSPEC = Pin.types.UNSPEC
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if os.path.join(_REPO_ROOT, "tools") not in sys.path:
+    sys.path.insert(0, os.path.join(_REPO_ROOT, "tools"))
+
+from resolve_kicad_libs import KicadLibraries, LibraryNotFound  # noqa: E402
 
 
-def _part(name, ref_prefix, footprint, pins, kicad_lib, mpn,
-          pins_verified, description, datasheet="", keywords=""):
-    """Build a TEMPLATE SKiDL part and stamp it with documentation fields.
+class SymbolResolutionError(RuntimeError):
+    """A declared lib_id does not exist in the installed libraries."""
 
-    `pins` is a list of (num, name, func) tuples. Returned part is a TEMPLATE;
-    call it (e.g. ``DAC8552()(ref='U4')``) to instantiate an instance into the
-    active circuit.
+
+_LIBS = None
+
+
+def libs():
+    """The shared, lazily-built view of the installed KiCad libraries."""
+    global _LIBS
+    if _LIBS is None:
+        try:
+            _LIBS = KicadLibraries()
+        except LibraryNotFound as exc:
+            raise SymbolResolutionError(
+                "This design reads every pin number from the installed KiCad "
+                "libraries and refuses to guess.\n\n" + str(exc)) from exc
+    return _LIBS
+
+
+# KiCad electrical-type string -> SKiDL pin function.
+_ETYPE = {
+    "input": Pin.types.INPUT,
+    "output": Pin.types.OUTPUT,
+    "bidirectional": Pin.types.BIDIR,
+    "tri_state": Pin.types.TRISTATE,
+    "passive": Pin.types.PASSIVE,
+    "free": Pin.types.PASSIVE,
+    "unspecified": Pin.types.UNSPEC,
+    "power_in": Pin.types.PWRIN,
+    "power_out": Pin.types.PWROUT,
+    "open_collector": Pin.types.OPENCOLL,
+    "open_emitter": Pin.types.OPENEMIT,
+    "no_connect": Pin.types.NOCONNECT,
+}
+
+
+def _part(lib_id, ref_prefix, footprint, mpn, pins_verified, description,
+          aliases=None, extra_aliases=None, keywords="", datasheet="",
+          name=None):
+    """Build a TEMPLATE SKiDL part whose pins come from an installed symbol.
+
+    ``aliases`` maps a design-facing pin name to the official pin *number* it
+    refers to (a number, or a list of numbers when the design name legitimately
+    covers several pads — e.g. USB-C ``DP`` is pads A6 *and* B6). That name
+    becomes the pin's SKiDL name and the symbol's own name is kept as an alias,
+    so both spellings address the pin. The design name is a *label*; the pin
+    NUMBER — the fabrication-critical value — always comes from the symbol
+    file and is never restated here.
+
+    ``extra_aliases`` adds further names without changing the pin's name; use
+    it when the official name is already the one the blocks should read
+    (ADS1256 ``XTAL1/CLKIN`` is one pad addressable as ``XTAL1`` or ``CLKIN``).
     """
+    sym = libs().get_symbol(lib_id)
+    if sym is None:
+        nick = lib_id.split(":", 1)[0] if ":" in lib_id else lib_id
+        known = libs().has_symbol_library(nick)
+        raise SymbolResolutionError(
+            f"symbol {lib_id!r} does not exist "
+            f"({'library found, symbol missing' if known else 'library not found'}). "
+            f"Resolve the correct name with:\n"
+            f"    python3 tools/resolve_kicad_libs.py --find-symbol "
+            f"'{lib_id.split(':')[-1]}*'")
+
+    official_numbers = {sp.number for sp in sym.pins}
+    design_name_of = {}
+    for design_name, numbers in (aliases or {}).items():
+        for num in (numbers if isinstance(numbers, (list, tuple)) else [numbers]):
+            num = str(num)
+            if num not in official_numbers:
+                raise SymbolResolutionError(
+                    f"{lib_id}: cannot name pin {num!r} {design_name!r} — "
+                    f"that pin number is not in the symbol")
+            design_name_of[num] = design_name
+
     p = Part(
-        name=name,
+        name=name or sym.name,
         tool=SKIDL,
         ref_prefix=ref_prefix,
         dest=TEMPLATE,
         footprint=footprint,
-        pins=[Pin(num=str(n), name=nm, func=fn) for (n, nm, fn) in pins],
+        pins=[Pin(num=sp.number,
+                  name=design_name_of.get(sp.number, sp.name),
+                  func=_ETYPE.get(sp.etype, Pin.types.UNSPEC))
+              for sp in sym.pins],
     )
+
+    # Keep the symbol's own pin name reachable alongside the design name.
+    for sp in sym.pins:
+        if sp.number in design_name_of and sp.name != design_name_of[sp.number]:
+            p[sp.number].aliases += sp.name
+
+    for design_name, numbers in (extra_aliases or {}).items():
+        for num in (numbers if isinstance(numbers, (list, tuple)) else [numbers]):
+            target = p[str(num)]
+            if target is None:
+                raise SymbolResolutionError(
+                    f"{lib_id}: cannot alias {design_name!r} to pin {num!r} — "
+                    f"that pin number is not in the symbol")
+            target.aliases += design_name
+
     p.description = description
     p.keywords = keywords
-    p.datasheet = datasheet
+    p.datasheet = datasheet or sym.properties.get("Datasheet", "")
     # Documentation fields carried into the KiCad netlist / BOM.
     p.fields["MPN"] = mpn
-    p.fields["KiCad_Lib"] = kicad_lib
+    p.fields["KiCad_Lib"] = lib_id
     p.fields["Pins_Verified"] = pins_verified
+    # Machine-checkable provenance: exactly where these pin numbers were read.
+    p.fields["Symbol_Source"] = f"{os.path.basename(sym.file)}:{sym.line}"
     return p
 
 
 # =====================================================================
-#  GENERIC PASSIVES  (pinouts are physically universal → "STD")
+#  GENERIC PASSIVES
 # =====================================================================
 
 def R():
-    return _part("R", "R", "Resistor_SMD:R_0603_1608Metric",
-                 [("1", "~", _PAS), ("2", "~", _PAS)],
-                 "Device:R", "generic", "STD", "Resistor")
+    return _part("Device:R", "R", "Resistor_SMD:R_0603_1608Metric",
+                 "generic", "RESOLVED", "Resistor")
 
 
 def C():
-    return _part("C", "C", "Capacitor_SMD:C_0603_1608Metric",
-                 [("1", "~", _PAS), ("2", "~", _PAS)],
-                 "Device:C", "generic", "STD", "Unpolarized capacitor")
+    return _part("Device:C", "C", "Capacitor_SMD:C_0603_1608Metric",
+                 "generic", "RESOLVED", "Unpolarized capacitor")
 
 
 def C_POL():
-    # KiCad Device:CP — pin 1 = +, pin 2 = -
-    return _part("CP", "C", "Capacitor_THT:CP_Radial_D8.0mm_P3.50mm",
-                 [("1", "+", _PAS), ("2", "-", _PAS)],
-                 "Device:CP", "generic", "STD", "Polarized capacitor")
+    # Device:C_Polarized draws the "+" glyph on the pin-1 side of the body
+    # (polylines at y=+2.286/+2.794, pin 1 at y=+3.81), so pin 1 is the anode.
+    return _part("Device:C_Polarized", "C",
+                 "Capacitor_THT:CP_Radial_D8.0mm_P3.50mm",
+                 "generic", "RESOLVED", "Polarized capacitor",
+                 aliases={"+": 1, "-": 2})
 
 
 def L_FerriteBead():
-    return _part("FerriteBead", "FB", "Inductor_SMD:L_0805_2012Metric",
-                 [("1", "1", _PAS), ("2", "2", _PAS)],
-                 "Device:FerriteBead", "BLM21PG221SN1D", "STD",
-                 "Ferrite bead, 220R @ 100MHz")
+    return _part("Device:FerriteBead", "FB", "Inductor_SMD:L_0805_2012Metric",
+                 "BLM21PG221SN1D", "RESOLVED", "Ferrite bead, 220R @ 100MHz")
 
 
 def D():
-    # KiCad footprint convention: cathode = pad 1.
-    return _part("D", "D", "Diode_SMD:D_SOD-123",
-                 [("1", "K", _PAS), ("2", "A", _PAS)],
-                 "Device:D", "1N4148", "STD", "Diode (cathode=pad1)")
+    return _part("Device:D", "D", "Diode_SMD:D_SOD-123",
+                 "1N4148", "RESOLVED", "Diode (cathode = pin K)")
 
 
 def D_TVS():
-    # Bidirectional TVS — both pins passive, no polarity for the CA variant.
-    return _part("D_TVS", "D", "Diode_SMD:D_SMB",
-                 [("1", "A1", _PAS), ("2", "A2", _PAS)],
-                 "Device:D_TVS", "SMBJ15CA", "STD", "Bidirectional TVS diode")
+    return _part("Device:D_TVS", "D", "Diode_SMD:D_SMB",
+                 "SMBJ15CA", "RESOLVED", "Bidirectional TVS diode")
 
 
 def LED():
-    return _part("LED", "D", "LED_SMD:LED_0805_2012Metric",
-                 [("1", "K", _PAS), ("2", "A", _PAS)],
-                 "Device:LED", "generic", "STD", "Light emitting diode (cathode=pad1)")
+    return _part("Device:LED", "D", "LED_SMD:LED_0805_2012Metric",
+                 "generic", "RESOLVED", "Light emitting diode")
 
 
 def Fuse_PTC():
-    return _part("Polyfuse", "F", "Fuse:Fuse_Bourns-MF-RG300",
-                 [("1", "1", _PAS), ("2", "2", _PAS)],
-                 "Device:Polyfuse", "0ZRM0010FF1E", "STD",
-                 "PTC resettable fuse, 100mA hold")
+    return _part("Device:Polyfuse", "F", "Fuse:Fuse_Bourns_MF-RG300",
+                 "0ZRM0010FF1E", "RESOLVED", "PTC resettable fuse")
 
 
 def Crystal():
-    return _part("Crystal", "Y", "Crystal:Crystal_SMD_HC49-SD",
-                 [("1", "1", _PAS), ("2", "2", _PAS)],
-                 "Device:Crystal", "generic", "STD", "Two pin crystal")
+    return _part("Device:Crystal", "Y", "Crystal:Crystal_SMD_HC49-SD",
+                 "generic", "RESOLVED", "Two pin crystal")
 
 
 def TestPoint():
-    return _part("TestPoint", "TP", "TestPoint:TestPoint_Pad_D1.5mm",
-                 [("1", "1", _PAS)],
-                 "Connector:TestPoint", "n/a", "STD", "Test point")
+    return _part("Connector:TestPoint", "TP", "TestPoint:TestPoint_Pad_D1.5mm",
+                 "n/a", "RESOLVED", "Test point")
 
 
 def SW_Push():
-    return _part("SW_Push", "SW", "Button_Switch_THT:SW_PUSH_6mm",
-                 [("1", "1", _PAS), ("2", "2", _PAS)],
-                 "Switch:SW_Push", "generic", "STD", "Momentary push switch")
+    return _part("Switch:SW_Push", "SW", "Button_Switch_THT:SW_PUSH_6mm",
+                 "generic", "RESOLVED", "Momentary push switch")
 
 
 # =====================================================================
@@ -163,45 +242,53 @@ def SW_Push():
 # =====================================================================
 
 def TerminalBlock_4():
-    return _part("Screw_Terminal_01x04", "J",
-                 "TerminalBlock:TerminalBlock_bornier-4_P5.08mm",
-                 [("1", "Pin_1", _PAS), ("2", "Pin_2", _PAS),
-                  ("3", "Pin_3", _PAS), ("4", "Pin_4", _PAS)],
-                 "Connector:Screw_Terminal_01x04", "generic-5.08mm", "STD",
-                 "4-pos terminal block: +15V_RAW,-15V_RAW,+5V_RAW,GND")
+    # Footprint selection: of the six 4-position 5.08 mm terminal blocks in the
+    # installed libraries, the Phoenix MKDS-1,5-4-5.08 is the 1.5 mm^2 industry
+    # reference part with a 1.3 mm drill (adequate for the bench-supply rails)
+    # and the smallest board depth (9.8 mm) among the 1.3 mm-drill options.
+    # See docs/identifier_resolution.md for the full candidate table.
+    return _part(
+        "Connector:Screw_Terminal_01x04", "J",
+        "TerminalBlock_Phoenix:TerminalBlock_Phoenix_MKDS-1,5-4-5.08"
+        "_1x04_P5.08mm_Horizontal",
+        "MKDS 1,5/4-5,08", "RESOLVED",
+        "4-pos terminal block: +15V_RAW,-15V_RAW,+5V_RAW,GND")
 
 
 def Header_1x05():
-    return _part("Conn_01x05", "J",
+    return _part("Connector_Generic:Conn_01x05", "J",
                  "Connector_PinHeader_2.54mm:PinHeader_1x05_P2.54mm_Vertical",
-                 [("1", "Pin_1", _PAS), ("2", "Pin_2", _PAS),
-                  ("3", "Pin_3", _PAS), ("4", "Pin_4", _PAS),
-                  ("5", "Pin_5", _PAS)],
-                 "Connector_Generic:Conn_01x05", "generic-2.54mm", "STD",
+                 "generic-2.54mm", "RESOLVED",
                  "SWD header: SWDIO,SWCLK,GND,3V3,NRST")
 
 
-def Conn_DUT_1x04():
-    # J4 — physical DUT connector (banana / panel mount). Nets named by function.
-    return _part("Conn_01x04", "J",
-                 "Connector:Banana_Jack_1x04",
-                 [("1", "FORCE+", _PAS), ("2", "SENSE+", _PAS),
-                  ("3", "SENSE-", _PAS), ("4", "FORCE-", _PAS)],
-                 "Connector_Generic:Conn_01x04", "panel-mount-banana", "STD",
-                 "DUT connector: FORCE+,SENSE+,SENSE-,FORCE-")
+def BananaJack(function_name):
+    """One panel-mount banana jack, aliased to the DUT terminal it carries.
+
+    A 4-position banana jack does not exist as a single KiCad part — only
+    Banana_Jack_1Pin / 2Pin / 3Pin — so the DUT connector is four separate
+    single-pin jacks (J4..J7), one per Kelvin wire.
+    """
+    # The jack's pin keeps the symbol's own name (``Pin_1``) and gains the
+    # terminal function as an alias: all four jacks then share one identical
+    # symbol definition, while the block still connects by function name.
+    return _part("Connector_Generic:Conn_01x01", "J",
+                 "Connector:Banana_Jack_1Pin",
+                 "panel-mount-banana-4mm", "RESOLVED",
+                 f"DUT banana jack: {function_name}",
+                 extra_aliases={function_name: 1})
 
 
 def USB_C_Receptacle():
-    # USB2.0-only USB-C receptacle. Reduced pin set (power/CC/data/shield).
-    return _part("USB_C_Receptacle_USB2.0", "J",
+    # USB2.0 USB-C receptacle. The GCT USB4085 footprint has 17 distinct pad
+    # names (A1 A4 A5 A6 A7 A8 A9 A12 B1 B4 B5 B6 B7 B8 B9 B12 S1); the
+    # _16P symbol variant declares exactly those 17 pins, while _14P omits
+    # A8/B8 (SBU1/SBU2) and would leave two pads permanently unnetted.
+    return _part("Connector:USB_C_Receptacle_USB2.0_16P", "J",
                  "Connector_USB:USB_C_Receptacle_GCT_USB4085",
-                 [("A1", "GND", _PWRIN), ("A4", "VBUS", _PWRIN),
-                  ("A5", "CC1", _BIDIR), ("A6", "DP", _BIDIR),
-                  ("A7", "DM", _BIDIR), ("B5", "CC2", _BIDIR),
-                  ("S1", "SHIELD", _PAS)],
-                 "Connector:USB_C_Receptacle_USB2.0", "USB-C 2.0 SMD",
-                 "VERIFY-DATASHEET",
-                 "USB-C receptacle (USB2.0 subset: VBUS,GND,CC1,CC2,DP,DM,SHIELD)")
+                 "GCT USB4085", "RESOLVED",
+                 "USB-C receptacle, USB 2.0, 16 signal pins + shield",
+                 aliases={"DP": ["A6", "B6"], "DM": ["A7", "B7"]})
 
 
 # =====================================================================
@@ -209,23 +296,21 @@ def USB_C_Receptacle():
 # =====================================================================
 
 def LD1117S33():
-    # SOT-223: pin1=GND(adj), pin2=VOUT(+tab), pin3=VIN. Universal LD1117 pinout.
-    return _part("LD1117S33", "U", "Package_TO_SOT_SMD:SOT-223-3_TabPin2",
-                 [("1", "GND", _PWRIN), ("2", "VOUT", _PWROUT),
-                  ("3", "VIN", _PWRIN)],
-                 "Regulator_Linear:LD1117S33TR_SOT223", "LD1117S33TR", "STD",
-                 "3.3V 800mA LDO", keywords="LDO regulator 3V3")
+    return _part("Regulator_Linear:LD1117S33TR_SOT223", "U",
+                 "Package_TO_SOT_SMD:SOT-223-3_TabPin2",
+                 "LD1117S33TR", "RESOLVED", "3.3V 800mA LDO",
+                 aliases={"VOUT": 2, "VIN": 3},
+                 keywords="LDO regulator 3V3")
 
 
 def REF5025():
-    # VSSOP-8 (DGK). Names authoritative; numbers per datasheet, mark to verify.
-    return _part("REF5025", "U", "Package_SO:VSSOP-8_3x3mm_P0.65mm",
-                 [("1", "NC1", _NC), ("2", "VIN", _PWRIN), ("3", "TEMP", _OUT),
-                  ("4", "GND", _PWRIN), ("5", "VOUT", _OUT),
-                  ("6", "TRIM/NR", _PAS), ("7", "NC2", _NC), ("8", "NC3", _NC)],
-                 "Reference_Voltage:REF5025AID", "REF5025AIDGKT",
-                 "VERIFY-DATASHEET",
+    # MPN REF5025AIDGKT -> A grade, DGK (VSSOP-8) package -> REF5025ADGK.
+    return _part("Reference_Voltage:REF5025ADGK", "U",
+                 "Package_SO:VSSOP-8_3x3mm_P0.65mm",
+                 "REF5025AIDGKT", "RESOLVED",
                  "2.500V precision voltage reference",
+                 aliases={"VIN": 2, "TEMP": 3, "TRIM/NR": 5, "VOUT": 6,
+                          "NC1": 1, "NC2": 7, "NC3": 8},
                  keywords="voltage reference 2.5V")
 
 
@@ -234,24 +319,21 @@ def REF5025():
 # =====================================================================
 
 def DAC8552():
-    # VSSOP-8 (DGK). Single shared VREF pin for both channels (per design note).
-    return _part("DAC8552", "U", "Package_SO:VSSOP-8_3x3mm_P0.65mm",
-                 [("1", "VDD", _PWRIN), ("2", "VOUTA", _OUT), ("3", "VOUTB", _OUT),
-                  ("4", "VREF", _IN), ("5", "GND", _PWRIN), ("6", "SYNC", _IN),
-                  ("7", "SCLK", _IN), ("8", "DIN", _IN)],
-                 "Analog_DAC:DAC8552", "DAC8552IDGKR", "VERIFY-DATASHEET",
+    return _part("Analog_DAC:DAC8552", "U",
+                 "Package_SO:VSSOP-8_3x3mm_P0.65mm",
+                 "DAC8552IDGKR", "RESOLVED",
                  "16-bit dual voltage-output DAC, SPI",
+                 aliases={"VDD": 1, "VREF": 2, "VOUTB": 3, "VOUTA": 4,
+                          "SYNC": 5, "DIN": 7},
                  keywords="DAC 16-bit dual SPI")
 
 
 def OPA2277():
-    # Dual precision op-amp, SOIC-8 — universal dual-op-amp pinout → STD.
-    return _part("OPA2277", "U", "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm",
-                 [("1", "OUTA", _OUT), ("2", "-INA", _IN), ("3", "+INA", _IN),
-                  ("4", "V-", _PWRIN), ("5", "+INB", _IN), ("6", "-INB", _IN),
-                  ("7", "OUTB", _OUT), ("8", "V+", _PWRIN)],
-                 "Amplifier_Operational:OPA2277", "OPA2277UA", "STD",
-                 "Dual precision op-amp",
+    return _part("Amplifier_Operational:OPA2277", "U",
+                 "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm",
+                 "OPA2277UA", "RESOLVED", "Dual precision op-amp",
+                 aliases={"OUTA": 1, "-INA": 2, "+INA": 3,
+                          "+INB": 5, "-INB": 6, "OUTB": 7},
                  keywords="opamp precision dual")
 
 
@@ -260,13 +342,17 @@ def OPA2277():
 # =====================================================================
 
 def OPA548():
-    # TO-220-7. Pin NAMES authoritative; numbers to verify against datasheet.
-    return _part("OPA548", "U", "Package_TO_SOT_THT:TO-220-7_Vertical",
-                 [("1", "E/S", _IN), ("2", "V-", _PWRIN), ("3", "-IN", _IN),
-                  ("4", "+IN", _IN), ("5", "ILIM", _IN), ("6", "V+", _PWRIN),
-                  ("7", "OUT", _PWROUT)],
-                 "Amplifier_Operational:OPA548T", "OPA548T", "VERIFY-DATASHEET",
+    # No OPA548 symbol exists in the official KiCad libraries, so this is the
+    # project-local symbol in libraries/stage1_iv.kicad_sym. Its pin numbers
+    # come from a published third-party KiCad library, NOT from TI SBOS070,
+    # which is unreachable from this environment — hence VERIFY-DATASHEET.
+    # See libraries/provenance/opa548t_akl_symbol.txt.
+    return _part("stage1_iv:OPA548T", "U",
+                 "Package_TO_SOT_THT:TO-220-7_P2.54x3.7mm"
+                 "_StaggerOdd_Lead3.8mm_Vertical",
+                 "OPA548T", "VERIFY-DATASHEET",
                  "High-current power op-amp with current limit",
+                 aliases={"+IN": 1, "-IN": 2, "ILIM": 3, "OUT": 6},
                  keywords="power opamp current limit")
 
 
@@ -275,85 +361,51 @@ def OPA548():
 # =====================================================================
 
 def INA128P():
-    # DIP-8. Numbers universal for the INA12x/INA114/AD620 family (design doc
-    # asserts these exact numbers on Sheets 5/6) → STD.
-    return _part("INA128P", "U", "Package_DIP:DIP-8_W7.62mm",
-                 [("1", "RG1", _PAS), ("2", "-IN", _IN), ("3", "+IN", _IN),
-                  ("4", "V-", _PWRIN), ("5", "REF", _IN), ("6", "OUT", _OUT),
-                  ("7", "V+", _PWRIN), ("8", "RG2", _PAS)],
-                 "Amplifier_Instrumentation:INA128P", "INA128P", "STD",
+    # The official symbol is Amplifier_Instrumentation:INA128 (there is no
+    # "INA128P"); the P suffix is the DIP-8 package option, carried in the MPN.
+    return _part("Amplifier_Instrumentation:INA128", "U",
+                 "Package_DIP:DIP-8_W7.62mm",
+                 "INA128P", "RESOLVED",
                  "Instrumentation amplifier, G=1+50k/RG",
+                 aliases={"RG1": 1, "-IN": 2, "+IN": 3, "REF": 5,
+                          "OUT": 6, "RG2": 8},
                  keywords="instrumentation amplifier inamp")
 
 
 # =====================================================================
-#  ADC  (fine-pitch → PLACEHOLDER-REMAP pin numbers)
+#  ADC
 # =====================================================================
 
 def ADS1256():
-    # TSSOP-28. Pin NAME/NET mapping is complete; pin NUMBERS are sequential
-    # placeholders to be remapped from the official symbol at layout time.
-    names = [
-        "AVDD", "AGND", "DVDD", "DGND", "VREFP", "VREFN",
-        "AIN0", "AIN1", "AIN2", "AIN3", "AINCOM",
-        "XTAL1", "XTAL2", "CLKIN",
-        "CS", "SCLK", "DIN", "DOUT", "DRDY", "RESET", "PDWN", "SYNC",
-    ]
-    func = {
-        "AVDD": _PWRIN, "AGND": _PWRIN, "DVDD": _PWRIN, "DGND": _PWRIN,
-        "VREFP": _IN, "VREFN": _IN,
-        "AIN0": _IN, "AIN1": _IN, "AIN2": _IN, "AIN3": _IN, "AINCOM": _IN,
-        "XTAL1": _IN, "XTAL2": _OUT, "CLKIN": _IN,
-        "CS": _IN, "SCLK": _IN, "DIN": _IN, "DOUT": _TRI,
-        "DRDY": _OUT, "RESET": _IN, "PDWN": _IN, "SYNC": _IN,
-    }
-    pins = [(str(i + 1), nm, func[nm]) for i, nm in enumerate(names)]
-    return _part("ADS1256", "U", "Package_SO:TSSOP-28_4.4x9.7mm_P0.65mm",
-                 pins, "Analog_ADC:ADS1256", "ADS1256IDBR", "PLACEHOLDER-REMAP",
+    # Analog_ADC has no ADS1256 (only ADS1251), so this is the project-local
+    # symbol authored directly from the TI data sheet: SBAS288K, "Terminal
+    # Functions" table, page 5, column "TERMINAL NO. / ADS1256".
+    # Package is SSOP-28 (TI DB, R-PDSO-G28, JEDEC MO-150) per the data
+    # sheet's MECHANICAL DATA page — NOT the 4.4 mm-wide TSSOP-28.
+    return _part("stage1_iv:ADS1256", "U",
+                 "Package_SO:SSOP-28_5.3x10.2mm_P0.65mm",
+                 "ADS1256IDBR", "RESOLVED",
                  "24-bit delta-sigma ADC, 8ch, PGA, SPI",
+                 # XTAL1/CLKIN (19) and SYNC/PDWN (14) are single pads whose
+                 # official names the blocks read directly; the halves are kept
+                 # addressable so an older reference still resolves to the pad.
+                 extra_aliases={"XTAL1": 19, "CLKIN": 19,
+                                "SYNC": 14, "PDWN": 14},
                  keywords="ADC 24-bit delta-sigma SPI")
 
 
 # =====================================================================
-#  MCU  (fine-pitch → PLACEHOLDER-REMAP pin numbers)
+#  MCU
 # =====================================================================
 
 def STM32F411RET6():
-    # LQFP-64. Pin NAMES = STM32 port/function names actually used in the design.
-    # Pin NUMBERS are sequential placeholders — remap from official
-    # MCU_ST_STM32F4:STM32F411RETx symbol at layout time (per spec §0.7).
-    named = [
-        # power
-        ("VBAT", _PWRIN), ("VDD", _PWRIN), ("VDDA", _PWRIN),
-        ("VSS", _PWRIN), ("VSSA", _PWRIN), ("VCAP1", _PAS),
-        # system
-        ("NRST", _IN), ("BOOT0", _IN),
-        ("PH0", _IN), ("PH1", _OUT),      # OSC_IN / OSC_OUT (HSE)
-        # SPI1 -> DAC (write-only)
-        ("PA4", _OUT),                    # CS_DAC (GPIO)
-        ("PA5", _OUT),                    # SPI1_SCK  -> SCK1
-        ("PA7", _OUT),                    # SPI1_MOSI -> MOSI1
-        # SPI2 -> ADC (bidirectional)
-        ("PB12", _OUT),                   # CS_ADC (GPIO)
-        ("PB13", _OUT),                   # SPI2_SCK  -> SCK2
-        ("PB14", _IN),                    # SPI2_MISO -> MISO2
-        ("PB15", _OUT),                   # SPI2_MOSI -> MOSI2
-        ("PA8", _IN),                     # DRDY (EXTI)
-        ("PA9", _OUT),                    # RESET_ADC (GPIO)
-        # USB OTG FS
-        ("PA11", _BIDIR),                 # USB_DM
-        ("PA12", _BIDIR),                 # USB_DP
-        # SWD
-        ("PA13", _BIDIR),                 # SWDIO
-        ("PA14", _IN),                    # SWCLK
-        # misc
-        ("PA0", _IN),                     # VBUS_SENSE (ADC-capable)
-        ("PC13", _OUT),                   # LED_STATUS
-    ]
-    pins = [(str(i + 1), nm, fn) for i, (nm, fn) in enumerate(named)]
-    return _part("STM32F411RETx", "U", "Package_QFP:LQFP-64_10x10mm_P0.5mm",
-                 pins, "MCU_ST_STM32F4:STM32F411RETx", "STM32F411RET6",
-                 "PLACEHOLDER-REMAP",
+    # The official symbol already uses the design's own pin names (PA5, PB13,
+    # VDD, VSS, VCAP1, NRST, BOOT0, PH0, PH1 ...), so no aliases are needed.
+    # VDD is four pads (19/32/48/64) and VSS four (18/31/47/63); addressing
+    # U9["VDD"] returns all of them, so every rail pad gets connected.
+    return _part("MCU_ST_STM32F4:STM32F411RETx", "U",
+                 "Package_QFP:LQFP-64_10x10mm_P0.5mm",
+                 "STM32F411RET6", "RESOLVED",
                  "ARM Cortex-M4 MCU, 2x SPI, USB OTG FS",
                  keywords="STM32 MCU Cortex-M4")
 
@@ -363,10 +415,63 @@ def STM32F411RET6():
 # =====================================================================
 
 def USBLC6_2SC6():
-    # SOT-23-6. IO1 on pins 1&6, IO2 on pins 3&4, VBUS pin5, GND pin2.
-    return _part("USBLC6-2SC6", "U", "Package_TO_SOT_SMD:SOT-23-6",
-                 [("1", "IO1", _BIDIR), ("2", "GND", _PWRIN), ("3", "IO2", _BIDIR),
-                  ("4", "IO2b", _BIDIR), ("5", "VBUS", _PWRIN), ("6", "IO1b", _BIDIR)],
-                 "Power_Protection:USBLC6-2SC6", "USBLC6-2SC6", "VERIFY-DATASHEET",
-                 "USB ESD protection array",
+    # Pins 1/6 are the two ends of I/O1 and pins 3/4 the two ends of I/O2;
+    # the design routes the signal in on one end and out on the other, so the
+    # aliases keep those two ends distinguishable by name.
+    return _part("Power_Protection:USBLC6-2SC6", "U",
+                 "Package_TO_SOT_SMD:SOT-23-6",
+                 "USBLC6-2SC6", "RESOLVED", "USB ESD protection array",
+                 aliases={"IO1": 1, "IO2": 3, "IO2b": 4, "IO1b": 6},
                  keywords="ESD USB protection")
+
+
+# =====================================================================
+#  ALIAS DOCUMENTATION
+# =====================================================================
+# Every design-facing pin name that is NOT the official symbol's own pin name.
+# Format: factory -> {design name: (pin number, official symbol pin name)}.
+ALIAS_DOCUMENTATION = {
+    "C_POL / Device:C_Polarized": {
+        "+": (1, "~ (anode; '+' glyph is drawn on the pin-1 side)"),
+        "-": (2, "~ (cathode; filled bar)"),
+    },
+    "BananaJack / Connector_Generic:Conn_01x01": {
+        "<FORCE+|SENSE+|SENSE-|FORCE->": (1, "Pin_1"),
+    },
+    "USB_C_Receptacle / Connector:USB_C_Receptacle_USB2.0_16P": {
+        "DP": ("A6 + B6", "D+  (both orientations)"),
+        "DM": ("A7 + B7", "D-  (both orientations)"),
+    },
+    "LD1117S33 / Regulator_Linear:LD1117S33TR_SOT223": {
+        "VOUT": (2, "VO"), "VIN": (3, "VI"),
+    },
+    "REF5025 / Reference_Voltage:REF5025ADGK": {
+        "VIN": (2, "Vin"), "TEMP": (3, "Temp"), "TRIM/NR": (5, "Trim/NR"),
+        "VOUT": (6, "Vout"), "NC1": (1, "DNC"), "NC2": (7, "NC"),
+        "NC3": (8, "DNC"),
+    },
+    "DAC8552 / Analog_DAC:DAC8552": {
+        "VDD": (1, "V_{DD}"), "VREF": (2, "V_{REF}"), "VOUTB": (3, "V_{OUT}B"),
+        "VOUTA": (4, "V_{OUT}A"), "SYNC": (5, "~{SYNC}"), "DIN": (7, "D_{IN}"),
+    },
+    "OPA2277 / Amplifier_Operational:OPA2277": {
+        "OUTA": (1, "~"), "-INA": (2, "-"), "+INA": (3, "+"),
+        "+INB": (5, "+"), "-INB": (6, "-"), "OUTB": (7, "~"),
+    },
+    "OPA548 / stage1_iv:OPA548T": {
+        "+IN": (1, "+"), "-IN": (2, "-"),
+        "ILIM": (3, "CS  (current-limit set)"), "OUT": (6, "~"),
+    },
+    "INA128P / Amplifier_Instrumentation:INA128": {
+        "RG1": (1, "Rg"), "-IN": (2, "-"), "+IN": (3, "+"), "REF": (5, "Ref"),
+        "OUT": (6, "~"), "RG2": (8, "Rg"),
+    },
+    "ADS1256 / stage1_iv:ADS1256": {
+        "XTAL1": (19, "XTAL1/CLKIN"), "CLKIN": (19, "XTAL1/CLKIN"),
+        "SYNC": (14, "SYNC/PDWN"), "PDWN": (14, "SYNC/PDWN"),
+    },
+    "USBLC6_2SC6 / Power_Protection:USBLC6-2SC6": {
+        "IO1": (1, "I/O1"), "IO2": (3, "I/O2"),
+        "IO2b": (4, "I/O2"), "IO1b": (6, "I/O1"),
+    },
+}

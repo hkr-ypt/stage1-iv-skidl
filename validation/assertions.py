@@ -135,6 +135,67 @@ def a_net_manifest(n):
             ok, f"under-populated nets = {empties or 'none'}")
 
 
+def a_usb_c_pads_fully_connected(n, circuit):
+    """Every USB-C power/ground pad is bonded and both data pairs are tied.
+
+    The USB-C receptacle is symmetric: GND is four pads, VBUS is four pads,
+    and D+/D- each appear twice — once per cable orientation. Connecting only
+    one of each is not a cosmetic omission: a plug inserted the other way up
+    lands its data pair on unconnected pads and the port silently works in
+    one orientation only.
+    """
+    j3 = next((p for p in circuit.parts if p.ref == "J3"), None)
+    if j3 is None:
+        return ("USB-C (J3) pads: GND/VBUS fully bonded, D+/D- pairs tied",
+                False, "J3 not found in the circuit")
+
+    def nets_of(name):
+        pins = j3[name]
+        pins = pins if isinstance(pins, list) else [pins]
+        return {(str(p.num), tuple(sorted(x.name for x in p.get_nets())))
+                for p in pins}
+
+    problems = []
+
+    gnd = nets_of("GND")
+    if len(gnd) < 4:
+        problems.append(f"expected 4 GND pads, symbol declares {len(gnd)}")
+    off_rail = sorted(num for num, nets in gnd if "DGND" not in nets)
+    if off_rail:
+        problems.append(f"GND pad(s) {off_rail} are not on DGND")
+
+    vbus = nets_of("VBUS")
+    if len(vbus) < 4:
+        problems.append(f"expected 4 VBUS pads, symbol declares {len(vbus)}")
+    off_vbus = sorted(num for num, nets in vbus if "VBUS" not in nets)
+    if off_vbus:
+        problems.append(f"VBUS pad(s) {off_vbus} are not on VBUS")
+
+    for label in ("DP", "DM"):
+        pads = nets_of(label)
+        if len(pads) != 2:
+            problems.append(f"{label} should be 2 pads, symbol declares {len(pads)}")
+            continue
+        nets = {nets for _num, nets in pads}
+        if len(nets) != 1 or not nets.pop():
+            problems.append(
+                f"{label} pads {sorted(num for num, _ in pads)} are not tied "
+                f"to the same net — the cable would work in one orientation only")
+
+    shield = nets_of("SHIELD")
+    if not shield or any(not nets for _num, nets in shield):
+        problems.append("SHIELD pad carries no net")
+
+    ok = not problems
+    return ("USB-C (J3) pads: GND/VBUS fully bonded, D+/D- pairs tied", ok,
+            "; ".join(problems) if problems else
+            f"GND={sorted(num for num, _ in gnd)} on DGND, "
+            f"VBUS={sorted(num for num, _ in vbus)} on VBUS, "
+            f"D+={sorted(num for num, _ in nets_of('DP'))} tied, "
+            f"D-={sorted(num for num, _ in nets_of('DM'))} tied, "
+            f"SHIELD={sorted(num for num, _ in shield)} connected")
+
+
 ALL_ASSERTIONS = [
     a_shared_reference,
     a_force_path_chain,
@@ -144,6 +205,7 @@ ALL_ASSERTIONS = [
     a_spi_buses_separate,
     a_star_ground,
     a_net_manifest,
+    a_usb_c_pads_fully_connected,
 ]
 
 
@@ -153,7 +215,10 @@ def run_assertions(n, circuit=None):
     print("=" * 70)
     failures = []
     for fn in ALL_ASSERTIONS:
-        name, ok, detail = fn(n)
+        # Most assertions read only the net namespace; the ones that need to
+        # reach a specific part (USB-C pad coverage) take the circuit too.
+        nargs = fn.__code__.co_argcount
+        name, ok, detail = fn(n, circuit) if nargs == 2 else fn(n)
         status = "PASS" if ok else "FAIL"
         print(f"  [{status}] {name}")
         print(f"         {detail}")
