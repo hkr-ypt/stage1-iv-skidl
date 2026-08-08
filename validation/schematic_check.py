@@ -16,7 +16,7 @@ Checks (all must pass; exits non-zero on any failure):
      tuples reconstructed from labels/sheet-pins equals the netlist's set.
   2. Part sets match (same references, no duplicates across sheets).
   3. Every net carries the correct label class per the documented rule:
-     GLOBAL_POWER (power rails from blocks/nets.py + NET_MANIFEST["power"])
+     GLOBAL_POWER (PWR_FLAG'd rails from blocks/nets.py + NET_MANIFEST["power"])
      -> global_label; nets spanning >= 2 sheets -> hierarchical_label;
      single-sheet nets -> local label. One single class per net everywhere;
      local label names are never reused on a second sheet.
@@ -45,7 +45,8 @@ sys.path.insert(0, str(HERE))
 from simp_sexp import Sexp                     # noqa: E402
 from kinparse import parse_netlist             # noqa: E402
 
-from blocks.nets import NET_MANIFEST, _POWER_RAILS, _SPECIAL  # noqa: E402
+from blocks.nets import (NET_MANIFEST,  # noqa: E402
+                         EXTERNALLY_SOURCED_RAILS)
 
 BLOCK_ORDER = [
     "power", "mcu", "dac_sweep", "output_buffer",
@@ -54,9 +55,11 @@ BLOCK_ORDER = [
 TOP_FILE = "stage1_iv.kicad_sch"
 NETLIST_FILE = "stage1_iv.net"
 
-# Nets that must use global power labels: rails stamped drive=POWER in
-# blocks/nets.py plus the shared power/reference group of the net manifest.
-POWER_NET_NAMES = ({_SPECIAL.get(attr, attr) for attr in _POWER_RAILS}
+# Nets that must use global power labels: the externally-sourced rails that
+# carry a PWR_FLAG, plus the shared power/reference group of the net manifest
+# (which adds +3V3D and VREF_2V5 — rails with a real on-board driver and so
+# deliberately unflagged).
+POWER_NET_NAMES = (set(EXTERNALLY_SOURCED_RAILS.values())
                    | set(NET_MANIFEST["power"]))
 
 

@@ -75,11 +75,16 @@ def build():
 
 
 SHEET_OF = {
+    # FLG1..FLG6 are PWR_FLAG virtual symbols on the rails that enter the
+    # board at J1 / FB1 / the R31 star point — see blocks/power.py.
     "1 Power": ["J1", "U1", "U2", "FB1", "R31", "C1", "C2", "C3", "C4", "C5",
-                "C6", "C7", "C8", "C9", "C10"],
+                "C6", "C7", "C8", "C9", "C10",
+                "#FLG1", "#FLG2", "#FLG3", "#FLG4", "#FLG5", "#FLG6"],
     "2 MCU": ["U9", "Y2", "C32", "C33", "C34", "C35", "C36", "C37", "C38", "C39",
               "C40", "C43", "FB2", "R21", "C41", "SW1", "R22", "R23", "LED1",
-              "J2", "J3", "U10", "R24", "R25", "R26", "R27", "R28", "R29", "C42"],
+              "J2", "J3", "U10", "R24", "R25", "R26", "R27", "R28", "R29", "C42",
+              # FLG7 = VBUS (from the USB host), FLG8 = VDDA (after FB2).
+              "#FLG7", "#FLG8"],
     "3 DAC/Sweep": ["U4", "C13", "U3", "C11", "C12", "R1", "R2", "R3", "R4",
                     "R5", "R6", "TP1"],
     "4 Power Buffer": ["U5", "R7", "R8", "C14", "C15", "C16", "C17", "C18", "R9",
@@ -202,20 +207,42 @@ def main():
     print_net_manifest(n)
     write_component_manifest(circuit)
 
-    erc_summary = run_erc(circuit)
+    try:
+        erc_summary = run_erc(circuit)
+    except AssertionError as exc:
+        print(f"\nERC: FAIL\n{exc}", file=sys.stderr)
+        return 1
     run_assertions(n, circuit)
 
     print("\n" + "=" * 70)
     print("SUMMARY")
     print("=" * 70)
-    print(f"  Parts .............. {erc_summary['parts']}")
+    print(f"  Parts .............. {erc_summary['parts']} "
+          f"({len(erc_summary['power_flag_nets'])} PWR_FLAGs)")
     print(f"  Nets ............... {erc_summary['nets']}")
     print(f"  Netlist ............ {os.path.basename(netlist_path)}")
     print(f"  Schematic .......... {len(sch_files)} sheets "
           f"({os.path.basename(sch_files[0])} + 8 child sheets)")
-    print("  ERC ................ PASS (see warnings above for reserved pins)")
+    # Derived from the ERC result, never asserted. run_erc() already raises on
+    # any error or un-allow-listed warning, so reaching here means both are
+    # zero; printing the actual numbers keeps that visible and auditable.
+    erc_errors = erc_summary["erc_errors"]
+    erc_warnings = erc_summary["erc_warnings"]
+    erc_allowed = erc_summary["erc_warnings_allowed"]
+    print(f"  SKiDL ERC .......... {erc_errors} errors, {erc_warnings} warnings"
+          + (f" ({erc_allowed} allow-listed)" if erc_allowed else ""))
+    print(f"  Power flags ........ {len(erc_summary['power_flag_nets'])} on "
+          f"{', '.join(erc_summary['power_flag_nets'])}")
     print("  Structural check ... PASS (identifiers, pads, provenance)")
     print("  Assertions ......... PASS")
+    print("\n  NOTE: SKiDL ERC and KiCad ERC are different checks with "
+          "different coverage.\n        See validation/erc.py — a pass here is "
+          "not evidence about KiCad ERC.")
+
+    if erc_errors or erc_summary["erc_warnings_offending"]:
+        print("\nDesign build FAILED on ERC.", file=sys.stderr)
+        return 1
+
     print("\nDesign build complete.")
     return 0
 

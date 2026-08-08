@@ -7,16 +7,31 @@ sheet boundaries. In SKiDL, nets merge by *connection*, not by name, so every
 block must connect to the *same* Net objects. ``create_nets()`` builds all
 global nets once; ``main.py`` passes the returned namespace into every block.
 
-Power/ground rails are stamped with ``drive = POWER`` so SKiDL ERC treats them
-as driven (the electrical equivalent of a KiCad PWR_FLAG) and does not report
-"no driving pins" on rails fed from the bench supply.
+WHY THERE IS NO ``drive = POWER`` HERE ANY MORE
+-----------------------------------------------
+This module used to stamp every supply rail with ``Net.drive = POWER`` and
+describe it as "the electrical equivalent of a KiCad PWR_FLAG". **It was not.**
+``Net.drive`` is a runtime Python attribute read only by ``skidl.ERC()``. It is
+never serialised into ``stage1_iv.net`` and never emitted into any
+``.kicad_sch`` — the outputs contained zero power symbols of any kind. All it
+did was stop SKiDL from reporting the eight undriven rails, while KiCad, which
+never saw it, reported every one of them as a ``power_pin_not_driven`` error.
+It converted a real finding into a silent pass.
+
+The mechanism is now a real one: each externally-sourced rail carries a
+**PWR_FLAG part** (``power:PWR_FLAG``, one ``power_out`` pin) instantiated in
+the block where that rail physically enters the design — see
+:data:`EXTERNALLY_SOURCED_RAILS` below for the list and ``blocks/power.py`` /
+``blocks/mcu.py`` for the instances and their justifications. A PWR_FLAG is a
+component: it appears in the netlist, it appears in the schematic, and both
+SKiDL's ERC and KiCad's ERC can see it.
 
 The set of names below is the authoritative "net manifest" required by the
 spec; ``validation/assertions.py`` checks that each one exists and is populated.
 """
 
 from types import SimpleNamespace
-from skidl import Net, POWER
+from skidl import Net
 
 
 # Names that map 1:1 to a valid Python attribute.
@@ -51,12 +66,30 @@ _SPECIAL = {
     "SENSE_MINUS": "SENSE-",
 }
 
-# Rails that must be marked as driven (power/ground) for ERC. VBUS is supplied
-# externally by the USB host, so it is marked driven as well.
-_POWER_RAILS = [
-    "P15VA", "N15VA", "P5VA", "P5V_RAW", "P3V3D", "VDDA", "VBUS",
-    "AGND", "DGND",
-]
+# Rails whose energy originates OUTSIDE this board, so nothing on the board can
+# drive them. Each one carries exactly one PWR_FLAG, instantiated at its
+# physical point of entry in blocks/power.py or blocks/mcu.py (the reason for
+# each is written there, next to the part).
+#
+# This is a declaration of intent, not a mechanism: it drives nothing at build
+# time. validation/erc.py::check_power_flags asserts that the set of nets
+# actually carrying a PWR_FLAG equals this set exactly, so the table cannot
+# drift away from the circuit in either direction.
+#
+# Deliberately absent — these have a genuine on-board power_out driver, and a
+# flag on them would mask a future wiring error:
+#     +3V3D      driven by U1 (LD1117S33) VOUT
+#     VREF_2V5   driven by U2 (REF5025)   Vout
+EXTERNALLY_SOURCED_RAILS = {
+    "P5V_RAW": "+5V_RAW",   # bench supply via J1.3
+    "P15VA": "+15VA",       # bench supply via J1.1
+    "N15VA": "-15VA",       # bench supply via J1.2
+    "DGND": "DGND",         # bench supply return via J1.4
+    "AGND": "AGND",         # analog return; separate net from DGND (R31 star)
+    "P5VA": "+5VA",         # +5V_RAW through ferrite bead FB1
+    "VBUS": "VBUS",         # USB host, via J3
+    "VDDA": "VDDA",         # +3V3D through ferrite bead FB2
+}
 
 
 def create_nets():
@@ -66,11 +99,6 @@ def create_nets():
         setattr(n, name, Net(name))
     for attr, kicad_name in _SPECIAL.items():
         setattr(n, attr, Net(kicad_name))
-
-    # Mark supply/ground rails as driven so ERC does not flag them.
-    for attr in _POWER_RAILS:
-        getattr(n, attr).drive = POWER
-
     return n
 
 

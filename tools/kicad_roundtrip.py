@@ -84,10 +84,18 @@ def parse_kicad_netlist(path):
 
 _UNNAMED_RE = re.compile(r"^(Net-\(|unconnected-|N\$)")
 
+# KiCad reserves a leading "#" for virtual power symbols (PWR_FLAG and the
+# ground/rail symbols) and omits them from netlist export and from the board.
+# SKiDL's netlist does include them, so they are dropped from BOTH sides before
+# the topology comparison; their presence in the schematic is verified
+# separately by tools/kicad_erc_power.py.
+_VIRTUAL_REF_RE = re.compile(r"^#")
+
 
 def normalise(conns):
-    """Drop KiCad's auto-generated net names; compare topology, not labels."""
-    return {k: v for k, v in conns.items() if not _UNNAMED_RE.match(v)}
+    """Drop auto-generated net names and virtual power symbols."""
+    return {k: v for k, v in conns.items()
+            if not _UNNAMED_RE.match(v) and not _VIRTUAL_REF_RE.match(k[0])}
 
 
 def group_by_net(conns):
@@ -119,8 +127,14 @@ def run(sch, net, keep=False):
                              text=True).stdout.strip()
     print(f"KiCad version: {version}")
 
-    ours = normalise(parse_kicad_netlist(net))
+    ours_raw = parse_kicad_netlist(net)
+    ours = normalise(ours_raw)
     theirs = normalise(parse_kicad_netlist(exported))
+    virtual = sorted({ref for ref, _pin in ours_raw
+                      if _VIRTUAL_REF_RE.match(ref)})
+    if virtual:
+        print(f"virtual power symbols    : {len(virtual)} "
+              f"({', '.join(virtual)}) — excluded from both sides")
 
     print(f"netlist connections      : {len(ours)}")
     print(f"KiCad schematic connections: {len(theirs)}")
@@ -179,6 +193,10 @@ def run(sch, net, keep=False):
         lib_id = (part.fields.get("KiCad_Lib") or "").strip()
         if ":" not in lib_id or libs.get_symbol(lib_id) is None:
             sym_missing.append(f"{part.ref} ({lib_id})")
+        # Virtual power symbols have no footprint by design; KiCad's footprint
+        # link check does not apply to them either.
+        if part.fields.get("Symbol_Class"):
+            continue
         fp_id = (part.footprint or "").strip()
         if ":" not in fp_id or libs.get_footprint(fp_id) is None:
             fp_missing.append(f"{part.ref} ({fp_id})")

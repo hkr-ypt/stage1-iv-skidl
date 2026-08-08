@@ -198,6 +198,17 @@ unresolved_items:
       installable here (the KiCad PPA is blocked). tools/kicad_roundtrip.py
       substitutes: kicad-cli exports its own netlist from the schematic and it
       matches stage1_iv.net exactly (307 connections, 66 nets).
+  - id: kicad-erc-power-measurement
+    what: KiCad ERC violation counts for power_pin_not_driven
+    why: >
+      kicad-cli sch erc first shipped in KiCad 8; KiCad 7.0.11 is the newest
+      version installable here (the KiCad PPA host is refused by the network
+      egress policy), so the ERC dialog was never run.
+      tools/kicad_erc_power.py substitutes: it evaluates KiCad's power-driver
+      rules directly on the emitted .kicad_sch files, which is the artifact
+      KiCad ERC reads. Measured 7 -> 0 power_pin_not_driven, 0 driver
+      conflicts. This is a re-implementation of the rule, not a KiCad run,
+      and is labelled as such wherever quoted.
   - id: lib-symbol-issues
     what: KiCad lib_symbol_issues "library not found" / lib_symbol_mismatch
     why: out of scope per the brief; 12 libraries / 24 lib_ids, unchanged.
@@ -288,9 +299,48 @@ schematic_assumptions:
 validation:
   erc:
     module: validation/erc.py
-    checks: [skidl-ERC (unconnected/drivers/power-flags), missing-footprints,
-             duplicate-refs, pin-number-provenance]
+    scope: >
+      SKiDL ERC and KiCad ERC are DIFFERENT CHECKS WITH DIFFERENT COVERAGE.
+      A pass here is evidence about the SKiDL circuit and is NOT evidence
+      about KiCad ERC.
+    skidl_erc_covers: [unconnected pins, no-connect pin also on a real net,
+                       nets with < 2 pins, pin-type conflicts,
+                       insufficient drive (SKiDL analogue of KiCad
+                       power_pin_not_driven; PWR_FLAGs satisfy both)]
+    skidl_erc_does_not_cover: [lib_symbol_issues, lib_symbol_mismatch,
+                               "symbol not found in library",
+                               footprint_link_issues,
+                               geometric rules (wire/label/pin overlap,
+                               dangling ends, bus errors, sheet-pin mismatch)]
+    covered_instead_by: [validation/footprint_check.py,
+                         tools/audit_identifiers.py]
+    gate: >
+      erc_logger error/warning counters are read around the ERC() call and
+      cross-checked against the captured message texts; any error, any
+      un-allow-listed warning, or any PWR_FLAG invariant violation raises and
+      main.py exits non-zero. WARNING_ALLOWLIST is empty.
     result: 0 errors, 0 warnings
+
+  power_flags:
+    mechanism: >
+      Eight externally-sourced rails each carry one power:PWR_FLAG part
+      (a real symbol with a power_out pin, serialised into the netlist and the
+      schematic). This REPLACED blocks/nets.py's Net.drive = POWER, which was
+      a runtime-only Python attribute: it silenced skidl.ERC() and was never
+      written to stage1_iv.net or to any .kicad_sch, so KiCad reported every
+      one of those rails as power_pin_not_driven.
+    flagged:
+      - {net: "+15VA",   source: "bench supply via J1 pin 1",   flag: "#FLG1", file: blocks/power.py}
+      - {net: "-15VA",   source: "bench supply via J1 pin 2",   flag: "#FLG2", file: blocks/power.py}
+      - {net: "+5V_RAW", source: "bench supply via J1 pin 3",   flag: "#FLG3", file: blocks/power.py}
+      - {net: "DGND",    source: "bench supply return, J1 pin 4", flag: "#FLG4", file: blocks/power.py}
+      - {net: "+5VA",    source: "+5V_RAW through ferrite FB1", flag: "#FLG5", file: blocks/power.py}
+      - {net: "AGND",    source: "analog return; separate net from DGND (R31 star)", flag: "#FLG6", file: blocks/power.py}
+      - {net: "VBUS",    source: "USB host via J3",             flag: "#FLG7", file: blocks/mcu.py}
+      - {net: "VDDA",    source: "+3V3D through ferrite FB2",   flag: "#FLG8", file: blocks/mcu.py}
+    deliberately_not_flagged:
+      - {net: "+3V3D",    driver: "U1.VOUT (LD1117S33)", reason: "real on-board driver; a flag would mask a regulator wiring error"}
+      - {net: "VREF_2V5", driver: "U2.Vout (REF5025)",   reason: "real on-board driver; same"}
   assertions:
     module: validation/assertions.py
     checks:
