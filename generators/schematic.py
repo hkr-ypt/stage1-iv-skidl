@@ -156,6 +156,25 @@ class UuidFactory:
         return val
 
 
+def symbol_instance_path(block, ref):
+    """The KiCad instance path of one schematic symbol: /root/sheet/symbol.
+
+    This is what a board footprint's ``(path ...)`` must contain. KiCad matches
+    board footprints to schematic symbols by this string and by nothing else;
+    a footprint whose path does not resolve is treated as having no symbol, so
+    "Update PCB from Schematic" adds a fresh copy of the part and orphans the
+    placed one.
+
+    Every UUID here is a deterministic UUIDv5 over the same namespace and the
+    same keys :class:`UuidFactory` uses, so this can be computed without
+    running the schematic generator - but it must be kept in step with it,
+    which is why it lives in this file and not in generators/pcb.py.
+    """
+    def u(key):
+        return str(uuid.uuid5(UUID_NAMESPACE, key))
+    return f"/{u('sch:top')}/{u(f'top:sheetsym:{block}')}/{u(f'{block}:sym:{ref}')}"
+
+
 def even_up(units):
     """Round grid units up to an even number (full 2.54 mm grid)."""
     return units + (units % 2)

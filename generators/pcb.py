@@ -1124,7 +1124,17 @@ def generate_pcb(circuit, out_dir="."):
         set_reference(node, part.ref)
         set_value(node, str(part.value))
         assign_nets(node, pad_net.get(part.ref, {}))
-        node.append(L(A("path"), Q(f"/{uid('sheet:' + part.ref)}")))
+        # THE link between this board and the schematic. It used to be a UUID
+        # invented here, which matched nothing: all 110 footprints were
+        # unreachable from the schematic, so "Update PCB from Schematic" saw
+        # 110 symbols with no footprint, added a fresh library copy of each at
+        # a default position with a default reference field, and orphaned
+        # everything this generator had placed. That is the board the DRC
+        # reports were run on.
+        from generators.schematic import symbol_instance_path
+        node.append(L(A("path"),
+                      Q(symbol_instance_path(
+                          getattr(part, "skidl_block", "misc"), part.ref))))
         item = Placed(part.ref, node, getattr(part, "skidl_block", "misc"))
         if part.ref in bridge_pins:
             # Parts that bond to both ground systems leave their block and go
