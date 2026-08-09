@@ -86,6 +86,9 @@ PART_GUTTER = 1.2                    # between courtyards inside a block
 MOUNTING_HOLE_DIA = 3.2              # M3 clearance
 MOUNTING_HOLE_PAD = 6.0
 MOUNTING_HOLE_INSET = 5.0
+# _mounting_hole draws its courtyard 0.25 mm outside the pad; keep the two in
+# step so size_board() budgets the space KiCad will actually check.
+MOUNTING_HOLE_CRTYD = MOUNTING_HOLE_PAD / 2 + 0.25
 ZONE_GAP = 2.0                       # AGND zone to DGND zone, see docs
 
 # Shelf packing on courtyard bounding boxes wastes roughly half the area
@@ -194,7 +197,48 @@ def load_footprint(libs, fp_id):
             break
     if node is None:
         raise RuntimeError(f"{fp.file}: no (footprint ...) node")
-    return _convert(node), fp.file
+    node = _convert(node)
+    # The footprint's own name in a board file is the FULL library id. Emitting
+    # the bare name makes KiCad report "The current configuration does not
+    # include the library ''" for every footprint on the board, and breaks
+    # "Update Footprints from Library".
+    node[1] = Q(fp_id)
+    return node, fp.file
+
+
+def _primitive_points(node):
+    """Every (x, y) a graphic primitive occupies — circles expanded properly.
+
+    A ``(fp_circle (center cx cy) (end ex ey))`` is defined by two points, and
+    taking their bounding box understates the shape badly: a 6.1 mm banana-jack
+    courtyard collapses to a line. KiCad's own DRC does not make that mistake,
+    which is how 45 courtyards_overlap errors appeared on a board this project
+    had certified as overlap-free. Expand the circle to centre +/- radius.
+    """
+    head = str(node[0]) if node and isinstance(node[0], str) else ""
+    kids = {}
+    for c in node:
+        if isinstance(c, list) and c and isinstance(c[0], str):
+            kids.setdefault(str(c[0]), []).append(c)
+
+    if head in ("fp_circle", "gr_circle", "circle"):
+        ctr = kids.get("center", [None])[0]
+        end = kids.get("end", [None])[0]
+        if ctr is not None and end is not None:
+            cx, cy = float(ctr[1]), float(ctr[2])
+            r = math.hypot(float(end[1]) - cx, float(end[2]) - cy)
+            return [(cx - r, cy - r), (cx + r, cy + r)]
+
+    pts = []
+    for key in ("start", "end", "center", "mid"):
+        for c in kids.get(key, []):
+            if len(c) > 2:
+                pts.append((float(c[1]), float(c[2])))
+    for c in kids.get("pts", []):
+        for p in c:
+            if isinstance(p, list) and str(p[0]) == "xy" and len(p) > 2:
+                pts.append((float(p[1]), float(p[2])))
+    return pts
 
 
 def courtyard_bbox(node):
@@ -212,14 +256,8 @@ def courtyard_bbox(node):
         on_crtyd = layer in ("F.CrtYd", "B.CrtYd")
         if head in ("fp_line", "fp_rect", "fp_poly", "fp_circle", "fp_arc"):
             if on_crtyd == want_courtyard:
-                for c in n:
-                    if isinstance(c, list) and str(c[0]) in ("start", "end",
-                                                             "center", "mid"):
-                        xs.append(float(c[1])); ys.append(float(c[2]))
-                    if isinstance(c, list) and str(c[0]) == "pts":
-                        for p in c:
-                            if isinstance(p, list) and str(p[0]) == "xy":
-                                xs.append(float(p[1])); ys.append(float(p[2]))
+                for px, py in _primitive_points(n):
+                    xs.append(px); ys.append(py)
         if head == "pad" and not want_courtyard:
             at = size = None
             for c in n:
@@ -678,7 +716,12 @@ def size_board(placed_blocks):
     xs += [p.x + p.cx + p.w / 2 for group in placed_blocks.values() for p in group]
     ys = [p.y + p.cy - p.h / 2 for group in placed_blocks.values() for p in group]
     ys += [p.y + p.cy + p.h / 2 for group in placed_blocks.values() for p in group]
-    margin = EDGE_CLEARANCE + MOUNTING_HOLE_INSET + MOUNTING_HOLE_PAD / 2
+    # The mounting hole's COURTYARD, not its pad, is what must clear the parts:
+    # KiCad checks courtyards, and _mounting_hole draws one 0.25 mm outside the
+    # pad. Budgeting only the pad radius left the corner holes overlapping the
+    # nearest part by 0.25 mm, which KiCad reported as courtyards_overlap.
+    margin = (EDGE_CLEARANCE + MOUNTING_HOLE_INSET + MOUNTING_HOLE_CRTYD
+              + PART_GUTTER)
     return (min(xs) - margin, min(ys) - margin,
             max(xs) + margin, max(ys) + margin)
 

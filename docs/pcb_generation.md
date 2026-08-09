@@ -6,18 +6,19 @@ actually in.
 
 ## The headline, first
 
-**The board is not routed, DRC has not been run in this environment, and
-nothing in this repository claims a DRC pass.**
+**The board is not routed. DRC now runs and reports zero errors this project
+does not account for — but 247 connections still have to be drawn by a human,
+and that is not a DRC pass.**
 
 | | |
 |---|---|
-| Board | 114.22 × 96.48 mm, 2 layers, 1.6 mm FR-4 |
+| Board | 129.05 × 108.40 mm, 2 layers, 1.6 mm FR-4 |
 | Footprints placed | 110 (+ 4 mounting holes) |
 | Nets | 66, every one in an explicit netclass |
 | Tracks | **0** |
 | Connections still to route | **247** (73 of which the ground pours cover) |
 | Autorouted | **no** |
-| `kicad-cli pcb drc` result | **not run** — see §"Why DRC has not been run here" |
+| DRC | **runs** via `pcbnew.WriteDRCReport()` — see §"DRC does run" |
 
 ## What was generated, and from what
 
@@ -279,19 +280,21 @@ vendored footprint is no longer used, and CI runs it.
 
 * **Origin** is the KiCad page origin; the placement starts at (0, 0) and the
   outline extends negative by the edge margin. The board rectangle is
-  (−8.5, −8.5) to (105.72, 87.98) mm.
+  the placement extents plus the edge margin.
 * **Outline** is a rectangle on `Edge.Cuts`, sized from the *actual* placement
   extents plus `F8 + mounting-hole inset + mounting-hole pad/2`. It is not a
   guessed size: change a part and the board resizes.
 * **Column widths are derived, then relaxed.** The starting widths are
   proportional to the courtyard area each column must hold; the packer is then
   *measured* and the widths rescaled until the three columns finish at
-  comparable heights. That is why the board is 114 × 96 mm and not the
+  comparable heights. That is why the board is 129 × 108 mm and not the
   270 × 74 mm ribbon a fixed column width produced. The relaxation is
   deterministic — same circuit, same board, verified in CI by building twice
   and diffing.
 * **4 M3 mounting holes**, 3.2 mm drill / 6.0 mm pad, inset 5.5 mm from each
-  corner (F8 + 5.0 mm).
+  corner (F8 + 5.0 mm). The board margin budgets the hole's *courtyard*
+  (pad/2 + 0.25) plus a part gutter — budgeting the pad radius alone left the
+  corner holes overlapping the nearest part by 0.25 mm, which KiCad caught.
 * **Edge clearance** F8 = 0.5 mm, checked against every courtyard by
   `check_edge_clearance`.
 
@@ -306,7 +309,68 @@ What the placement *guarantees*: no overlapping courtyards, block coherence,
 analog/digital separation matching the pours, decoupling adjacency. What it is
 **not**: an optimised layout. It is a sane starting point for manual routing.
 
-## Why DRC has not been run here
+## DRC does run — three defects it found
+
+`kicad-cli pcb drc` arrived in KiCad 8, and this project concluded from that
+alone that DRC could not run here. **That was wrong.**
+`pcbnew.WriteDRCReport()` has existed in the SWIG bindings since KiCad 7, and
+`validation/drc_check.py` now uses it. Running it found three real defects that
+every structural check in this repository had passed:
+
+| Found by DRC | Count | Cause |
+|---|---:|---|
+| `courtyards_overlap` | 45 | This project's courtyard reader took the bounding box of a circle's *centre and rim point* — so a 6.1 mm banana-jack courtyard collapsed to a line and parts were placed on top of it. Circles now expand to centre ± radius, in both `generators/pcb.py` and `validation/drc_check.py`. |
+| `solder_mask_bridge`, `hole_near_hole`, `hole_clearance` | 25 | All downstream of the same circle bug. |
+| `lib_footprint_issues` | 114 | The emitted footprint nodes carried the bare name (`SOIC-8_…`) instead of the full library id (`Package_SO:SOIC-8_…`), so KiCad reported "the current configuration does not include the library ''". |
+
+Plus the corner mounting holes overlapped the nearest part by 0.25 mm, because
+`size_board()` budgeted the hole's *pad* radius where KiCad checks its
+*courtyard*.
+
+Current state, from a real run (`pcbnew 7.0.11`):
+
+```
+unconnected_items    247   routing, expected — matches this file's own prediction
+lib_footprint_issues 114   warning; KiCad 7 cannot parse the vendored v9
+                           footprints (version 20241229). KiCad 9/10 can.
+silk_overlap          77   warning; Prompt 4's scope
+clearance             30   all intra-footprint; see below
+courtyards_overlap     0
+solder_mask_bridge     0
+hole_near_hole         0
+hole_clearance         0
+invalid_outline        0
+```
+
+### The 30 clearance violations, and why they are not counted as defects
+
+Every one is a pad pair **inside a single footprint** — the class
+`stage1_iv.kicad_dru` covers. `memberOfFootprint()` was added in **KiCad 8**
+(verified against the KiCad source: absent in 7.0.11, present in 8.0.0, 9.0.0,
+10.0.5), so on the KiCad 7 running DRC here the scoped rule is **inert** and the
+violations say nothing about the board.
+
+`classify_violations()` admits that escape only when all of: the type is
+`clearance`, both items are pads of one footprint, that reference appears in the
+`.kicad_dru`, and the running KiCad predates 8. `check_rule_satisfiability` has
+already checked those same pad pairs against the rule value from source. On
+KiCad 8+ the rule applies and the count should be 0 — please confirm.
+
+Everything KiCad calls an **error** and neither escape covers is a hard failure.
+Everything KiCad calls a **warning** is reported by type and count, never
+dropped.
+
+### The `.kicad_dru` must compile
+
+It once did not: the file used `;;` comments, and KiCad parses `.kicad_dru` with
+the DSN lexer, whose comment character is `#` **as the first non-blank character
+of a line** (`common/dsnlexer.cpp`: *"If the first non-blank character is #, this
+line is a comment. Comments cannot follow any other token on the same line."*).
+An uncompilable rules file makes KiCad refuse to run DRC at all. That is now a
+**hard failure**, not a skip — reporting SKIPPED would hide our own broken file
+behind the message used when KiCad is simply absent.
+
+## Note on older KiCad
 
 `kicad-cli pcb drc` first shipped in **KiCad 8**. The newest KiCad installable
 in this environment is **7.0.11**, whose `kicad-cli pcb` offers only `export`:

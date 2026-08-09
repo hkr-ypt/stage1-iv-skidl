@@ -229,6 +229,16 @@ s = p.read_text(); assert "\"S1\"" in s
 p.write_text(s.replace("(pad \"S1\"", "(pad \"SH\""))
 '
 
+# 16. a .kicad_dru KiCad cannot compile: DRC refuses to start entirely, so the
+#     user cannot check the board at all. This shipped once - the file used ';'
+#     comments, which the DSN lexer does not accept (it wants '#', first
+#     non-blank character of a line).
+expect_fail board "custom rules file KiCad cannot compile" '
+import pathlib
+p = pathlib.Path("stage1_iv.kicad_dru"); s = p.read_text()
+p.write_text(s.replace("# GENERATED FILE", ";; GENERATED FILE", 1))
+'
+
 echo "----------------------------------------------------------------------"
 if [ "$FAILURES" -eq 0 ]; then
     echo "ALL INJECTED FAULTS CAUGHT — the guard works."

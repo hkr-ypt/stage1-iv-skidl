@@ -16,7 +16,8 @@ plus a generated component manifest.
 
 > **The board is not routed and DRC has not been run.** `generators/pcb.py`
 > places parts and writes design rules; drawing tracks is a human task, and
-> nothing in this repository claims a DRC pass. 247 connections remain.
+> nothing in this repository claims a DRC pass. 247 connections remain. DRC itself
+> runs in CI via KiCad's Python bindings.
 
 ---
 

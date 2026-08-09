@@ -401,37 +401,42 @@ def dru_file(circuit):
     footprint file. Nothing is excluded and no severity is downgraded.
     """
     tight = tight_footprints(circuit)
+    # KiCad parses .kicad_dru with the DSN lexer, whose comment character is
+    # '#', and only when it is the first non-blank character of a line
+    # (common/dsnlexer.cpp: "If the first non-blank character is #, this line
+    # is a comment. Comments cannot follow any other token on the same line").
+    # A ';' comment makes the whole file unparseable and DRC refuses to run.
     lines = [
         "(version 1)",
         "",
-        ";; GENERATED FILE - do not edit by hand.",
-        ";; Regenerate with `python3 tools/gen_project_config.py`; verify with",
-        ";; `python3 tools/gen_project_config.py --check`.",
-        ";;",
-        ";; WHY THIS FILE EXISTS",
-        ";; KiCad enforces the larger of two nets' netclass clearances between",
-        ";; their pads. For two pads of the same fine-pitch package that is a",
-        ";; constraint the layout cannot satisfy: the spacing is a property of",
-        ";; the part, not of the board. The references below are exactly the",
-        ";; ones affected, each with the gap measured from its footprint file",
-        ";; by tools/measure_pad_gaps.py.",
-        ";;",
-        ";; This narrows a constraint in a scope where it is unsatisfiable. It",
-        ";; does NOT exclude a rule or downgrade a severity: clearance is still",
-        ";; checked on these pads, at "
+        "# GENERATED FILE - do not edit by hand.",
+        "# Regenerate with `python3 tools/gen_project_config.py`; verify with",
+        "# `python3 tools/gen_project_config.py --check`.",
+        "#",
+        "# WHY THIS FILE EXISTS",
+        "# KiCad enforces the larger of two nets' netclass clearances between",
+        "# their pads. For two pads of the same fine-pitch package that is a",
+        "# constraint the layout cannot satisfy: the spacing is a property of",
+        "# the part, not of the board. The references below are exactly the",
+        "# ones affected, each with the gap measured from its footprint file",
+        "# by tools/measure_pad_gaps.py.",
+        "#",
+        "# This narrows a constraint in a scope where it is unsatisfiable. It",
+        "# does NOT exclude a rule or downgrade a severity: clearance is still",
+        "# checked on these pads, at "
         f"{INTRA_FOOTPRINT_CLEARANCE} mm, and pad-to-track, track-to-track and",
-        ";; pad-to-pad between different footprints are untouched.",
+        "# pad-to-pad between different footprints are untouched.",
         "",
     ]
     if not tight:
-        lines.append(";; No footprint on this board is tighter than its "
+        lines.append("# No footprint on this board is tighter than its "
                      "netclass clearance.")
         return "\n".join(lines) + "\n"
 
     for ref, fp_id, gap, need, pair in tight:
         lines += [
-            f";; {ref}  {fp_id}",
-            f";;   pads {pair} are {gap:.3f} mm apart; netclass would require "
+            f"# {ref}  {fp_id}",
+            f"#   pads {pair} are {gap:.3f} mm apart; netclass would require "
             f"{need:.2f} mm",
             f'(rule "intra_footprint_clearance_{ref}"',
             f'  (constraint clearance (min {INTRA_FOOTPRINT_CLEARANCE}mm))',

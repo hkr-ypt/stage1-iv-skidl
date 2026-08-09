@@ -135,7 +135,7 @@
 	(net 64 "V_DAC")
 	(net 65 "V_SENSE_OUT")
 	(net 66 "V_SWEEP")
-	(footprint "SOIC-8_3.9x4.9mm_P1.27mm"
+	(footprint "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm"
 		(at 3.7 2.7)
 		(layer "F.Cu")
 		(fp_text reference "U3"
@@ -433,7 +433,7 @@
 		)
 		(path "/5f2a50c9-fc16-5496-8bc8-4df7cf3a52ea")
 	)
-	(footprint "VSSOP-8_3x3mm_P0.65mm"
+	(footprint "Package_SO:VSSOP-8_3x3mm_P0.65mm"
 		(at 11.78 1.75)
 		(layer "F.Cu")
 		(fp_text reference "U4"
@@ -728,8 +728,78 @@
 		)
 		(path "/e2b833bd-c61f-5208-bc2d-1fe180c32516")
 	)
-	(footprint "C_0603_1608Metric"
-		(at 17.64 0.73)
+	(footprint "TestPoint:TestPoint_Pad_D1.5mm"
+		(at 17.41 1.25)
+		(layer "F.Cu")
+		(fp_text reference "TP1"
+			(at 0 -1.648 0)
+			(layer "F.SilkS")
+			(tstamp df8ad89a-4372-48a1-959d-41a6068fbd8e)
+			(effects
+				(font
+					(size 1 1)
+					(thickness 0.15)
+				)
+			)
+		)
+		(fp_text value "V_SWEEP"
+			(at 0 1.75 0)
+			(layer "F.Fab")
+			(tstamp bd63ee48-4a53-41ce-9f1d-e4ce2bbaee53)
+			(effects
+				(font
+					(size 1 1)
+					(thickness 0.15)
+				)
+			)
+		)
+		(attr exclude_from_pos_files exclude_from_bom)
+		(fp_circle
+			(center 0 0)
+			(end 0 0.95)
+			(stroke
+				(width 0.12)
+				(type solid)
+			)
+			(fill none)
+			(layer "F.SilkS")
+			(tstamp 188606f7-41cf-4150-b22a-1b8f5885c87d)
+		)
+		(fp_circle
+			(center 0 0)
+			(end 1.25 0)
+			(stroke
+				(width 0.05)
+				(type solid)
+			)
+			(fill none)
+			(layer "F.CrtYd")
+			(tstamp c1a41909-dd0d-4698-8873-fe0292742945)
+		)
+		(fp_text user "${REFERENCE}"
+			(at 0 -1.65 0)
+			(layer "F.Fab")
+			(tstamp e27ec8d6-1f94-40cd-a4aa-0963d435fbb8)
+			(effects
+				(font
+					(size 1 1)
+					(thickness 0.15)
+				)
+			)
+		)
+		(pad "1" smd circle
+			(at 0 0)
+			(size 1.5 1.5)
+			(layers "F.Cu" "F.Mask")
+			(tstamp 8a03cd79-fadf-4c81-9b59-724c470e191a)
+			(net 66 "V_SWEEP")
+			(pinfunction "1")
+			(pintype "passive")
+		)
+		(path "/b54a2e4c-5a9f-59aa-af87-84a73ba84783")
+	)
+	(footprint "Capacitor_SMD:C_0603_1608Metric"
+		(at 21.34 0.73)
 		(layer "F.Cu")
 		(fp_text reference "C11"
 			(at 0 -1.43 0)
@@ -820,8 +890,8 @@
 		)
 		(path "/6aed0b0b-5f02-58e7-be52-3652ba14497f")
 	)
-	(footprint "C_0603_1608Metric"
-		(at 21.8 0.73)
+	(footprint "Capacitor_SMD:C_0603_1608Metric"
+		(at 25.5 0.73)
 		(layer "F.Cu")
 		(fp_text reference "C12"
 			(at 0 -1.43 0)
@@ -912,8 +982,8 @@
 		)
 		(path "/5ebf5c99-211f-5ea0-a812-072730b785eb")
 	)
-	(footprint "C_0603_1608Metric"
-		(at 1.48 7.33)
+	(footprint "Capacitor_SMD:C_0603_1608Metric"
+		(at 29.66 0.73)
 		(layer "F.Cu")
 		(fp_text reference "C13"
 			(at 0 -1.43 0)
@@ -1004,8 +1074,8 @@
 		)
 		(path "/f4af2ba8-2ae7-5c14-afbe-0ccb32b48c5a")
 	)
-	(footprint "R_0603_1608Metric"
-		(at 5.64 7.33)
+	(footprint "Resistor_SMD:R_0603_1608Metric"
+		(at 33.82 0.73)
 		(layer "F.Cu")
 		(fp_text reference "R1"
 			(at 0 -1.43 0)
@@ -1096,8 +1166,8 @@
 		)
 		(path "/212c20f6-3a4a-50a8-baed-881f31984ed1")
 	)
-	(footprint "R_0603_1608Metric"
-		(at 9.8 7.33)
+	(footprint "Resistor_SMD:R_0603_1608Metric"
+		(at 1.48 7.33)
 		(layer "F.Cu")
 		(fp_text reference "R2"
 			(at 0 -1.43 0)
@@ -1188,8 +1258,8 @@
 		)
 		(path "/442aaa05-4690-5aa2-98ae-9b9e7e20dba5")
 	)
-	(footprint "R_0603_1608Metric"
-		(at 13.96 7.33)
+	(footprint "Resistor_SMD:R_0603_1608Metric"
+		(at 5.64 7.33)
 		(layer "F.Cu")
 		(fp_text reference "R3"
 			(at 0 -1.43 0)
@@ -1280,8 +1350,8 @@
 		)
 		(path "/08d1a35d-21b2-5364-92ad-4fad1661c904")
 	)
-	(footprint "R_0603_1608Metric"
-		(at 18.12 7.33)
+	(footprint "Resistor_SMD:R_0603_1608Metric"
+		(at 9.8 7.33)
 		(layer "F.Cu")
 		(fp_text reference "R4"
 			(at 0 -1.43 0)
@@ -1372,8 +1442,8 @@
 		)
 		(path "/160a44ba-bcd1-53c9-83e7-7b88a38ac235")
 	)
-	(footprint "R_0603_1608Metric"
-		(at 22.28 7.33)
+	(footprint "Resistor_SMD:R_0603_1608Metric"
+		(at 13.96 7.33)
 		(layer "F.Cu")
 		(fp_text reference "R5"
 			(at 0 -1.43 0)
@@ -1464,8 +1534,8 @@
 		)
 		(path "/71c21652-e984-5384-a470-59cffdf0492d")
 	)
-	(footprint "R_0603_1608Metric"
-		(at 1.48 9.99)
+	(footprint "Resistor_SMD:R_0603_1608Metric"
+		(at 18.12 7.33)
 		(layer "F.Cu")
 		(fp_text reference "R6"
 			(at 0 -1.43 0)
@@ -1556,78 +1626,8 @@
 		)
 		(path "/3493a5b7-dcd3-5245-8c0d-55e9226ac918")
 	)
-	(footprint "TestPoint_Pad_D1.5mm"
-		(at 4.16 9.26)
-		(layer "F.Cu")
-		(fp_text reference "TP1"
-			(at 0 -1.648 0)
-			(layer "F.SilkS")
-			(tstamp df8ad89a-4372-48a1-959d-41a6068fbd8e)
-			(effects
-				(font
-					(size 1 1)
-					(thickness 0.15)
-				)
-			)
-		)
-		(fp_text value "V_SWEEP"
-			(at 0 1.75 0)
-			(layer "F.Fab")
-			(tstamp bd63ee48-4a53-41ce-9f1d-e4ce2bbaee53)
-			(effects
-				(font
-					(size 1 1)
-					(thickness 0.15)
-				)
-			)
-		)
-		(attr exclude_from_pos_files exclude_from_bom)
-		(fp_circle
-			(center 0 0)
-			(end 0 0.95)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(fill none)
-			(layer "F.SilkS")
-			(tstamp 188606f7-41cf-4150-b22a-1b8f5885c87d)
-		)
-		(fp_circle
-			(center 0 0)
-			(end 1.25 0)
-			(stroke
-				(width 0.05)
-				(type solid)
-			)
-			(fill none)
-			(layer "F.CrtYd")
-			(tstamp c1a41909-dd0d-4698-8873-fe0292742945)
-		)
-		(fp_text user "${REFERENCE}"
-			(at 0 -1.65 0)
-			(layer "F.Fab")
-			(tstamp e27ec8d6-1f94-40cd-a4aa-0963d435fbb8)
-			(effects
-				(font
-					(size 1 1)
-					(thickness 0.15)
-				)
-			)
-		)
-		(pad "1" smd circle
-			(at 0 0)
-			(size 1.5 1.5)
-			(layers "F.Cu" "F.Mask")
-			(tstamp 8a03cd79-fadf-4c81-9b59-724c470e191a)
-			(net 66 "V_SWEEP")
-			(pinfunction "1")
-			(pintype "passive")
-		)
-		(path "/b54a2e4c-5a9f-59aa-af87-84a73ba84783")
-	)
-	(footprint "TO-220-7_P2.54x3.7mm_StaggerOdd_Lead3.8mm_Vertical"
-		(at 1.44 23.17)
+	(footprint "Package_TO_SOT_THT:TO-220-7_P2.54x3.7mm_StaggerOdd_Lead3.8mm_Vertical"
+		(at 1.44 20.51)
 		(layer "F.Cu")
 		(fp_text reference "U5"
 			(at 3.81 -9.32 0)
@@ -2055,8 +2055,8 @@
 		)
 		(path "/1ac95895-1b3e-5fae-bb6a-531f16b8f767")
 	)
-	(footprint "CP_EIA-3528-21_Kemet-B"
-		(at 14.16 16.37)
+	(footprint "Capacitor_Tantalum_SMD:CP_EIA-3528-21_Kemet-B"
+		(at 14.16 13.71)
 		(layer "F.Cu")
 		(fp_text reference "C17"
 			(at 0 -2.35 0)
@@ -2191,8 +2191,8 @@
 		)
 		(path "/2595bdc9-ec04-5f7a-8d52-ebc793238093")
 	)
-	(footprint "CP_EIA-3528-21_Kemet-B"
-		(at 20.28 16.37)
+	(footprint "Capacitor_Tantalum_SMD:CP_EIA-3528-21_Kemet-B"
+		(at 20.28 13.71)
 		(layer "F.Cu")
 		(fp_text reference "C18"
 			(at 0 -2.35 0)
@@ -2327,8 +2327,78 @@
 		)
 		(path "/cc8ba717-d12b-519e-82e7-9695b6be6cdf")
 	)
-	(footprint "R_1206_3216Metric"
-		(at 2.28 26.65)
+	(footprint "TestPoint:TestPoint_Pad_D1.5mm"
+		(at 25.19 13.31)
+		(layer "F.Cu")
+		(fp_text reference "TP2"
+			(at 0 -1.648 0)
+			(layer "F.SilkS")
+			(tstamp df8ad89a-4372-48a1-959d-41a6068fbd8e)
+			(effects
+				(font
+					(size 1 1)
+					(thickness 0.15)
+				)
+			)
+		)
+		(fp_text value "VO_SENSE"
+			(at 0 1.75 0)
+			(layer "F.Fab")
+			(tstamp bd63ee48-4a53-41ce-9f1d-e4ce2bbaee53)
+			(effects
+				(font
+					(size 1 1)
+					(thickness 0.15)
+				)
+			)
+		)
+		(attr exclude_from_pos_files exclude_from_bom)
+		(fp_circle
+			(center 0 0)
+			(end 0 0.95)
+			(stroke
+				(width 0.12)
+				(type solid)
+			)
+			(fill none)
+			(layer "F.SilkS")
+			(tstamp 188606f7-41cf-4150-b22a-1b8f5885c87d)
+		)
+		(fp_circle
+			(center 0 0)
+			(end 1.25 0)
+			(stroke
+				(width 0.05)
+				(type solid)
+			)
+			(fill none)
+			(layer "F.CrtYd")
+			(tstamp c1a41909-dd0d-4698-8873-fe0292742945)
+		)
+		(fp_text user "${REFERENCE}"
+			(at 0 -1.65 0)
+			(layer "F.Fab")
+			(tstamp e27ec8d6-1f94-40cd-a4aa-0963d435fbb8)
+			(effects
+				(font
+					(size 1 1)
+					(thickness 0.15)
+				)
+			)
+		)
+		(pad "1" smd circle
+			(at 0 0)
+			(size 1.5 1.5)
+			(layers "F.Cu" "F.Mask")
+			(tstamp 8a03cd79-fadf-4c81-9b59-724c470e191a)
+			(net 60 "VO_SENSE")
+			(pinfunction "1")
+			(pintype "passive")
+		)
+		(path "/a95f6e8d-63c1-529a-af88-268acdc6d743")
+	)
+	(footprint "Resistor_SMD:R_1206_3216Metric"
+		(at 29.92 13.19)
 		(layer "F.Cu")
 		(fp_text reference "R7"
 			(at 0 -1.83 0)
@@ -2419,8 +2489,8 @@
 		)
 		(path "/645d7756-e9cf-56f7-8830-0224b45c4ad0")
 	)
-	(footprint "R_1206_3216Metric"
-		(at 8.04 26.65)
+	(footprint "Resistor_SMD:R_1206_3216Metric"
+		(at 35.68 13.19)
 		(layer "F.Cu")
 		(fp_text reference "R9"
 			(at 0 -1.83 0)
@@ -2511,8 +2581,8 @@
 		)
 		(path "/9acfae51-b370-5eeb-ae45-cd440069f2fe")
 	)
-	(footprint "C_0805_2012Metric"
-		(at 13.22 26.5)
+	(footprint "Capacitor_SMD:C_0805_2012Metric"
+		(at 1.7 23.84)
 		(layer "F.Cu")
 		(fp_text reference "C14"
 			(at 0 -1.68 0)
@@ -2603,8 +2673,8 @@
 		)
 		(path "/c2ec184d-87ef-5ba5-9583-f8f9e03d7b92")
 	)
-	(footprint "C_0805_2012Metric"
-		(at 17.82 26.5)
+	(footprint "Capacitor_SMD:C_0805_2012Metric"
+		(at 6.3 23.84)
 		(layer "F.Cu")
 		(fp_text reference "C15"
 			(at 0 -1.68 0)
@@ -2695,8 +2765,8 @@
 		)
 		(path "/95feeee1-e563-5f61-9900-4956535dc1d8")
 	)
-	(footprint "C_0805_2012Metric"
-		(at 22.42 26.5)
+	(footprint "Capacitor_SMD:C_0805_2012Metric"
+		(at 10.9 23.84)
 		(layer "F.Cu")
 		(fp_text reference "C16"
 			(at 0 -1.68 0)
@@ -2787,8 +2857,8 @@
 		)
 		(path "/d2d94188-b8ce-5a69-a3ee-751c9572451d")
 	)
-	(footprint "C_0603_1608Metric"
-		(at 1.48 29.71)
+	(footprint "Capacitor_SMD:C_0603_1608Metric"
+		(at 15.28 23.59)
 		(layer "F.Cu")
 		(fp_text reference "C19"
 			(at 0 -1.43 0)
@@ -2879,8 +2949,8 @@
 		)
 		(path "/51c249ee-0655-5b1f-9687-9a2c614ff523")
 	)
-	(footprint "R_0603_1608Metric"
-		(at 5.64 29.71)
+	(footprint "Resistor_SMD:R_0603_1608Metric"
+		(at 19.44 23.59)
 		(layer "F.Cu")
 		(fp_text reference "R8"
 			(at 0 -1.43 0)
@@ -2971,78 +3041,8 @@
 		)
 		(path "/19251306-c22b-5d6c-a125-0f90760cbaea")
 	)
-	(footprint "TestPoint_Pad_D1.5mm"
-		(at 8.32 28.98)
-		(layer "F.Cu")
-		(fp_text reference "TP2"
-			(at 0 -1.648 0)
-			(layer "F.SilkS")
-			(tstamp df8ad89a-4372-48a1-959d-41a6068fbd8e)
-			(effects
-				(font
-					(size 1 1)
-					(thickness 0.15)
-				)
-			)
-		)
-		(fp_text value "VO_SENSE"
-			(at 0 1.75 0)
-			(layer "F.Fab")
-			(tstamp bd63ee48-4a53-41ce-9f1d-e4ce2bbaee53)
-			(effects
-				(font
-					(size 1 1)
-					(thickness 0.15)
-				)
-			)
-		)
-		(attr exclude_from_pos_files exclude_from_bom)
-		(fp_circle
-			(center 0 0)
-			(end 0 0.95)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(fill none)
-			(layer "F.SilkS")
-			(tstamp 188606f7-41cf-4150-b22a-1b8f5885c87d)
-		)
-		(fp_circle
-			(center 0 0)
-			(end 1.25 0)
-			(stroke
-				(width 0.05)
-				(type solid)
-			)
-			(fill none)
-			(layer "F.CrtYd")
-			(tstamp c1a41909-dd0d-4698-8873-fe0292742945)
-		)
-		(fp_text user "${REFERENCE}"
-			(at 0 -1.65 0)
-			(layer "F.Fab")
-			(tstamp e27ec8d6-1f94-40cd-a4aa-0963d435fbb8)
-			(effects
-				(font
-					(size 1 1)
-					(thickness 0.15)
-				)
-			)
-		)
-		(pad "1" smd circle
-			(at 0 0)
-			(size 1.5 1.5)
-			(layers "F.Cu" "F.Mask")
-			(tstamp 8a03cd79-fadf-4c81-9b59-724c470e191a)
-			(net 60 "VO_SENSE")
-			(pinfunction "1")
-			(pintype "passive")
-		)
-		(path "/a95f6e8d-63c1-529a-af88-268acdc6d743")
-	)
-	(footprint "DIP-8_W7.62mm"
-		(at 1.06 35.96)
+	(footprint "Package_DIP:DIP-8_W7.62mm"
+		(at 1.06 30.34)
 		(layer "F.Cu")
 		(fp_text reference "U6"
 			(at 3.81 -2.33 0)
@@ -3260,8 +3260,8 @@
 		)
 		(path "/fad56f8d-8999-5e74-acec-7b470a97410f")
 	)
-	(footprint "R_Axial_DIN0207_L6.3mm_D2.5mm_P10.16mm_Horizontal"
-		(at 11.98 35.94)
+	(footprint "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P10.16mm_Horizontal"
+		(at 11.98 30.32)
 		(layer "F.Cu")
 		(fp_text reference "R10"
 			(at 5.08 -2.37 0)
@@ -3380,8 +3380,148 @@
 		)
 		(path "/3a243a24-992e-5713-984f-09f8a19506b6")
 	)
-	(footprint "C_0603_1608Metric"
-		(at 1.48 47.03)
+	(footprint "TestPoint:TestPoint_Pad_D1.5mm"
+		(at 25.64 30.07)
+		(layer "F.Cu")
+		(fp_text reference "TP3"
+			(at 0 -1.648 0)
+			(layer "F.SilkS")
+			(tstamp df8ad89a-4372-48a1-959d-41a6068fbd8e)
+			(effects
+				(font
+					(size 1 1)
+					(thickness 0.15)
+				)
+			)
+		)
+		(fp_text value "ISENSE_HI"
+			(at 0 1.75 0)
+			(layer "F.Fab")
+			(tstamp bd63ee48-4a53-41ce-9f1d-e4ce2bbaee53)
+			(effects
+				(font
+					(size 1 1)
+					(thickness 0.15)
+				)
+			)
+		)
+		(attr exclude_from_pos_files exclude_from_bom)
+		(fp_circle
+			(center 0 0)
+			(end 0 0.95)
+			(stroke
+				(width 0.12)
+				(type solid)
+			)
+			(fill none)
+			(layer "F.SilkS")
+			(tstamp 188606f7-41cf-4150-b22a-1b8f5885c87d)
+		)
+		(fp_circle
+			(center 0 0)
+			(end 1.25 0)
+			(stroke
+				(width 0.05)
+				(type solid)
+			)
+			(fill none)
+			(layer "F.CrtYd")
+			(tstamp c1a41909-dd0d-4698-8873-fe0292742945)
+		)
+		(fp_text user "${REFERENCE}"
+			(at 0 -1.65 0)
+			(layer "F.Fab")
+			(tstamp e27ec8d6-1f94-40cd-a4aa-0963d435fbb8)
+			(effects
+				(font
+					(size 1 1)
+					(thickness 0.15)
+				)
+			)
+		)
+		(pad "1" smd circle
+			(at 0 0)
+			(size 1.5 1.5)
+			(layers "F.Cu" "F.Mask")
+			(tstamp 8a03cd79-fadf-4c81-9b59-724c470e191a)
+			(net 24 "FORCE-")
+			(pinfunction "1")
+			(pintype "passive")
+		)
+		(path "/d26fadbf-20c1-599f-b3bd-7d64aecbce0b")
+	)
+	(footprint "TestPoint:TestPoint_Pad_D1.5mm"
+		(at 29.34 30.07)
+		(layer "F.Cu")
+		(fp_text reference "TP4"
+			(at 0 -1.648 0)
+			(layer "F.SilkS")
+			(tstamp df8ad89a-4372-48a1-959d-41a6068fbd8e)
+			(effects
+				(font
+					(size 1 1)
+					(thickness 0.15)
+				)
+			)
+		)
+		(fp_text value "I_SENSE_OUT"
+			(at 0 1.75 0)
+			(layer "F.Fab")
+			(tstamp bd63ee48-4a53-41ce-9f1d-e4ce2bbaee53)
+			(effects
+				(font
+					(size 1 1)
+					(thickness 0.15)
+				)
+			)
+		)
+		(attr exclude_from_pos_files exclude_from_bom)
+		(fp_circle
+			(center 0 0)
+			(end 0 0.95)
+			(stroke
+				(width 0.12)
+				(type solid)
+			)
+			(fill none)
+			(layer "F.SilkS")
+			(tstamp 188606f7-41cf-4150-b22a-1b8f5885c87d)
+		)
+		(fp_circle
+			(center 0 0)
+			(end 1.25 0)
+			(stroke
+				(width 0.05)
+				(type solid)
+			)
+			(fill none)
+			(layer "F.CrtYd")
+			(tstamp c1a41909-dd0d-4698-8873-fe0292742945)
+		)
+		(fp_text user "${REFERENCE}"
+			(at 0 -1.65 0)
+			(layer "F.Fab")
+			(tstamp e27ec8d6-1f94-40cd-a4aa-0963d435fbb8)
+			(effects
+				(font
+					(size 1 1)
+					(thickness 0.15)
+				)
+			)
+		)
+		(pad "1" smd circle
+			(at 0 0)
+			(size 1.5 1.5)
+			(layers "F.Cu" "F.Mask")
+			(tstamp 8a03cd79-fadf-4c81-9b59-724c470e191a)
+			(net 25 "I_SENSE_OUT")
+			(pinfunction "1")
+			(pintype "passive")
+		)
+		(path "/e876f225-fb96-52af-befe-928553b1afd7")
+	)
+	(footprint "Capacitor_SMD:C_0603_1608Metric"
+		(at 33.27 29.55)
 		(layer "F.Cu")
 		(fp_text reference "C20"
 			(at 0 -1.43 0)
@@ -3472,8 +3612,8 @@
 		)
 		(path "/ff7fbb1e-c325-5c1d-addc-46b19cab39a4")
 	)
-	(footprint "C_0603_1608Metric"
-		(at 5.64 47.03)
+	(footprint "Capacitor_SMD:C_0603_1608Metric"
+		(at 1.48 41.41)
 		(layer "F.Cu")
 		(fp_text reference "C21"
 			(at 0 -1.43 0)
@@ -3564,8 +3704,8 @@
 		)
 		(path "/fbcdcd3e-8c66-54f5-8bc5-2969fdf15f02")
 	)
-	(footprint "R_0603_1608Metric"
-		(at 9.8 47.03)
+	(footprint "Resistor_SMD:R_0603_1608Metric"
+		(at 5.64 41.41)
 		(layer "F.Cu")
 		(fp_text reference "R11"
 			(at 0 -1.43 0)
@@ -3656,148 +3796,8 @@
 		)
 		(path "/c3e505eb-6921-5b67-8925-501052c65921")
 	)
-	(footprint "TestPoint_Pad_D1.5mm"
-		(at 12.48 46.3)
-		(layer "F.Cu")
-		(fp_text reference "TP3"
-			(at 0 -1.648 0)
-			(layer "F.SilkS")
-			(tstamp df8ad89a-4372-48a1-959d-41a6068fbd8e)
-			(effects
-				(font
-					(size 1 1)
-					(thickness 0.15)
-				)
-			)
-		)
-		(fp_text value "ISENSE_HI"
-			(at 0 1.75 0)
-			(layer "F.Fab")
-			(tstamp bd63ee48-4a53-41ce-9f1d-e4ce2bbaee53)
-			(effects
-				(font
-					(size 1 1)
-					(thickness 0.15)
-				)
-			)
-		)
-		(attr exclude_from_pos_files exclude_from_bom)
-		(fp_circle
-			(center 0 0)
-			(end 0 0.95)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(fill none)
-			(layer "F.SilkS")
-			(tstamp 188606f7-41cf-4150-b22a-1b8f5885c87d)
-		)
-		(fp_circle
-			(center 0 0)
-			(end 1.25 0)
-			(stroke
-				(width 0.05)
-				(type solid)
-			)
-			(fill none)
-			(layer "F.CrtYd")
-			(tstamp c1a41909-dd0d-4698-8873-fe0292742945)
-		)
-		(fp_text user "${REFERENCE}"
-			(at 0 -1.65 0)
-			(layer "F.Fab")
-			(tstamp e27ec8d6-1f94-40cd-a4aa-0963d435fbb8)
-			(effects
-				(font
-					(size 1 1)
-					(thickness 0.15)
-				)
-			)
-		)
-		(pad "1" smd circle
-			(at 0 0)
-			(size 1.5 1.5)
-			(layers "F.Cu" "F.Mask")
-			(tstamp 8a03cd79-fadf-4c81-9b59-724c470e191a)
-			(net 24 "FORCE-")
-			(pinfunction "1")
-			(pintype "passive")
-		)
-		(path "/d26fadbf-20c1-599f-b3bd-7d64aecbce0b")
-	)
-	(footprint "TestPoint_Pad_D1.5mm"
-		(at 14.93 46.3)
-		(layer "F.Cu")
-		(fp_text reference "TP4"
-			(at 0 -1.648 0)
-			(layer "F.SilkS")
-			(tstamp df8ad89a-4372-48a1-959d-41a6068fbd8e)
-			(effects
-				(font
-					(size 1 1)
-					(thickness 0.15)
-				)
-			)
-		)
-		(fp_text value "I_SENSE_OUT"
-			(at 0 1.75 0)
-			(layer "F.Fab")
-			(tstamp bd63ee48-4a53-41ce-9f1d-e4ce2bbaee53)
-			(effects
-				(font
-					(size 1 1)
-					(thickness 0.15)
-				)
-			)
-		)
-		(attr exclude_from_pos_files exclude_from_bom)
-		(fp_circle
-			(center 0 0)
-			(end 0 0.95)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(fill none)
-			(layer "F.SilkS")
-			(tstamp 188606f7-41cf-4150-b22a-1b8f5885c87d)
-		)
-		(fp_circle
-			(center 0 0)
-			(end 1.25 0)
-			(stroke
-				(width 0.05)
-				(type solid)
-			)
-			(fill none)
-			(layer "F.CrtYd")
-			(tstamp c1a41909-dd0d-4698-8873-fe0292742945)
-		)
-		(fp_text user "${REFERENCE}"
-			(at 0 -1.65 0)
-			(layer "F.Fab")
-			(tstamp e27ec8d6-1f94-40cd-a4aa-0963d435fbb8)
-			(effects
-				(font
-					(size 1 1)
-					(thickness 0.15)
-				)
-			)
-		)
-		(pad "1" smd circle
-			(at 0 0)
-			(size 1.5 1.5)
-			(layers "F.Cu" "F.Mask")
-			(tstamp 8a03cd79-fadf-4c81-9b59-724c470e191a)
-			(net 25 "I_SENSE_OUT")
-			(pinfunction "1")
-			(pintype "passive")
-		)
-		(path "/e876f225-fb96-52af-befe-928553b1afd7")
-	)
-	(footprint "DIP-8_W7.62mm"
-		(at 1.06 53.28)
+	(footprint "Package_DIP:DIP-8_W7.62mm"
+		(at 1.06 47.66)
 		(layer "F.Cu")
 		(fp_text reference "U7"
 			(at 3.81 -2.33 0)
@@ -4015,8 +4015,218 @@
 		)
 		(path "/27668471-752f-5d95-9148-cf7670c75922")
 	)
-	(footprint "D_SOD-123"
-		(at 13.28 52.91)
+	(footprint "TestPoint:TestPoint_Pad_D1.5mm"
+		(at 12.18 47.39)
+		(layer "F.Cu")
+		(fp_text reference "TP5"
+			(at 0 -1.648 0)
+			(layer "F.SilkS")
+			(tstamp df8ad89a-4372-48a1-959d-41a6068fbd8e)
+			(effects
+				(font
+					(size 1 1)
+					(thickness 0.15)
+				)
+			)
+		)
+		(fp_text value "SENSE+"
+			(at 0 1.75 0)
+			(layer "F.Fab")
+			(tstamp bd63ee48-4a53-41ce-9f1d-e4ce2bbaee53)
+			(effects
+				(font
+					(size 1 1)
+					(thickness 0.15)
+				)
+			)
+		)
+		(attr exclude_from_pos_files exclude_from_bom)
+		(fp_circle
+			(center 0 0)
+			(end 0 0.95)
+			(stroke
+				(width 0.12)
+				(type solid)
+			)
+			(fill none)
+			(layer "F.SilkS")
+			(tstamp 188606f7-41cf-4150-b22a-1b8f5885c87d)
+		)
+		(fp_circle
+			(center 0 0)
+			(end 1.25 0)
+			(stroke
+				(width 0.05)
+				(type solid)
+			)
+			(fill none)
+			(layer "F.CrtYd")
+			(tstamp c1a41909-dd0d-4698-8873-fe0292742945)
+		)
+		(fp_text user "${REFERENCE}"
+			(at 0 -1.65 0)
+			(layer "F.Fab")
+			(tstamp e27ec8d6-1f94-40cd-a4aa-0963d435fbb8)
+			(effects
+				(font
+					(size 1 1)
+					(thickness 0.15)
+				)
+			)
+		)
+		(pad "1" smd circle
+			(at 0 0)
+			(size 1.5 1.5)
+			(layers "F.Cu" "F.Mask")
+			(tstamp 8a03cd79-fadf-4c81-9b59-724c470e191a)
+			(net 39 "SENSE+")
+			(pinfunction "1")
+			(pintype "passive")
+		)
+		(path "/4273c379-960b-5250-a1d9-f99a26d73d1d")
+	)
+	(footprint "TestPoint:TestPoint_Pad_D1.5mm"
+		(at 15.88 47.39)
+		(layer "F.Cu")
+		(fp_text reference "TP6"
+			(at 0 -1.648 0)
+			(layer "F.SilkS")
+			(tstamp df8ad89a-4372-48a1-959d-41a6068fbd8e)
+			(effects
+				(font
+					(size 1 1)
+					(thickness 0.15)
+				)
+			)
+		)
+		(fp_text value "SENSE-"
+			(at 0 1.75 0)
+			(layer "F.Fab")
+			(tstamp bd63ee48-4a53-41ce-9f1d-e4ce2bbaee53)
+			(effects
+				(font
+					(size 1 1)
+					(thickness 0.15)
+				)
+			)
+		)
+		(attr exclude_from_pos_files exclude_from_bom)
+		(fp_circle
+			(center 0 0)
+			(end 0 0.95)
+			(stroke
+				(width 0.12)
+				(type solid)
+			)
+			(fill none)
+			(layer "F.SilkS")
+			(tstamp 188606f7-41cf-4150-b22a-1b8f5885c87d)
+		)
+		(fp_circle
+			(center 0 0)
+			(end 1.25 0)
+			(stroke
+				(width 0.05)
+				(type solid)
+			)
+			(fill none)
+			(layer "F.CrtYd")
+			(tstamp c1a41909-dd0d-4698-8873-fe0292742945)
+		)
+		(fp_text user "${REFERENCE}"
+			(at 0 -1.65 0)
+			(layer "F.Fab")
+			(tstamp e27ec8d6-1f94-40cd-a4aa-0963d435fbb8)
+			(effects
+				(font
+					(size 1 1)
+					(thickness 0.15)
+				)
+			)
+		)
+		(pad "1" smd circle
+			(at 0 0)
+			(size 1.5 1.5)
+			(layers "F.Cu" "F.Mask")
+			(tstamp 8a03cd79-fadf-4c81-9b59-724c470e191a)
+			(net 40 "SENSE-")
+			(pinfunction "1")
+			(pintype "passive")
+		)
+		(path "/da8802e6-e304-5531-9963-291b7a1a3f54")
+	)
+	(footprint "TestPoint:TestPoint_Pad_D1.5mm"
+		(at 19.58 47.39)
+		(layer "F.Cu")
+		(fp_text reference "TP7"
+			(at 0 -1.648 0)
+			(layer "F.SilkS")
+			(tstamp df8ad89a-4372-48a1-959d-41a6068fbd8e)
+			(effects
+				(font
+					(size 1 1)
+					(thickness 0.15)
+				)
+			)
+		)
+		(fp_text value "V_SENSE_OUT"
+			(at 0 1.75 0)
+			(layer "F.Fab")
+			(tstamp bd63ee48-4a53-41ce-9f1d-e4ce2bbaee53)
+			(effects
+				(font
+					(size 1 1)
+					(thickness 0.15)
+				)
+			)
+		)
+		(attr exclude_from_pos_files exclude_from_bom)
+		(fp_circle
+			(center 0 0)
+			(end 0 0.95)
+			(stroke
+				(width 0.12)
+				(type solid)
+			)
+			(fill none)
+			(layer "F.SilkS")
+			(tstamp 188606f7-41cf-4150-b22a-1b8f5885c87d)
+		)
+		(fp_circle
+			(center 0 0)
+			(end 1.25 0)
+			(stroke
+				(width 0.05)
+				(type solid)
+			)
+			(fill none)
+			(layer "F.CrtYd")
+			(tstamp c1a41909-dd0d-4698-8873-fe0292742945)
+		)
+		(fp_text user "${REFERENCE}"
+			(at 0 -1.65 0)
+			(layer "F.Fab")
+			(tstamp e27ec8d6-1f94-40cd-a4aa-0963d435fbb8)
+			(effects
+				(font
+					(size 1 1)
+					(thickness 0.15)
+				)
+			)
+		)
+		(pad "1" smd circle
+			(at 0 0)
+			(size 1.5 1.5)
+			(layers "F.Cu" "F.Mask")
+			(tstamp 8a03cd79-fadf-4c81-9b59-724c470e191a)
+			(net 65 "V_SENSE_OUT")
+			(pinfunction "1")
+			(pintype "passive")
+		)
+		(path "/ee763325-27c4-5308-9041-7a12e6b2a98e")
+	)
+	(footprint "Diode_SMD:D_SOD-123"
+		(at 24.38 47.29)
 		(layer "F.Cu")
 		(fp_text reference "D1"
 			(at 0 -2 0)
@@ -4254,8 +4464,8 @@
 		)
 		(path "/190bbc00-2c8a-526e-bcb9-22018a51d0dd")
 	)
-	(footprint "D_SOD-123"
-		(at 19.18 52.91)
+	(footprint "Diode_SMD:D_SOD-123"
+		(at 30.28 47.29)
 		(layer "F.Cu")
 		(fp_text reference "D2"
 			(at 0 -2 0)
@@ -4493,8 +4703,8 @@
 		)
 		(path "/a1a4ea3e-138f-578b-b1d2-93471afbe541")
 	)
-	(footprint "D_SOD-123"
-		(at 2.35 64.77)
+	(footprint "Diode_SMD:D_SOD-123"
+		(at 36.18 47.29)
 		(layer "F.Cu")
 		(fp_text reference "D3"
 			(at 0 -2 0)
@@ -4732,8 +4942,8 @@
 		)
 		(path "/0cc0b093-45ed-568a-9f5a-e6fd91ca2e69")
 	)
-	(footprint "D_SOD-123"
-		(at 8.25 64.77)
+	(footprint "Diode_SMD:D_SOD-123"
+		(at 2.35 59.15)
 		(layer "F.Cu")
 		(fp_text reference "D4"
 			(at 0 -2 0)
@@ -4971,8 +5181,8 @@
 		)
 		(path "/c6760cda-0853-5aa5-a069-ea0df359de72")
 	)
-	(footprint "C_0603_1608Metric"
-		(at 13.28 64.35)
+	(footprint "Capacitor_SMD:C_0603_1608Metric"
+		(at 7.38 58.73)
 		(layer "F.Cu")
 		(fp_text reference "C22"
 			(at 0 -1.43 0)
@@ -5063,8 +5273,8 @@
 		)
 		(path "/1051cafe-9e01-533a-a76e-f58f1f3e061b")
 	)
-	(footprint "C_0603_1608Metric"
-		(at 17.44 64.35)
+	(footprint "Capacitor_SMD:C_0603_1608Metric"
+		(at 11.54 58.73)
 		(layer "F.Cu")
 		(fp_text reference "C23"
 			(at 0 -1.43 0)
@@ -5155,8 +5365,8 @@
 		)
 		(path "/ccf0c14a-8432-5584-b7a2-0c47a4604cb7")
 	)
-	(footprint "R_0603_1608Metric"
-		(at 21.6 64.35)
+	(footprint "Resistor_SMD:R_0603_1608Metric"
+		(at 15.7 58.73)
 		(layer "F.Cu")
 		(fp_text reference "R12"
 			(at 0 -1.43 0)
@@ -5247,8 +5457,8 @@
 		)
 		(path "/e88dabd1-da29-528b-8bd2-c8e750a78a98")
 	)
-	(footprint "R_0603_1608Metric"
-		(at 1.48 67.85)
+	(footprint "Resistor_SMD:R_0603_1608Metric"
+		(at 19.86 58.73)
 		(layer "F.Cu")
 		(fp_text reference "R13"
 			(at 0 -1.43 0)
@@ -5339,8 +5549,8 @@
 		)
 		(path "/d21af55c-c3c1-526d-9e8e-8392c3102b3d")
 	)
-	(footprint "R_0603_1608Metric"
-		(at 5.64 67.85)
+	(footprint "Resistor_SMD:R_0603_1608Metric"
+		(at 24.02 58.73)
 		(layer "F.Cu")
 		(fp_text reference "R14"
 			(at 0 -1.43 0)
@@ -5431,13 +5641,13 @@
 		)
 		(path "/4aa00386-7512-5e37-8f73-4d8b80327b28")
 	)
-	(footprint "TestPoint_Pad_D1.5mm"
-		(at 8.32 67.12)
+	(footprint "Connector:Banana_Jack_1Pin"
+		(at 5.75 70.05)
 		(layer "F.Cu")
-		(fp_text reference "TP5"
-			(at 0 -1.648 0)
+		(fp_text reference "J4"
+			(at 0 -6.5 0)
 			(layer "F.SilkS")
-			(tstamp df8ad89a-4372-48a1-959d-41a6068fbd8e)
+			(tstamp cae53453-23a4-4035-9373-234f77ffea6b)
 			(effects
 				(font
 					(size 1 1)
@@ -5445,10 +5655,10 @@
 				)
 			)
 		)
-		(fp_text value "SENSE+"
-			(at 0 1.75 0)
+		(fp_text value "DUT FORCE+"
+			(at -0.25 6.5 0)
 			(layer "F.Fab")
-			(tstamp bd63ee48-4a53-41ce-9f1d-e4ce2bbaee53)
+			(tstamp a0a5c96e-7585-4d5a-b434-7c329e22b95f)
 			(effects
 				(font
 					(size 1 1)
@@ -5456,33 +5666,81 @@
 				)
 			)
 		)
-		(attr exclude_from_pos_files exclude_from_bom)
+		(attr through_hole)
 		(fp_circle
 			(center 0 0)
-			(end 0 0.95)
+			(end 5.5 0)
 			(stroke
 				(width 0.12)
 				(type solid)
 			)
 			(fill none)
 			(layer "F.SilkS")
-			(tstamp 188606f7-41cf-4150-b22a-1b8f5885c87d)
+			(tstamp d58b8bab-042c-41e8-9d9d-9e163ce2f590)
 		)
 		(fp_circle
 			(center 0 0)
-			(end 1.25 0)
+			(end 5.75 0)
 			(stroke
 				(width 0.05)
 				(type solid)
 			)
 			(fill none)
 			(layer "F.CrtYd")
-			(tstamp c1a41909-dd0d-4698-8873-fe0292742945)
+			(tstamp 7672db33-4cdd-4a3e-930f-80a9d3a1f4f7)
+		)
+		(fp_circle
+			(center 0 0)
+			(end 2 0)
+			(stroke
+				(width 0.1)
+				(type solid)
+			)
+			(fill none)
+			(layer "F.Fab")
+			(tstamp d5ac2832-d797-43a8-961a-f323f5c186ce)
+		)
+		(fp_circle
+			(center 0 0)
+			(end 4.85 0.05)
+			(stroke
+				(width 0.1)
+				(type solid)
+			)
+			(fill none)
+			(layer "F.Fab")
+			(tstamp 1a2f15df-f8d2-4d5c-a72d-390a36c0603c)
 		)
 		(fp_text user "${REFERENCE}"
-			(at 0 -1.65 0)
+			(at 0 0 0)
 			(layer "F.Fab")
-			(tstamp e27ec8d6-1f94-40cd-a4aa-0963d435fbb8)
+			(tstamp 5367da88-5e8e-4ef0-a67d-252f1d50b615)
+			(effects
+				(font
+					(size 0.8 0.8)
+					(thickness 0.12)
+				)
+			)
+		)
+		(pad "1" thru_hole circle
+			(at 0 0)
+			(size 10.16 10.16)
+			(drill 6.1)
+			(layers "*.Cu" "*.Mask")
+			(tstamp 5aea2b88-a3e4-4846-81d9-542cceecd34c)
+			(net 23 "FORCE+")
+			(pinfunction "Pin_1")
+			(pintype "passive")
+		)
+		(path "/63bd6ba8-7aa2-59ae-8087-8e6c918ff634")
+	)
+	(footprint "Connector:Banana_Jack_1Pin"
+		(at 18.45 70.05)
+		(layer "F.Cu")
+		(fp_text reference "J5"
+			(at 0 -6.5 0)
+			(layer "F.SilkS")
+			(tstamp cae53453-23a4-4035-9373-234f77ffea6b)
 			(effects
 				(font
 					(size 1 1)
@@ -5490,24 +5748,92 @@
 				)
 			)
 		)
-		(pad "1" smd circle
+		(fp_text value "DUT SENSE+"
+			(at -0.25 6.5 0)
+			(layer "F.Fab")
+			(tstamp a0a5c96e-7585-4d5a-b434-7c329e22b95f)
+			(effects
+				(font
+					(size 1 1)
+					(thickness 0.15)
+				)
+			)
+		)
+		(attr through_hole)
+		(fp_circle
+			(center 0 0)
+			(end 5.5 0)
+			(stroke
+				(width 0.12)
+				(type solid)
+			)
+			(fill none)
+			(layer "F.SilkS")
+			(tstamp d58b8bab-042c-41e8-9d9d-9e163ce2f590)
+		)
+		(fp_circle
+			(center 0 0)
+			(end 5.75 0)
+			(stroke
+				(width 0.05)
+				(type solid)
+			)
+			(fill none)
+			(layer "F.CrtYd")
+			(tstamp 7672db33-4cdd-4a3e-930f-80a9d3a1f4f7)
+		)
+		(fp_circle
+			(center 0 0)
+			(end 2 0)
+			(stroke
+				(width 0.1)
+				(type solid)
+			)
+			(fill none)
+			(layer "F.Fab")
+			(tstamp d5ac2832-d797-43a8-961a-f323f5c186ce)
+		)
+		(fp_circle
+			(center 0 0)
+			(end 4.85 0.05)
+			(stroke
+				(width 0.1)
+				(type solid)
+			)
+			(fill none)
+			(layer "F.Fab")
+			(tstamp 1a2f15df-f8d2-4d5c-a72d-390a36c0603c)
+		)
+		(fp_text user "${REFERENCE}"
+			(at 0 0 0)
+			(layer "F.Fab")
+			(tstamp 5367da88-5e8e-4ef0-a67d-252f1d50b615)
+			(effects
+				(font
+					(size 0.8 0.8)
+					(thickness 0.12)
+				)
+			)
+		)
+		(pad "1" thru_hole circle
 			(at 0 0)
-			(size 1.5 1.5)
-			(layers "F.Cu" "F.Mask")
-			(tstamp 8a03cd79-fadf-4c81-9b59-724c470e191a)
+			(size 10.16 10.16)
+			(drill 6.1)
+			(layers "*.Cu" "*.Mask")
+			(tstamp 5aea2b88-a3e4-4846-81d9-542cceecd34c)
 			(net 39 "SENSE+")
-			(pinfunction "1")
+			(pinfunction "Pin_1")
 			(pintype "passive")
 		)
-		(path "/4273c379-960b-5250-a1d9-f99a26d73d1d")
+		(path "/87e49b07-3cb3-53b4-9d97-e6fb21b96df6")
 	)
-	(footprint "TestPoint_Pad_D1.5mm"
-		(at 10.77 67.12)
+	(footprint "Connector:Banana_Jack_1Pin"
+		(at 31.15 70.05)
 		(layer "F.Cu")
-		(fp_text reference "TP6"
-			(at 0 -1.648 0)
+		(fp_text reference "J6"
+			(at 0 -6.5 0)
 			(layer "F.SilkS")
-			(tstamp df8ad89a-4372-48a1-959d-41a6068fbd8e)
+			(tstamp cae53453-23a4-4035-9373-234f77ffea6b)
 			(effects
 				(font
 					(size 1 1)
@@ -5515,10 +5841,10 @@
 				)
 			)
 		)
-		(fp_text value "SENSE-"
-			(at 0 1.75 0)
+		(fp_text value "DUT SENSE-"
+			(at -0.25 6.5 0)
 			(layer "F.Fab")
-			(tstamp bd63ee48-4a53-41ce-9f1d-e4ce2bbaee53)
+			(tstamp a0a5c96e-7585-4d5a-b434-7c329e22b95f)
 			(effects
 				(font
 					(size 1 1)
@@ -5526,58 +5852,81 @@
 				)
 			)
 		)
-		(attr exclude_from_pos_files exclude_from_bom)
+		(attr through_hole)
 		(fp_circle
 			(center 0 0)
-			(end 0 0.95)
+			(end 5.5 0)
 			(stroke
 				(width 0.12)
 				(type solid)
 			)
 			(fill none)
 			(layer "F.SilkS")
-			(tstamp 188606f7-41cf-4150-b22a-1b8f5885c87d)
+			(tstamp d58b8bab-042c-41e8-9d9d-9e163ce2f590)
 		)
 		(fp_circle
 			(center 0 0)
-			(end 1.25 0)
+			(end 5.75 0)
 			(stroke
 				(width 0.05)
 				(type solid)
 			)
 			(fill none)
 			(layer "F.CrtYd")
-			(tstamp c1a41909-dd0d-4698-8873-fe0292742945)
+			(tstamp 7672db33-4cdd-4a3e-930f-80a9d3a1f4f7)
+		)
+		(fp_circle
+			(center 0 0)
+			(end 2 0)
+			(stroke
+				(width 0.1)
+				(type solid)
+			)
+			(fill none)
+			(layer "F.Fab")
+			(tstamp d5ac2832-d797-43a8-961a-f323f5c186ce)
+		)
+		(fp_circle
+			(center 0 0)
+			(end 4.85 0.05)
+			(stroke
+				(width 0.1)
+				(type solid)
+			)
+			(fill none)
+			(layer "F.Fab")
+			(tstamp 1a2f15df-f8d2-4d5c-a72d-390a36c0603c)
 		)
 		(fp_text user "${REFERENCE}"
-			(at 0 -1.65 0)
+			(at 0 0 0)
 			(layer "F.Fab")
-			(tstamp e27ec8d6-1f94-40cd-a4aa-0963d435fbb8)
+			(tstamp 5367da88-5e8e-4ef0-a67d-252f1d50b615)
 			(effects
 				(font
-					(size 1 1)
-					(thickness 0.15)
+					(size 0.8 0.8)
+					(thickness 0.12)
 				)
 			)
 		)
-		(pad "1" smd circle
+		(pad "1" thru_hole circle
 			(at 0 0)
-			(size 1.5 1.5)
-			(layers "F.Cu" "F.Mask")
-			(tstamp 8a03cd79-fadf-4c81-9b59-724c470e191a)
+			(size 10.16 10.16)
+			(drill 6.1)
+			(layers "*.Cu" "*.Mask")
+			(tstamp 5aea2b88-a3e4-4846-81d9-542cceecd34c)
 			(net 40 "SENSE-")
-			(pinfunction "1")
+			(pinfunction "Pin_1")
 			(pintype "passive")
 		)
-		(path "/da8802e6-e304-5531-9963-291b7a1a3f54")
+		(path "/606eac71-abf7-57ad-8138-9ca7d4d50d69")
 	)
-	(footprint "TestPoint_Pad_D1.5mm"
-		(at 13.22 67.12)
+	(footprint "Connector:Banana_Jack_1Pin"
+		(at 5.75 82.75)
 		(layer "F.Cu")
-		(fp_text reference "TP7"
-			(at 0 -1.648 0)
+		(fp_text reference "J7"
+			(at 0 -6.5 0)
 			(layer "F.SilkS")
-			(tstamp df8ad89a-4372-48a1-959d-41a6068fbd8e)
+			(tstamp cae53453-23a4-4035-9373-234f77ffea6b)
 			(effects
 				(font
 					(size 1 1)
@@ -5585,10 +5934,10 @@
 				)
 			)
 		)
-		(fp_text value "V_SENSE_OUT"
-			(at 0 1.75 0)
+		(fp_text value "DUT FORCE-"
+			(at -0.25 6.5 0)
 			(layer "F.Fab")
-			(tstamp bd63ee48-4a53-41ce-9f1d-e4ce2bbaee53)
+			(tstamp a0a5c96e-7585-4d5a-b434-7c329e22b95f)
 			(effects
 				(font
 					(size 1 1)
@@ -5596,53 +5945,76 @@
 				)
 			)
 		)
-		(attr exclude_from_pos_files exclude_from_bom)
+		(attr through_hole)
 		(fp_circle
 			(center 0 0)
-			(end 0 0.95)
+			(end 5.5 0)
 			(stroke
 				(width 0.12)
 				(type solid)
 			)
 			(fill none)
 			(layer "F.SilkS")
-			(tstamp 188606f7-41cf-4150-b22a-1b8f5885c87d)
+			(tstamp d58b8bab-042c-41e8-9d9d-9e163ce2f590)
 		)
 		(fp_circle
 			(center 0 0)
-			(end 1.25 0)
+			(end 5.75 0)
 			(stroke
 				(width 0.05)
 				(type solid)
 			)
 			(fill none)
 			(layer "F.CrtYd")
-			(tstamp c1a41909-dd0d-4698-8873-fe0292742945)
+			(tstamp 7672db33-4cdd-4a3e-930f-80a9d3a1f4f7)
+		)
+		(fp_circle
+			(center 0 0)
+			(end 2 0)
+			(stroke
+				(width 0.1)
+				(type solid)
+			)
+			(fill none)
+			(layer "F.Fab")
+			(tstamp d5ac2832-d797-43a8-961a-f323f5c186ce)
+		)
+		(fp_circle
+			(center 0 0)
+			(end 4.85 0.05)
+			(stroke
+				(width 0.1)
+				(type solid)
+			)
+			(fill none)
+			(layer "F.Fab")
+			(tstamp 1a2f15df-f8d2-4d5c-a72d-390a36c0603c)
 		)
 		(fp_text user "${REFERENCE}"
-			(at 0 -1.65 0)
+			(at 0 0 0)
 			(layer "F.Fab")
-			(tstamp e27ec8d6-1f94-40cd-a4aa-0963d435fbb8)
+			(tstamp 5367da88-5e8e-4ef0-a67d-252f1d50b615)
 			(effects
 				(font
-					(size 1 1)
-					(thickness 0.15)
+					(size 0.8 0.8)
+					(thickness 0.12)
 				)
 			)
 		)
-		(pad "1" smd circle
+		(pad "1" thru_hole circle
 			(at 0 0)
-			(size 1.5 1.5)
-			(layers "F.Cu" "F.Mask")
-			(tstamp 8a03cd79-fadf-4c81-9b59-724c470e191a)
-			(net 65 "V_SENSE_OUT")
-			(pinfunction "1")
+			(size 10.16 10.16)
+			(drill 6.1)
+			(layers "*.Cu" "*.Mask")
+			(tstamp 5aea2b88-a3e4-4846-81d9-542cceecd34c)
+			(net 24 "FORCE-")
+			(pinfunction "Pin_1")
 			(pintype "passive")
 		)
-		(path "/ee763325-27c4-5308-9041-7a12e6b2a98e")
+		(path "/5c3f7b1e-4847-5e6c-a5b2-019b061cef3c")
 	)
-	(footprint "D_SMB"
-		(at 3.65 74.83)
+	(footprint "Diode_SMD:D_SMB"
+		(at 16.35 79.25)
 		(layer "F.Cu")
 		(fp_text reference "D5"
 			(at 0 -3 0)
@@ -5870,8 +6242,8 @@
 		)
 		(path "/59e88085-8148-58e2-a304-0105758d1b9c")
 	)
-	(footprint "Fuse_Bourns_MF-RG300"
-		(at 9.75 73.73)
+	(footprint "Fuse:Fuse_Bourns_MF-RG300"
+		(at 22.45 78.15)
 		(layer "F.Cu")
 		(fp_text reference "F1"
 			(at 2.55 -1.9 0)
@@ -6016,8 +6388,8 @@
 		)
 		(path "/68e2163f-9e98-5d96-be9e-3356e6c900b5")
 	)
-	(footprint "R_1206_3216Metric"
-		(at 19.58 73.71)
+	(footprint "Resistor_SMD:R_1206_3216Metric"
+		(at 32.28 78.13)
 		(layer "F.Cu")
 		(fp_text reference "R30"
 			(at 0 -1.83 0)
@@ -6108,380 +6480,8 @@
 		)
 		(path "/c08a3077-1536-5bc8-b73d-7860f54019a1")
 	)
-	(footprint "Banana_Jack_1Pin"
-		(at 0 78.28)
-		(layer "F.Cu")
-		(fp_text reference "J4"
-			(at 0 -6.5 0)
-			(layer "F.SilkS")
-			(tstamp cae53453-23a4-4035-9373-234f77ffea6b)
-			(effects
-				(font
-					(size 1 1)
-					(thickness 0.15)
-				)
-			)
-		)
-		(fp_text value "DUT FORCE+"
-			(at -0.25 6.5 0)
-			(layer "F.Fab")
-			(tstamp a0a5c96e-7585-4d5a-b434-7c329e22b95f)
-			(effects
-				(font
-					(size 1 1)
-					(thickness 0.15)
-				)
-			)
-		)
-		(attr through_hole)
-		(fp_circle
-			(center 0 0)
-			(end 5.5 0)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(fill none)
-			(layer "F.SilkS")
-			(tstamp d58b8bab-042c-41e8-9d9d-9e163ce2f590)
-		)
-		(fp_circle
-			(center 0 0)
-			(end 5.75 0)
-			(stroke
-				(width 0.05)
-				(type solid)
-			)
-			(fill none)
-			(layer "F.CrtYd")
-			(tstamp 7672db33-4cdd-4a3e-930f-80a9d3a1f4f7)
-		)
-		(fp_circle
-			(center 0 0)
-			(end 2 0)
-			(stroke
-				(width 0.1)
-				(type solid)
-			)
-			(fill none)
-			(layer "F.Fab")
-			(tstamp d5ac2832-d797-43a8-961a-f323f5c186ce)
-		)
-		(fp_circle
-			(center 0 0)
-			(end 4.85 0.05)
-			(stroke
-				(width 0.1)
-				(type solid)
-			)
-			(fill none)
-			(layer "F.Fab")
-			(tstamp 1a2f15df-f8d2-4d5c-a72d-390a36c0603c)
-		)
-		(fp_text user "${REFERENCE}"
-			(at 0 0 0)
-			(layer "F.Fab")
-			(tstamp 5367da88-5e8e-4ef0-a67d-252f1d50b615)
-			(effects
-				(font
-					(size 0.8 0.8)
-					(thickness 0.12)
-				)
-			)
-		)
-		(pad "1" thru_hole circle
-			(at 0 0)
-			(size 10.16 10.16)
-			(drill 6.1)
-			(layers "*.Cu" "*.Mask")
-			(tstamp 5aea2b88-a3e4-4846-81d9-542cceecd34c)
-			(net 23 "FORCE+")
-			(pinfunction "Pin_1")
-			(pintype "passive")
-		)
-		(path "/63bd6ba8-7aa2-59ae-8087-8e6c918ff634")
-	)
-	(footprint "Banana_Jack_1Pin"
-		(at 6.95 78.28)
-		(layer "F.Cu")
-		(fp_text reference "J5"
-			(at 0 -6.5 0)
-			(layer "F.SilkS")
-			(tstamp cae53453-23a4-4035-9373-234f77ffea6b)
-			(effects
-				(font
-					(size 1 1)
-					(thickness 0.15)
-				)
-			)
-		)
-		(fp_text value "DUT SENSE+"
-			(at -0.25 6.5 0)
-			(layer "F.Fab")
-			(tstamp a0a5c96e-7585-4d5a-b434-7c329e22b95f)
-			(effects
-				(font
-					(size 1 1)
-					(thickness 0.15)
-				)
-			)
-		)
-		(attr through_hole)
-		(fp_circle
-			(center 0 0)
-			(end 5.5 0)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(fill none)
-			(layer "F.SilkS")
-			(tstamp d58b8bab-042c-41e8-9d9d-9e163ce2f590)
-		)
-		(fp_circle
-			(center 0 0)
-			(end 5.75 0)
-			(stroke
-				(width 0.05)
-				(type solid)
-			)
-			(fill none)
-			(layer "F.CrtYd")
-			(tstamp 7672db33-4cdd-4a3e-930f-80a9d3a1f4f7)
-		)
-		(fp_circle
-			(center 0 0)
-			(end 2 0)
-			(stroke
-				(width 0.1)
-				(type solid)
-			)
-			(fill none)
-			(layer "F.Fab")
-			(tstamp d5ac2832-d797-43a8-961a-f323f5c186ce)
-		)
-		(fp_circle
-			(center 0 0)
-			(end 4.85 0.05)
-			(stroke
-				(width 0.1)
-				(type solid)
-			)
-			(fill none)
-			(layer "F.Fab")
-			(tstamp 1a2f15df-f8d2-4d5c-a72d-390a36c0603c)
-		)
-		(fp_text user "${REFERENCE}"
-			(at 0 0 0)
-			(layer "F.Fab")
-			(tstamp 5367da88-5e8e-4ef0-a67d-252f1d50b615)
-			(effects
-				(font
-					(size 0.8 0.8)
-					(thickness 0.12)
-				)
-			)
-		)
-		(pad "1" thru_hole circle
-			(at 0 0)
-			(size 10.16 10.16)
-			(drill 6.1)
-			(layers "*.Cu" "*.Mask")
-			(tstamp 5aea2b88-a3e4-4846-81d9-542cceecd34c)
-			(net 39 "SENSE+")
-			(pinfunction "Pin_1")
-			(pintype "passive")
-		)
-		(path "/87e49b07-3cb3-53b4-9d97-e6fb21b96df6")
-	)
-	(footprint "Banana_Jack_1Pin"
-		(at 13.9 78.28)
-		(layer "F.Cu")
-		(fp_text reference "J6"
-			(at 0 -6.5 0)
-			(layer "F.SilkS")
-			(tstamp cae53453-23a4-4035-9373-234f77ffea6b)
-			(effects
-				(font
-					(size 1 1)
-					(thickness 0.15)
-				)
-			)
-		)
-		(fp_text value "DUT SENSE-"
-			(at -0.25 6.5 0)
-			(layer "F.Fab")
-			(tstamp a0a5c96e-7585-4d5a-b434-7c329e22b95f)
-			(effects
-				(font
-					(size 1 1)
-					(thickness 0.15)
-				)
-			)
-		)
-		(attr through_hole)
-		(fp_circle
-			(center 0 0)
-			(end 5.5 0)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(fill none)
-			(layer "F.SilkS")
-			(tstamp d58b8bab-042c-41e8-9d9d-9e163ce2f590)
-		)
-		(fp_circle
-			(center 0 0)
-			(end 5.75 0)
-			(stroke
-				(width 0.05)
-				(type solid)
-			)
-			(fill none)
-			(layer "F.CrtYd")
-			(tstamp 7672db33-4cdd-4a3e-930f-80a9d3a1f4f7)
-		)
-		(fp_circle
-			(center 0 0)
-			(end 2 0)
-			(stroke
-				(width 0.1)
-				(type solid)
-			)
-			(fill none)
-			(layer "F.Fab")
-			(tstamp d5ac2832-d797-43a8-961a-f323f5c186ce)
-		)
-		(fp_circle
-			(center 0 0)
-			(end 4.85 0.05)
-			(stroke
-				(width 0.1)
-				(type solid)
-			)
-			(fill none)
-			(layer "F.Fab")
-			(tstamp 1a2f15df-f8d2-4d5c-a72d-390a36c0603c)
-		)
-		(fp_text user "${REFERENCE}"
-			(at 0 0 0)
-			(layer "F.Fab")
-			(tstamp 5367da88-5e8e-4ef0-a67d-252f1d50b615)
-			(effects
-				(font
-					(size 0.8 0.8)
-					(thickness 0.12)
-				)
-			)
-		)
-		(pad "1" thru_hole circle
-			(at 0 0)
-			(size 10.16 10.16)
-			(drill 6.1)
-			(layers "*.Cu" "*.Mask")
-			(tstamp 5aea2b88-a3e4-4846-81d9-542cceecd34c)
-			(net 40 "SENSE-")
-			(pinfunction "Pin_1")
-			(pintype "passive")
-		)
-		(path "/606eac71-abf7-57ad-8138-9ca7d4d50d69")
-	)
-	(footprint "Banana_Jack_1Pin"
-		(at 0 79.48)
-		(layer "F.Cu")
-		(fp_text reference "J7"
-			(at 0 -6.5 0)
-			(layer "F.SilkS")
-			(tstamp cae53453-23a4-4035-9373-234f77ffea6b)
-			(effects
-				(font
-					(size 1 1)
-					(thickness 0.15)
-				)
-			)
-		)
-		(fp_text value "DUT FORCE-"
-			(at -0.25 6.5 0)
-			(layer "F.Fab")
-			(tstamp a0a5c96e-7585-4d5a-b434-7c329e22b95f)
-			(effects
-				(font
-					(size 1 1)
-					(thickness 0.15)
-				)
-			)
-		)
-		(attr through_hole)
-		(fp_circle
-			(center 0 0)
-			(end 5.5 0)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(fill none)
-			(layer "F.SilkS")
-			(tstamp d58b8bab-042c-41e8-9d9d-9e163ce2f590)
-		)
-		(fp_circle
-			(center 0 0)
-			(end 5.75 0)
-			(stroke
-				(width 0.05)
-				(type solid)
-			)
-			(fill none)
-			(layer "F.CrtYd")
-			(tstamp 7672db33-4cdd-4a3e-930f-80a9d3a1f4f7)
-		)
-		(fp_circle
-			(center 0 0)
-			(end 2 0)
-			(stroke
-				(width 0.1)
-				(type solid)
-			)
-			(fill none)
-			(layer "F.Fab")
-			(tstamp d5ac2832-d797-43a8-961a-f323f5c186ce)
-		)
-		(fp_circle
-			(center 0 0)
-			(end 4.85 0.05)
-			(stroke
-				(width 0.1)
-				(type solid)
-			)
-			(fill none)
-			(layer "F.Fab")
-			(tstamp 1a2f15df-f8d2-4d5c-a72d-390a36c0603c)
-		)
-		(fp_text user "${REFERENCE}"
-			(at 0 0 0)
-			(layer "F.Fab")
-			(tstamp 5367da88-5e8e-4ef0-a67d-252f1d50b615)
-			(effects
-				(font
-					(size 0.8 0.8)
-					(thickness 0.12)
-				)
-			)
-		)
-		(pad "1" thru_hole circle
-			(at 0 0)
-			(size 10.16 10.16)
-			(drill 6.1)
-			(layers "*.Cu" "*.Mask")
-			(tstamp 5aea2b88-a3e4-4846-81d9-542cceecd34c)
-			(net 24 "FORCE-")
-			(pinfunction "Pin_1")
-			(pintype "passive")
-		)
-		(path "/5c3f7b1e-4847-5e6c-a5b2-019b061cef3c")
-	)
-	(footprint "TerminalBlock_Phoenix_MKDS-1,5-4-5.08_1x04_P5.08mm_Horizontal"
-		(at 54.96 5.71)
+	(footprint "TerminalBlock_Phoenix:TerminalBlock_Phoenix_MKDS-1,5-4-5.08_1x04_P5.08mm_Horizontal"
+		(at 69.37 5.71)
 		(layer "F.Cu")
 		(fp_text reference "J1"
 			(at 7.62 -6.32 0)
@@ -6832,1247 +6832,8 @@
 		)
 		(path "/4342947d-3f1b-58fc-9da7-be98fef51771")
 	)
-	(footprint "SOT-223-3_TabPin2"
-		(at 56.32 15.61)
-		(layer "F.Cu")
-		(fp_text reference "U1"
-			(at 0 -4.5 0)
-			(layer "F.SilkS")
-			(tstamp 095b50a5-76ce-476b-aa10-37a37fa441f1)
-			(effects
-				(font
-					(size 1 1)
-					(thickness 0.15)
-				)
-			)
-		)
-		(fp_text value "LD1117S33TR"
-			(at 0 4.5 0)
-			(layer "F.Fab")
-			(tstamp a763838d-1dc3-4eda-bbc0-fbcf1edf1449)
-			(effects
-				(font
-					(size 1 1)
-					(thickness 0.15)
-				)
-			)
-		)
-		(attr smd)
-		(fp_line
-			(start -1.85 -3.41)
-			(end 1.91 -3.41)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "F.SilkS")
-			(tstamp e98ec803-a6f4-4196-9fa0-d9f7619efa9d)
-		)
-		(fp_line
-			(start -1.85 3.41)
-			(end 1.91 3.41)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "F.SilkS")
-			(tstamp 6e43f798-7915-403c-b947-4851bde35045)
-		)
-		(fp_line
-			(start 1.91 -3.41)
-			(end 1.91 -2.15)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "F.SilkS")
-			(tstamp ddfc40c4-e33c-493e-b735-24282440d539)
-		)
-		(fp_line
-			(start 1.91 3.41)
-			(end 1.91 2.15)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "F.SilkS")
-			(tstamp 79366377-6a9f-460a-b0d1-788467590954)
-		)
-		(fp_poly
-			(pts
-				(xy -3.13 -3.31)
-				(xy -3.37 -3.64)
-				(xy -2.89 -3.64)
-				(xy -3.13 -3.31)
-			)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(fill solid)
-			(layer "F.SilkS")
-			(tstamp 27420593-f422-495a-9e17-88a99bcd8a3d)
-		)
-		(fp_line
-			(start -4.4 -3.6)
-			(end -4.4 3.6)
-			(stroke
-				(width 0.05)
-				(type solid)
-			)
-			(layer "F.CrtYd")
-			(tstamp 2d708b29-208a-4760-a2c5-6626e4d03d29)
-		)
-		(fp_line
-			(start -4.4 3.6)
-			(end 4.4 3.6)
-			(stroke
-				(width 0.05)
-				(type solid)
-			)
-			(layer "F.CrtYd")
-			(tstamp ffe8efb3-9432-4dfe-8e3a-faf2eb064270)
-		)
-		(fp_line
-			(start 4.4 -3.6)
-			(end -4.4 -3.6)
-			(stroke
-				(width 0.05)
-				(type solid)
-			)
-			(layer "F.CrtYd")
-			(tstamp d963e7fb-b321-4298-bcd6-9650f5938938)
-		)
-		(fp_line
-			(start 4.4 3.6)
-			(end 4.4 -3.6)
-			(stroke
-				(width 0.05)
-				(type solid)
-			)
-			(layer "F.CrtYd")
-			(tstamp 18839f08-10e9-4a73-9312-8be172f09091)
-		)
-		(fp_line
-			(start -1.85 -2.35)
-			(end -1.85 3.35)
-			(stroke
-				(width 0.1)
-				(type solid)
-			)
-			(layer "F.Fab")
-			(tstamp 659fc817-2286-4dd8-ba60-8e62262ce6cc)
-		)
-		(fp_line
-			(start -1.85 -2.35)
-			(end -0.85 -3.35)
-			(stroke
-				(width 0.1)
-				(type solid)
-			)
-			(layer "F.Fab")
-			(tstamp f393364a-2641-4746-ba4c-6509ea1de503)
-		)
-		(fp_line
-			(start -1.85 3.35)
-			(end 1.85 3.35)
-			(stroke
-				(width 0.1)
-				(type solid)
-			)
-			(layer "F.Fab")
-			(tstamp 27db54e0-f4a8-4972-bcbc-256787416dcd)
-		)
-		(fp_line
-			(start -0.85 -3.35)
-			(end 1.85 -3.35)
-			(stroke
-				(width 0.1)
-				(type solid)
-			)
-			(layer "F.Fab")
-			(tstamp be579ebe-38db-4860-98f0-9f530f704760)
-		)
-		(fp_line
-			(start 1.85 -3.35)
-			(end 1.85 3.35)
-			(stroke
-				(width 0.1)
-				(type solid)
-			)
-			(layer "F.Fab")
-			(tstamp 9d748ff0-f43a-42f3-a9ff-3a463972b1ca)
-		)
-		(fp_text user "${REFERENCE}"
-			(at 0 0 90)
-			(layer "F.Fab")
-			(tstamp aff1cd04-29c5-47f0-8349-1badf43ec67b)
-			(effects
-				(font
-					(size 0.8 0.8)
-					(thickness 0.12)
-				)
-			)
-		)
-		(pad "1" smd roundrect
-			(at -3.15 -2.3)
-			(size 2 1.5)
-			(layers "F.Cu" "F.Mask" "F.Paste")
-			(roundrect_rratio 0.25)
-			(tstamp 6c38c733-73aa-46ef-9aa8-0adc47a79448)
-			(net 18 "DGND")
-			(pinfunction "GND")
-			(pintype "power_in")
-		)
-		(pad "2" smd roundrect
-			(at -3.15 0)
-			(size 2 1.5)
-			(layers "F.Cu" "F.Mask" "F.Paste")
-			(roundrect_rratio 0.25)
-			(tstamp 553b4aa3-b4fc-45ee-9bbe-5eb8183ee7d8)
-			(net 2 "+3V3D")
-			(pinfunction "VOUT")
-			(pintype "power_out")
-		)
-		(pad "2" smd roundrect
-			(at 3.15 0)
-			(size 2 3.8)
-			(layers "F.Cu" "F.Mask" "F.Paste")
-			(roundrect_rratio 0.25)
-			(tstamp 118e82e2-9099-4e46-a269-1e2cb8448d5e)
-			(net 2 "+3V3D")
-			(pinfunction "VOUT")
-			(pintype "power_out")
-		)
-		(pad "3" smd roundrect
-			(at -3.15 2.3)
-			(size 2 1.5)
-			(layers "F.Cu" "F.Mask" "F.Paste")
-			(roundrect_rratio 0.25)
-			(tstamp 5046df04-2b74-45a5-867e-e33a5e51e59c)
-			(net 4 "+5V_RAW")
-			(pinfunction "VIN")
-			(pintype "power_in")
-		)
-		(path "/07f0c40e-a413-511d-a8cb-cb690c31da0b")
-	)
-	(footprint "VSSOP-8_3x3mm_P0.65mm"
-		(at 65.1 13.76)
-		(layer "F.Cu")
-		(fp_text reference "U2"
-			(at 0 -2.45 0)
-			(layer "F.SilkS")
-			(effects
-				(font
-					(size 1 1)
-					(thickness 0.15)
-				)
-			)
-		)
-		(fp_text value "REF5025AIDGKT"
-			(at 0 2.45 0)
-			(layer "F.Fab")
-			(effects
-				(font
-					(size 1 1)
-					(thickness 0.15)
-				)
-			)
-		)
-		(attr smd)
-		(fp_line
-			(start -1.61 -1.61)
-			(end 1.61 -1.61)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "F.SilkS")
-		)
-		(fp_line
-			(start -1.61 -1.485)
-			(end -1.61 -1.61)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "F.SilkS")
-		)
-		(fp_line
-			(start -1.61 1.61)
-			(end -1.61 1.485)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "F.SilkS")
-		)
-		(fp_line
-			(start 1.61 -1.61)
-			(end 1.61 -1.485)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "F.SilkS")
-		)
-		(fp_line
-			(start 1.61 1.485)
-			(end 1.61 1.61)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "F.SilkS")
-		)
-		(fp_line
-			(start 1.61 1.61)
-			(end -1.61 1.61)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "F.SilkS")
-		)
-		(fp_poly
-			(pts
-				(xy -2.16 -1.49)
-				(xy -2.4 -1.82)
-				(xy -1.92 -1.82)
-			)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(fill solid)
-			(layer "F.SilkS")
-		)
-		(fp_line
-			(start -3.18 -1.48)
-			(end -1.75 -1.48)
-			(stroke
-				(width 0.05)
-				(type solid)
-			)
-			(layer "F.CrtYd")
-		)
-		(fp_line
-			(start -3.18 1.48)
-			(end -3.18 -1.48)
-			(stroke
-				(width 0.05)
-				(type solid)
-			)
-			(layer "F.CrtYd")
-		)
-		(fp_line
-			(start -1.75 -1.75)
-			(end 1.75 -1.75)
-			(stroke
-				(width 0.05)
-				(type solid)
-			)
-			(layer "F.CrtYd")
-		)
-		(fp_line
-			(start -1.75 -1.48)
-			(end -1.75 -1.75)
-			(stroke
-				(width 0.05)
-				(type solid)
-			)
-			(layer "F.CrtYd")
-		)
-		(fp_line
-			(start -1.75 1.48)
-			(end -3.18 1.48)
-			(stroke
-				(width 0.05)
-				(type solid)
-			)
-			(layer "F.CrtYd")
-		)
-		(fp_line
-			(start -1.75 1.75)
-			(end -1.75 1.48)
-			(stroke
-				(width 0.05)
-				(type solid)
-			)
-			(layer "F.CrtYd")
-		)
-		(fp_line
-			(start 1.75 -1.75)
-			(end 1.75 -1.48)
-			(stroke
-				(width 0.05)
-				(type solid)
-			)
-			(layer "F.CrtYd")
-		)
-		(fp_line
-			(start 1.75 -1.48)
-			(end 3.18 -1.48)
-			(stroke
-				(width 0.05)
-				(type solid)
-			)
-			(layer "F.CrtYd")
-		)
-		(fp_line
-			(start 1.75 1.48)
-			(end 1.75 1.75)
-			(stroke
-				(width 0.05)
-				(type solid)
-			)
-			(layer "F.CrtYd")
-		)
-		(fp_line
-			(start 1.75 1.75)
-			(end -1.75 1.75)
-			(stroke
-				(width 0.05)
-				(type solid)
-			)
-			(layer "F.CrtYd")
-		)
-		(fp_line
-			(start 3.18 -1.48)
-			(end 3.18 1.48)
-			(stroke
-				(width 0.05)
-				(type solid)
-			)
-			(layer "F.CrtYd")
-		)
-		(fp_line
-			(start 3.18 1.48)
-			(end 1.75 1.48)
-			(stroke
-				(width 0.05)
-				(type solid)
-			)
-			(layer "F.CrtYd")
-		)
-		(fp_poly
-			(pts
-				(xy -0.75 -1.5)
-				(xy 1.5 -1.5)
-				(xy 1.5 1.5)
-				(xy -1.5 1.5)
-				(xy -1.5 -0.75)
-			)
-			(stroke
-				(width 0.1)
-				(type solid)
-			)
-			(fill none)
-			(layer "F.Fab")
-		)
-		(fp_text user "${REFERENCE}"
-			(at 0 0 0)
-			(layer "F.Fab")
-			(effects
-				(font
-					(size 0.75 0.75)
-					(thickness 0.11)
-				)
-			)
-		)
-		(pad "1" smd roundrect
-			(at -2.1125 -0.975)
-			(size 1.625 0.5)
-			(layers "F.Cu" "F.Mask" "F.Paste")
-			(roundrect_rratio 0.25)
-		)
-		(pad "2" smd roundrect
-			(at -2.1125 -0.325)
-			(size 1.625 0.5)
-			(layers "F.Cu" "F.Mask" "F.Paste")
-			(roundrect_rratio 0.25)
-			(net 3 "+5VA")
-			(pinfunction "VIN")
-			(pintype "power_in")
-		)
-		(pad "3" smd roundrect
-			(at -2.1125 0.325)
-			(size 1.625 0.5)
-			(layers "F.Cu" "F.Mask" "F.Paste")
-			(roundrect_rratio 0.25)
-		)
-		(pad "4" smd roundrect
-			(at -2.1125 0.975)
-			(size 1.625 0.5)
-			(layers "F.Cu" "F.Mask" "F.Paste")
-			(roundrect_rratio 0.25)
-			(net 12 "AGND")
-			(pinfunction "GND")
-			(pintype "power_in")
-		)
-		(pad "5" smd roundrect
-			(at 2.1125 0.975)
-			(size 1.625 0.5)
-			(layers "F.Cu" "F.Mask" "F.Paste")
-			(roundrect_rratio 0.25)
-		)
-		(pad "6" smd roundrect
-			(at 2.1125 0.325)
-			(size 1.625 0.5)
-			(layers "F.Cu" "F.Mask" "F.Paste")
-			(roundrect_rratio 0.25)
-			(net 61 "VREF_2V5")
-			(pinfunction "VOUT")
-			(pintype "power_out")
-		)
-		(pad "7" smd roundrect
-			(at 2.1125 -0.325)
-			(size 1.625 0.5)
-			(layers "F.Cu" "F.Mask" "F.Paste")
-			(roundrect_rratio 0.25)
-		)
-		(pad "8" smd roundrect
-			(at 2.1125 -0.975)
-			(size 1.625 0.5)
-			(layers "F.Cu" "F.Mask" "F.Paste")
-			(roundrect_rratio 0.25)
-		)
-		(path "/dd8b805f-7a78-5ddb-9a1d-3fa62f9fbacf")
-	)
-	(footprint "CP_EIA-3528-21_Kemet-B"
-		(at 54.38 22.06)
-		(layer "F.Cu")
-		(fp_text reference "C1"
-			(at 0 -2.35 0)
-			(layer "F.SilkS")
-			(effects
-				(font
-					(size 1 1)
-					(thickness 0.15)
-				)
-			)
-		)
-		(fp_text value "10uF"
-			(at 0 2.35 0)
-			(layer "F.Fab")
-			(effects
-				(font
-					(size 1 1)
-					(thickness 0.15)
-				)
-			)
-		)
-		(attr smd)
-		(fp_line
-			(start -2.47 -1.51)
-			(end -2.47 1.51)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "F.SilkS")
-		)
-		(fp_line
-			(start -2.47 1.51)
-			(end 1.75 1.51)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "F.SilkS")
-		)
-		(fp_line
-			(start 1.75 -1.51)
-			(end -2.47 -1.51)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "F.SilkS")
-		)
-		(fp_rect
-			(start -2.46 -1.65)
-			(end 2.46 1.65)
-			(stroke
-				(width 0.05)
-				(type solid)
-			)
-			(fill none)
-			(layer "F.CrtYd")
-		)
-		(fp_line
-			(start -1.75 -0.7)
-			(end -1.75 1.4)
-			(stroke
-				(width 0.1)
-				(type solid)
-			)
-			(layer "F.Fab")
-		)
-		(fp_line
-			(start -1.75 1.4)
-			(end 1.75 1.4)
-			(stroke
-				(width 0.1)
-				(type solid)
-			)
-			(layer "F.Fab")
-		)
-		(fp_line
-			(start -1.05 -1.4)
-			(end -1.75 -0.7)
-			(stroke
-				(width 0.1)
-				(type solid)
-			)
-			(layer "F.Fab")
-		)
-		(fp_line
-			(start 1.75 -1.4)
-			(end -1.05 -1.4)
-			(stroke
-				(width 0.1)
-				(type solid)
-			)
-			(layer "F.Fab")
-		)
-		(fp_line
-			(start 1.75 1.4)
-			(end 1.75 -1.4)
-			(stroke
-				(width 0.1)
-				(type solid)
-			)
-			(layer "F.Fab")
-		)
-		(fp_text user "${REFERENCE}"
-			(at 0 0 0)
-			(layer "F.Fab")
-			(effects
-				(font
-					(size 0.88 0.88)
-					(thickness 0.13)
-				)
-			)
-		)
-		(pad "1" smd roundrect
-			(at -1.54 0)
-			(size 1.34 2.39)
-			(layers "F.Cu" "F.Mask" "F.Paste")
-			(roundrect_rratio 0.186567)
-			(net 4 "+5V_RAW")
-			(pinfunction "+")
-			(pintype "passive")
-		)
-		(pad "2" smd roundrect
-			(at 1.54 0)
-			(size 1.34 2.39)
-			(layers "F.Cu" "F.Mask" "F.Paste")
-			(roundrect_rratio 0.186567)
-			(net 18 "DGND")
-			(pinfunction "-")
-			(pintype "passive")
-		)
-		(path "/a45fa4d1-6272-56d6-835f-38143a51d4db")
-	)
-	(footprint "CP_EIA-3528-21_Kemet-B"
-		(at 60.5 22.06)
-		(layer "F.Cu")
-		(fp_text reference "C2"
-			(at 0 -2.35 0)
-			(layer "F.SilkS")
-			(effects
-				(font
-					(size 1 1)
-					(thickness 0.15)
-				)
-			)
-		)
-		(fp_text value "10uF"
-			(at 0 2.35 0)
-			(layer "F.Fab")
-			(effects
-				(font
-					(size 1 1)
-					(thickness 0.15)
-				)
-			)
-		)
-		(attr smd)
-		(fp_line
-			(start -2.47 -1.51)
-			(end -2.47 1.51)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "F.SilkS")
-		)
-		(fp_line
-			(start -2.47 1.51)
-			(end 1.75 1.51)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "F.SilkS")
-		)
-		(fp_line
-			(start 1.75 -1.51)
-			(end -2.47 -1.51)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "F.SilkS")
-		)
-		(fp_rect
-			(start -2.46 -1.65)
-			(end 2.46 1.65)
-			(stroke
-				(width 0.05)
-				(type solid)
-			)
-			(fill none)
-			(layer "F.CrtYd")
-		)
-		(fp_line
-			(start -1.75 -0.7)
-			(end -1.75 1.4)
-			(stroke
-				(width 0.1)
-				(type solid)
-			)
-			(layer "F.Fab")
-		)
-		(fp_line
-			(start -1.75 1.4)
-			(end 1.75 1.4)
-			(stroke
-				(width 0.1)
-				(type solid)
-			)
-			(layer "F.Fab")
-		)
-		(fp_line
-			(start -1.05 -1.4)
-			(end -1.75 -0.7)
-			(stroke
-				(width 0.1)
-				(type solid)
-			)
-			(layer "F.Fab")
-		)
-		(fp_line
-			(start 1.75 -1.4)
-			(end -1.05 -1.4)
-			(stroke
-				(width 0.1)
-				(type solid)
-			)
-			(layer "F.Fab")
-		)
-		(fp_line
-			(start 1.75 1.4)
-			(end 1.75 -1.4)
-			(stroke
-				(width 0.1)
-				(type solid)
-			)
-			(layer "F.Fab")
-		)
-		(fp_text user "${REFERENCE}"
-			(at 0 0 0)
-			(layer "F.Fab")
-			(effects
-				(font
-					(size 0.88 0.88)
-					(thickness 0.13)
-				)
-			)
-		)
-		(pad "1" smd roundrect
-			(at -1.54 0)
-			(size 1.34 2.39)
-			(layers "F.Cu" "F.Mask" "F.Paste")
-			(roundrect_rratio 0.186567)
-			(net 2 "+3V3D")
-			(pinfunction "+")
-			(pintype "passive")
-		)
-		(pad "2" smd roundrect
-			(at 1.54 0)
-			(size 1.34 2.39)
-			(layers "F.Cu" "F.Mask" "F.Paste")
-			(roundrect_rratio 0.186567)
-			(net 18 "DGND")
-			(pinfunction "-")
-			(pintype "passive")
-		)
-		(path "/f2ddac78-dfb2-5fca-85c9-7df848496316")
-	)
-	(footprint "C_0805_2012Metric"
-		(at 65.86 21.39)
-		(layer "F.Cu")
-		(fp_text reference "C3"
-			(at 0 -1.68 0)
-			(layer "F.SilkS")
-			(effects
-				(font
-					(size 1 1)
-					(thickness 0.15)
-				)
-			)
-		)
-		(fp_text value "100nF"
-			(at 0 1.68 0)
-			(layer "F.Fab")
-			(effects
-				(font
-					(size 1 1)
-					(thickness 0.15)
-				)
-			)
-		)
-		(attr smd)
-		(fp_line
-			(start -0.261252 -0.735)
-			(end 0.261252 -0.735)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "F.SilkS")
-		)
-		(fp_line
-			(start -0.261252 0.735)
-			(end 0.261252 0.735)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "F.SilkS")
-		)
-		(fp_rect
-			(start -1.7 -0.98)
-			(end 1.7 0.98)
-			(stroke
-				(width 0.05)
-				(type solid)
-			)
-			(fill none)
-			(layer "F.CrtYd")
-		)
-		(fp_rect
-			(start -1 -0.625)
-			(end 1 0.625)
-			(stroke
-				(width 0.1)
-				(type solid)
-			)
-			(fill none)
-			(layer "F.Fab")
-		)
-		(fp_text user "${REFERENCE}"
-			(at 0 0 0)
-			(layer "F.Fab")
-			(effects
-				(font
-					(size 0.5 0.5)
-					(thickness 0.08)
-				)
-			)
-		)
-		(pad "1" smd roundrect
-			(at -0.95 0)
-			(size 1 1.45)
-			(layers "F.Cu" "F.Mask" "F.Paste")
-			(roundrect_rratio 0.25)
-			(net 4 "+5V_RAW")
-			(pinfunction "~")
-			(pintype "passive")
-		)
-		(pad "2" smd roundrect
-			(at 0.95 0)
-			(size 1 1.45)
-			(layers "F.Cu" "F.Mask" "F.Paste")
-			(roundrect_rratio 0.25)
-			(net 18 "DGND")
-			(pinfunction "~")
-			(pintype "passive")
-		)
-		(path "/6bf82e3a-f51c-5d69-825c-09621edcba36")
-	)
-	(footprint "C_0805_2012Metric"
-		(at 70.46 21.39)
-		(layer "F.Cu")
-		(fp_text reference "C4"
-			(at 0 -1.68 0)
-			(layer "F.SilkS")
-			(effects
-				(font
-					(size 1 1)
-					(thickness 0.15)
-				)
-			)
-		)
-		(fp_text value "100nF"
-			(at 0 1.68 0)
-			(layer "F.Fab")
-			(effects
-				(font
-					(size 1 1)
-					(thickness 0.15)
-				)
-			)
-		)
-		(attr smd)
-		(fp_line
-			(start -0.261252 -0.735)
-			(end 0.261252 -0.735)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "F.SilkS")
-		)
-		(fp_line
-			(start -0.261252 0.735)
-			(end 0.261252 0.735)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "F.SilkS")
-		)
-		(fp_rect
-			(start -1.7 -0.98)
-			(end 1.7 0.98)
-			(stroke
-				(width 0.05)
-				(type solid)
-			)
-			(fill none)
-			(layer "F.CrtYd")
-		)
-		(fp_rect
-			(start -1 -0.625)
-			(end 1 0.625)
-			(stroke
-				(width 0.1)
-				(type solid)
-			)
-			(fill none)
-			(layer "F.Fab")
-		)
-		(fp_text user "${REFERENCE}"
-			(at 0 0 0)
-			(layer "F.Fab")
-			(effects
-				(font
-					(size 0.5 0.5)
-					(thickness 0.08)
-				)
-			)
-		)
-		(pad "1" smd roundrect
-			(at -0.95 0)
-			(size 1 1.45)
-			(layers "F.Cu" "F.Mask" "F.Paste")
-			(roundrect_rratio 0.25)
-			(net 2 "+3V3D")
-			(pinfunction "~")
-			(pintype "passive")
-		)
-		(pad "2" smd roundrect
-			(at 0.95 0)
-			(size 1 1.45)
-			(layers "F.Cu" "F.Mask" "F.Paste")
-			(roundrect_rratio 0.25)
-			(net 18 "DGND")
-			(pinfunction "~")
-			(pintype "passive")
-		)
-		(path "/b61858f0-1931-5664-a6a0-edc40f40beb9")
-	)
-	(footprint "L_0805_2012Metric"
-		(at 53.67 25.76)
-		(layer "F.Cu")
-		(fp_text reference "FB1"
-			(at 0 -1.55 0)
-			(layer "F.SilkS")
-			(effects
-				(font
-					(size 1 1)
-					(thickness 0.15)
-				)
-			)
-		)
-		(fp_text value "BLM21PG221SN1D"
-			(at 0 1.55 0)
-			(layer "F.Fab")
-			(effects
-				(font
-					(size 1 1)
-					(thickness 0.15)
-				)
-			)
-		)
-		(attr smd)
-		(fp_line
-			(start -0.399622 -0.56)
-			(end 0.399622 -0.56)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "F.SilkS")
-		)
-		(fp_line
-			(start -0.399622 0.56)
-			(end 0.399622 0.56)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "F.SilkS")
-		)
-		(fp_rect
-			(start -1.75 -0.85)
-			(end 1.75 0.85)
-			(stroke
-				(width 0.05)
-				(type solid)
-			)
-			(fill none)
-			(layer "F.CrtYd")
-		)
-		(fp_rect
-			(start -1 -0.45)
-			(end 1 0.45)
-			(stroke
-				(width 0.1)
-				(type solid)
-			)
-			(fill none)
-			(layer "F.Fab")
-		)
-		(fp_text user "${REFERENCE}"
-			(at 0 0 0)
-			(layer "F.Fab")
-			(effects
-				(font
-					(size 0.5 0.5)
-					(thickness 0.08)
-				)
-			)
-		)
-		(pad "1" smd roundrect
-			(at -1.0625 0)
-			(size 0.875 1.2)
-			(layers "F.Cu" "F.Mask" "F.Paste")
-			(roundrect_rratio 0.25)
-			(net 4 "+5V_RAW")
-			(pinfunction "~")
-			(pintype "passive")
-		)
-		(pad "2" smd roundrect
-			(at 1.0625 0)
-			(size 0.875 1.2)
-			(layers "F.Cu" "F.Mask" "F.Paste")
-			(roundrect_rratio 0.25)
-			(net 3 "+5VA")
-			(pinfunction "~")
-			(pintype "passive")
-		)
-		(path "/00305b07-a983-5aa4-8927-794cb37b8405")
-	)
-	(footprint "C_0603_1608Metric"
-		(at 58.1 25.64)
-		(layer "F.Cu")
-		(fp_text reference "C10"
-			(at 0 -1.43 0)
-			(layer "F.SilkS")
-			(effects
-				(font
-					(size 1 1)
-					(thickness 0.15)
-				)
-			)
-		)
-		(fp_text value "100nF"
-			(at 0 1.43 0)
-			(layer "F.Fab")
-			(effects
-				(font
-					(size 1 1)
-					(thickness 0.15)
-				)
-			)
-		)
-		(attr smd)
-		(fp_line
-			(start -0.14058 -0.51)
-			(end 0.14058 -0.51)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "F.SilkS")
-		)
-		(fp_line
-			(start -0.14058 0.51)
-			(end 0.14058 0.51)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "F.SilkS")
-		)
-		(fp_rect
-			(start -1.48 -0.73)
-			(end 1.48 0.73)
-			(stroke
-				(width 0.05)
-				(type solid)
-			)
-			(fill none)
-			(layer "F.CrtYd")
-		)
-		(fp_rect
-			(start -0.8 -0.4)
-			(end 0.8 0.4)
-			(stroke
-				(width 0.1)
-				(type solid)
-			)
-			(fill none)
-			(layer "F.Fab")
-		)
-		(fp_text user "${REFERENCE}"
-			(at 0 0 0)
-			(layer "F.Fab")
-			(effects
-				(font
-					(size 0.4 0.4)
-					(thickness 0.06)
-				)
-			)
-		)
-		(pad "1" smd roundrect
-			(at -0.775 0)
-			(size 0.9 0.95)
-			(layers "F.Cu" "F.Mask" "F.Paste")
-			(roundrect_rratio 0.25)
-			(net 3 "+5VA")
-			(pinfunction "~")
-			(pintype "passive")
-		)
-		(pad "2" smd roundrect
-			(at 0.775 0)
-			(size 0.9 0.95)
-			(layers "F.Cu" "F.Mask" "F.Paste")
-			(roundrect_rratio 0.25)
-			(net 12 "AGND")
-			(pinfunction "~")
-			(pintype "passive")
-		)
-		(path "/76944e16-f7b2-580b-a3c8-5e8c9d9a0945")
-	)
-	(footprint "C_0603_1608Metric"
-		(at 62.26 25.64)
-		(layer "F.Cu")
-		(fp_text reference "C9"
-			(at 0 -1.43 0)
-			(layer "F.SilkS")
-			(effects
-				(font
-					(size 1 1)
-					(thickness 0.15)
-				)
-			)
-		)
-		(fp_text value "1uF"
-			(at 0 1.43 0)
-			(layer "F.Fab")
-			(effects
-				(font
-					(size 1 1)
-					(thickness 0.15)
-				)
-			)
-		)
-		(attr smd)
-		(fp_line
-			(start -0.14058 -0.51)
-			(end 0.14058 -0.51)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "F.SilkS")
-		)
-		(fp_line
-			(start -0.14058 0.51)
-			(end 0.14058 0.51)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "F.SilkS")
-		)
-		(fp_rect
-			(start -1.48 -0.73)
-			(end 1.48 0.73)
-			(stroke
-				(width 0.05)
-				(type solid)
-			)
-			(fill none)
-			(layer "F.CrtYd")
-		)
-		(fp_rect
-			(start -0.8 -0.4)
-			(end 0.8 0.4)
-			(stroke
-				(width 0.1)
-				(type solid)
-			)
-			(fill none)
-			(layer "F.Fab")
-		)
-		(fp_text user "${REFERENCE}"
-			(at 0 0 0)
-			(layer "F.Fab")
-			(effects
-				(font
-					(size 0.4 0.4)
-					(thickness 0.06)
-				)
-			)
-		)
-		(pad "1" smd roundrect
-			(at -0.775 0)
-			(size 0.9 0.95)
-			(layers "F.Cu" "F.Mask" "F.Paste")
-			(roundrect_rratio 0.25)
-			(net 61 "VREF_2V5")
-			(pinfunction "~")
-			(pintype "passive")
-		)
-		(pad "2" smd roundrect
-			(at 0.775 0)
-			(size 0.9 0.95)
-			(layers "F.Cu" "F.Mask" "F.Paste")
-			(roundrect_rratio 0.25)
-			(net 12 "AGND")
-			(pinfunction "~")
-			(pintype "passive")
-		)
-		(path "/d7a1fea3-25d0-5e8e-8d92-3c900602ec6a")
-	)
-	(footprint "CP_Radial_D8.0mm_P3.50mm"
-		(at 63.19 24.91)
+	(footprint "Capacitor_THT:CP_Radial_D8.0mm_P3.50mm"
+		(at 68.83 16.26)
 		(layer "F.Cu")
 		(fp_text reference "C5"
 			(at 1.75 -5.25 0)
@@ -9587,8 +8348,8 @@
 		)
 		(path "/9e26ccf0-07a3-5a06-874f-4e239768bfbb")
 	)
-	(footprint "CP_Radial_D8.0mm_P3.50mm"
-		(at 50.17 27.81)
+	(footprint "Capacitor_THT:CP_Radial_D8.0mm_P3.50mm"
+		(at 78.53 16.26)
 		(layer "F.Cu")
 		(fp_text reference "C6"
 			(at 1.75 -5.25 0)
@@ -11103,8 +9864,8 @@
 		)
 		(path "/14ee151c-efcb-5139-9741-44b557f20547")
 	)
-	(footprint "CP_Radial_D8.0mm_P3.50mm"
-		(at 55.62 27.81)
+	(footprint "Capacitor_THT:CP_Radial_D8.0mm_P3.50mm"
+		(at 68.83 25.96)
 		(layer "F.Cu")
 		(fp_text reference "C7"
 			(at 1.75 -5.25 0)
@@ -12619,8 +11380,8 @@
 		)
 		(path "/0a26dc3f-7555-5929-8707-b1cb4ecc7e50")
 	)
-	(footprint "CP_Radial_D8.0mm_P3.50mm"
-		(at 61.07 27.81)
+	(footprint "Capacitor_THT:CP_Radial_D8.0mm_P3.50mm"
+		(at 78.53 25.96)
 		(layer "F.Cu")
 		(fp_text reference "C8"
 			(at 1.75 -5.25 0)
@@ -14135,8 +12896,1247 @@
 		)
 		(path "/fec632e3-a886-59a2-bdf2-b5ea08384059")
 	)
-	(footprint "Crystal_SMD_HC49-SD"
-		(at 58.67 34.66)
+	(footprint "Package_TO_SOT_SMD:SOT-223-3_TabPin2"
+		(at 70.73 35.01)
+		(layer "F.Cu")
+		(fp_text reference "U1"
+			(at 0 -4.5 0)
+			(layer "F.SilkS")
+			(tstamp 095b50a5-76ce-476b-aa10-37a37fa441f1)
+			(effects
+				(font
+					(size 1 1)
+					(thickness 0.15)
+				)
+			)
+		)
+		(fp_text value "LD1117S33TR"
+			(at 0 4.5 0)
+			(layer "F.Fab")
+			(tstamp a763838d-1dc3-4eda-bbc0-fbcf1edf1449)
+			(effects
+				(font
+					(size 1 1)
+					(thickness 0.15)
+				)
+			)
+		)
+		(attr smd)
+		(fp_line
+			(start -1.85 -3.41)
+			(end 1.91 -3.41)
+			(stroke
+				(width 0.12)
+				(type solid)
+			)
+			(layer "F.SilkS")
+			(tstamp e98ec803-a6f4-4196-9fa0-d9f7619efa9d)
+		)
+		(fp_line
+			(start -1.85 3.41)
+			(end 1.91 3.41)
+			(stroke
+				(width 0.12)
+				(type solid)
+			)
+			(layer "F.SilkS")
+			(tstamp 6e43f798-7915-403c-b947-4851bde35045)
+		)
+		(fp_line
+			(start 1.91 -3.41)
+			(end 1.91 -2.15)
+			(stroke
+				(width 0.12)
+				(type solid)
+			)
+			(layer "F.SilkS")
+			(tstamp ddfc40c4-e33c-493e-b735-24282440d539)
+		)
+		(fp_line
+			(start 1.91 3.41)
+			(end 1.91 2.15)
+			(stroke
+				(width 0.12)
+				(type solid)
+			)
+			(layer "F.SilkS")
+			(tstamp 79366377-6a9f-460a-b0d1-788467590954)
+		)
+		(fp_poly
+			(pts
+				(xy -3.13 -3.31)
+				(xy -3.37 -3.64)
+				(xy -2.89 -3.64)
+				(xy -3.13 -3.31)
+			)
+			(stroke
+				(width 0.12)
+				(type solid)
+			)
+			(fill solid)
+			(layer "F.SilkS")
+			(tstamp 27420593-f422-495a-9e17-88a99bcd8a3d)
+		)
+		(fp_line
+			(start -4.4 -3.6)
+			(end -4.4 3.6)
+			(stroke
+				(width 0.05)
+				(type solid)
+			)
+			(layer "F.CrtYd")
+			(tstamp 2d708b29-208a-4760-a2c5-6626e4d03d29)
+		)
+		(fp_line
+			(start -4.4 3.6)
+			(end 4.4 3.6)
+			(stroke
+				(width 0.05)
+				(type solid)
+			)
+			(layer "F.CrtYd")
+			(tstamp ffe8efb3-9432-4dfe-8e3a-faf2eb064270)
+		)
+		(fp_line
+			(start 4.4 -3.6)
+			(end -4.4 -3.6)
+			(stroke
+				(width 0.05)
+				(type solid)
+			)
+			(layer "F.CrtYd")
+			(tstamp d963e7fb-b321-4298-bcd6-9650f5938938)
+		)
+		(fp_line
+			(start 4.4 3.6)
+			(end 4.4 -3.6)
+			(stroke
+				(width 0.05)
+				(type solid)
+			)
+			(layer "F.CrtYd")
+			(tstamp 18839f08-10e9-4a73-9312-8be172f09091)
+		)
+		(fp_line
+			(start -1.85 -2.35)
+			(end -1.85 3.35)
+			(stroke
+				(width 0.1)
+				(type solid)
+			)
+			(layer "F.Fab")
+			(tstamp 659fc817-2286-4dd8-ba60-8e62262ce6cc)
+		)
+		(fp_line
+			(start -1.85 -2.35)
+			(end -0.85 -3.35)
+			(stroke
+				(width 0.1)
+				(type solid)
+			)
+			(layer "F.Fab")
+			(tstamp f393364a-2641-4746-ba4c-6509ea1de503)
+		)
+		(fp_line
+			(start -1.85 3.35)
+			(end 1.85 3.35)
+			(stroke
+				(width 0.1)
+				(type solid)
+			)
+			(layer "F.Fab")
+			(tstamp 27db54e0-f4a8-4972-bcbc-256787416dcd)
+		)
+		(fp_line
+			(start -0.85 -3.35)
+			(end 1.85 -3.35)
+			(stroke
+				(width 0.1)
+				(type solid)
+			)
+			(layer "F.Fab")
+			(tstamp be579ebe-38db-4860-98f0-9f530f704760)
+		)
+		(fp_line
+			(start 1.85 -3.35)
+			(end 1.85 3.35)
+			(stroke
+				(width 0.1)
+				(type solid)
+			)
+			(layer "F.Fab")
+			(tstamp 9d748ff0-f43a-42f3-a9ff-3a463972b1ca)
+		)
+		(fp_text user "${REFERENCE}"
+			(at 0 0 90)
+			(layer "F.Fab")
+			(tstamp aff1cd04-29c5-47f0-8349-1badf43ec67b)
+			(effects
+				(font
+					(size 0.8 0.8)
+					(thickness 0.12)
+				)
+			)
+		)
+		(pad "1" smd roundrect
+			(at -3.15 -2.3)
+			(size 2 1.5)
+			(layers "F.Cu" "F.Mask" "F.Paste")
+			(roundrect_rratio 0.25)
+			(tstamp 6c38c733-73aa-46ef-9aa8-0adc47a79448)
+			(net 18 "DGND")
+			(pinfunction "GND")
+			(pintype "power_in")
+		)
+		(pad "2" smd roundrect
+			(at -3.15 0)
+			(size 2 1.5)
+			(layers "F.Cu" "F.Mask" "F.Paste")
+			(roundrect_rratio 0.25)
+			(tstamp 553b4aa3-b4fc-45ee-9bbe-5eb8183ee7d8)
+			(net 2 "+3V3D")
+			(pinfunction "VOUT")
+			(pintype "power_out")
+		)
+		(pad "2" smd roundrect
+			(at 3.15 0)
+			(size 2 3.8)
+			(layers "F.Cu" "F.Mask" "F.Paste")
+			(roundrect_rratio 0.25)
+			(tstamp 118e82e2-9099-4e46-a269-1e2cb8448d5e)
+			(net 2 "+3V3D")
+			(pinfunction "VOUT")
+			(pintype "power_out")
+		)
+		(pad "3" smd roundrect
+			(at -3.15 2.3)
+			(size 2 1.5)
+			(layers "F.Cu" "F.Mask" "F.Paste")
+			(roundrect_rratio 0.25)
+			(tstamp 5046df04-2b74-45a5-867e-e33a5e51e59c)
+			(net 4 "+5V_RAW")
+			(pinfunction "VIN")
+			(pintype "power_in")
+		)
+		(path "/07f0c40e-a413-511d-a8cb-cb690c31da0b")
+	)
+	(footprint "Package_SO:VSSOP-8_3x3mm_P0.65mm"
+		(at 79.51 33.16)
+		(layer "F.Cu")
+		(fp_text reference "U2"
+			(at 0 -2.45 0)
+			(layer "F.SilkS")
+			(effects
+				(font
+					(size 1 1)
+					(thickness 0.15)
+				)
+			)
+		)
+		(fp_text value "REF5025AIDGKT"
+			(at 0 2.45 0)
+			(layer "F.Fab")
+			(effects
+				(font
+					(size 1 1)
+					(thickness 0.15)
+				)
+			)
+		)
+		(attr smd)
+		(fp_line
+			(start -1.61 -1.61)
+			(end 1.61 -1.61)
+			(stroke
+				(width 0.12)
+				(type solid)
+			)
+			(layer "F.SilkS")
+		)
+		(fp_line
+			(start -1.61 -1.485)
+			(end -1.61 -1.61)
+			(stroke
+				(width 0.12)
+				(type solid)
+			)
+			(layer "F.SilkS")
+		)
+		(fp_line
+			(start -1.61 1.61)
+			(end -1.61 1.485)
+			(stroke
+				(width 0.12)
+				(type solid)
+			)
+			(layer "F.SilkS")
+		)
+		(fp_line
+			(start 1.61 -1.61)
+			(end 1.61 -1.485)
+			(stroke
+				(width 0.12)
+				(type solid)
+			)
+			(layer "F.SilkS")
+		)
+		(fp_line
+			(start 1.61 1.485)
+			(end 1.61 1.61)
+			(stroke
+				(width 0.12)
+				(type solid)
+			)
+			(layer "F.SilkS")
+		)
+		(fp_line
+			(start 1.61 1.61)
+			(end -1.61 1.61)
+			(stroke
+				(width 0.12)
+				(type solid)
+			)
+			(layer "F.SilkS")
+		)
+		(fp_poly
+			(pts
+				(xy -2.16 -1.49)
+				(xy -2.4 -1.82)
+				(xy -1.92 -1.82)
+			)
+			(stroke
+				(width 0.12)
+				(type solid)
+			)
+			(fill solid)
+			(layer "F.SilkS")
+		)
+		(fp_line
+			(start -3.18 -1.48)
+			(end -1.75 -1.48)
+			(stroke
+				(width 0.05)
+				(type solid)
+			)
+			(layer "F.CrtYd")
+		)
+		(fp_line
+			(start -3.18 1.48)
+			(end -3.18 -1.48)
+			(stroke
+				(width 0.05)
+				(type solid)
+			)
+			(layer "F.CrtYd")
+		)
+		(fp_line
+			(start -1.75 -1.75)
+			(end 1.75 -1.75)
+			(stroke
+				(width 0.05)
+				(type solid)
+			)
+			(layer "F.CrtYd")
+		)
+		(fp_line
+			(start -1.75 -1.48)
+			(end -1.75 -1.75)
+			(stroke
+				(width 0.05)
+				(type solid)
+			)
+			(layer "F.CrtYd")
+		)
+		(fp_line
+			(start -1.75 1.48)
+			(end -3.18 1.48)
+			(stroke
+				(width 0.05)
+				(type solid)
+			)
+			(layer "F.CrtYd")
+		)
+		(fp_line
+			(start -1.75 1.75)
+			(end -1.75 1.48)
+			(stroke
+				(width 0.05)
+				(type solid)
+			)
+			(layer "F.CrtYd")
+		)
+		(fp_line
+			(start 1.75 -1.75)
+			(end 1.75 -1.48)
+			(stroke
+				(width 0.05)
+				(type solid)
+			)
+			(layer "F.CrtYd")
+		)
+		(fp_line
+			(start 1.75 -1.48)
+			(end 3.18 -1.48)
+			(stroke
+				(width 0.05)
+				(type solid)
+			)
+			(layer "F.CrtYd")
+		)
+		(fp_line
+			(start 1.75 1.48)
+			(end 1.75 1.75)
+			(stroke
+				(width 0.05)
+				(type solid)
+			)
+			(layer "F.CrtYd")
+		)
+		(fp_line
+			(start 1.75 1.75)
+			(end -1.75 1.75)
+			(stroke
+				(width 0.05)
+				(type solid)
+			)
+			(layer "F.CrtYd")
+		)
+		(fp_line
+			(start 3.18 -1.48)
+			(end 3.18 1.48)
+			(stroke
+				(width 0.05)
+				(type solid)
+			)
+			(layer "F.CrtYd")
+		)
+		(fp_line
+			(start 3.18 1.48)
+			(end 1.75 1.48)
+			(stroke
+				(width 0.05)
+				(type solid)
+			)
+			(layer "F.CrtYd")
+		)
+		(fp_poly
+			(pts
+				(xy -0.75 -1.5)
+				(xy 1.5 -1.5)
+				(xy 1.5 1.5)
+				(xy -1.5 1.5)
+				(xy -1.5 -0.75)
+			)
+			(stroke
+				(width 0.1)
+				(type solid)
+			)
+			(fill none)
+			(layer "F.Fab")
+		)
+		(fp_text user "${REFERENCE}"
+			(at 0 0 0)
+			(layer "F.Fab")
+			(effects
+				(font
+					(size 0.75 0.75)
+					(thickness 0.11)
+				)
+			)
+		)
+		(pad "1" smd roundrect
+			(at -2.1125 -0.975)
+			(size 1.625 0.5)
+			(layers "F.Cu" "F.Mask" "F.Paste")
+			(roundrect_rratio 0.25)
+		)
+		(pad "2" smd roundrect
+			(at -2.1125 -0.325)
+			(size 1.625 0.5)
+			(layers "F.Cu" "F.Mask" "F.Paste")
+			(roundrect_rratio 0.25)
+			(net 3 "+5VA")
+			(pinfunction "VIN")
+			(pintype "power_in")
+		)
+		(pad "3" smd roundrect
+			(at -2.1125 0.325)
+			(size 1.625 0.5)
+			(layers "F.Cu" "F.Mask" "F.Paste")
+			(roundrect_rratio 0.25)
+		)
+		(pad "4" smd roundrect
+			(at -2.1125 0.975)
+			(size 1.625 0.5)
+			(layers "F.Cu" "F.Mask" "F.Paste")
+			(roundrect_rratio 0.25)
+			(net 12 "AGND")
+			(pinfunction "GND")
+			(pintype "power_in")
+		)
+		(pad "5" smd roundrect
+			(at 2.1125 0.975)
+			(size 1.625 0.5)
+			(layers "F.Cu" "F.Mask" "F.Paste")
+			(roundrect_rratio 0.25)
+		)
+		(pad "6" smd roundrect
+			(at 2.1125 0.325)
+			(size 1.625 0.5)
+			(layers "F.Cu" "F.Mask" "F.Paste")
+			(roundrect_rratio 0.25)
+			(net 61 "VREF_2V5")
+			(pinfunction "VOUT")
+			(pintype "power_out")
+		)
+		(pad "7" smd roundrect
+			(at 2.1125 -0.325)
+			(size 1.625 0.5)
+			(layers "F.Cu" "F.Mask" "F.Paste")
+			(roundrect_rratio 0.25)
+		)
+		(pad "8" smd roundrect
+			(at 2.1125 -0.975)
+			(size 1.625 0.5)
+			(layers "F.Cu" "F.Mask" "F.Paste")
+			(roundrect_rratio 0.25)
+		)
+		(path "/dd8b805f-7a78-5ddb-9a1d-3fa62f9fbacf")
+	)
+	(footprint "Capacitor_Tantalum_SMD:CP_EIA-3528-21_Kemet-B"
+		(at 68.79 41.46)
+		(layer "F.Cu")
+		(fp_text reference "C1"
+			(at 0 -2.35 0)
+			(layer "F.SilkS")
+			(effects
+				(font
+					(size 1 1)
+					(thickness 0.15)
+				)
+			)
+		)
+		(fp_text value "10uF"
+			(at 0 2.35 0)
+			(layer "F.Fab")
+			(effects
+				(font
+					(size 1 1)
+					(thickness 0.15)
+				)
+			)
+		)
+		(attr smd)
+		(fp_line
+			(start -2.47 -1.51)
+			(end -2.47 1.51)
+			(stroke
+				(width 0.12)
+				(type solid)
+			)
+			(layer "F.SilkS")
+		)
+		(fp_line
+			(start -2.47 1.51)
+			(end 1.75 1.51)
+			(stroke
+				(width 0.12)
+				(type solid)
+			)
+			(layer "F.SilkS")
+		)
+		(fp_line
+			(start 1.75 -1.51)
+			(end -2.47 -1.51)
+			(stroke
+				(width 0.12)
+				(type solid)
+			)
+			(layer "F.SilkS")
+		)
+		(fp_rect
+			(start -2.46 -1.65)
+			(end 2.46 1.65)
+			(stroke
+				(width 0.05)
+				(type solid)
+			)
+			(fill none)
+			(layer "F.CrtYd")
+		)
+		(fp_line
+			(start -1.75 -0.7)
+			(end -1.75 1.4)
+			(stroke
+				(width 0.1)
+				(type solid)
+			)
+			(layer "F.Fab")
+		)
+		(fp_line
+			(start -1.75 1.4)
+			(end 1.75 1.4)
+			(stroke
+				(width 0.1)
+				(type solid)
+			)
+			(layer "F.Fab")
+		)
+		(fp_line
+			(start -1.05 -1.4)
+			(end -1.75 -0.7)
+			(stroke
+				(width 0.1)
+				(type solid)
+			)
+			(layer "F.Fab")
+		)
+		(fp_line
+			(start 1.75 -1.4)
+			(end -1.05 -1.4)
+			(stroke
+				(width 0.1)
+				(type solid)
+			)
+			(layer "F.Fab")
+		)
+		(fp_line
+			(start 1.75 1.4)
+			(end 1.75 -1.4)
+			(stroke
+				(width 0.1)
+				(type solid)
+			)
+			(layer "F.Fab")
+		)
+		(fp_text user "${REFERENCE}"
+			(at 0 0 0)
+			(layer "F.Fab")
+			(effects
+				(font
+					(size 0.88 0.88)
+					(thickness 0.13)
+				)
+			)
+		)
+		(pad "1" smd roundrect
+			(at -1.54 0)
+			(size 1.34 2.39)
+			(layers "F.Cu" "F.Mask" "F.Paste")
+			(roundrect_rratio 0.186567)
+			(net 4 "+5V_RAW")
+			(pinfunction "+")
+			(pintype "passive")
+		)
+		(pad "2" smd roundrect
+			(at 1.54 0)
+			(size 1.34 2.39)
+			(layers "F.Cu" "F.Mask" "F.Paste")
+			(roundrect_rratio 0.186567)
+			(net 18 "DGND")
+			(pinfunction "-")
+			(pintype "passive")
+		)
+		(path "/a45fa4d1-6272-56d6-835f-38143a51d4db")
+	)
+	(footprint "Capacitor_Tantalum_SMD:CP_EIA-3528-21_Kemet-B"
+		(at 74.91 41.46)
+		(layer "F.Cu")
+		(fp_text reference "C2"
+			(at 0 -2.35 0)
+			(layer "F.SilkS")
+			(effects
+				(font
+					(size 1 1)
+					(thickness 0.15)
+				)
+			)
+		)
+		(fp_text value "10uF"
+			(at 0 2.35 0)
+			(layer "F.Fab")
+			(effects
+				(font
+					(size 1 1)
+					(thickness 0.15)
+				)
+			)
+		)
+		(attr smd)
+		(fp_line
+			(start -2.47 -1.51)
+			(end -2.47 1.51)
+			(stroke
+				(width 0.12)
+				(type solid)
+			)
+			(layer "F.SilkS")
+		)
+		(fp_line
+			(start -2.47 1.51)
+			(end 1.75 1.51)
+			(stroke
+				(width 0.12)
+				(type solid)
+			)
+			(layer "F.SilkS")
+		)
+		(fp_line
+			(start 1.75 -1.51)
+			(end -2.47 -1.51)
+			(stroke
+				(width 0.12)
+				(type solid)
+			)
+			(layer "F.SilkS")
+		)
+		(fp_rect
+			(start -2.46 -1.65)
+			(end 2.46 1.65)
+			(stroke
+				(width 0.05)
+				(type solid)
+			)
+			(fill none)
+			(layer "F.CrtYd")
+		)
+		(fp_line
+			(start -1.75 -0.7)
+			(end -1.75 1.4)
+			(stroke
+				(width 0.1)
+				(type solid)
+			)
+			(layer "F.Fab")
+		)
+		(fp_line
+			(start -1.75 1.4)
+			(end 1.75 1.4)
+			(stroke
+				(width 0.1)
+				(type solid)
+			)
+			(layer "F.Fab")
+		)
+		(fp_line
+			(start -1.05 -1.4)
+			(end -1.75 -0.7)
+			(stroke
+				(width 0.1)
+				(type solid)
+			)
+			(layer "F.Fab")
+		)
+		(fp_line
+			(start 1.75 -1.4)
+			(end -1.05 -1.4)
+			(stroke
+				(width 0.1)
+				(type solid)
+			)
+			(layer "F.Fab")
+		)
+		(fp_line
+			(start 1.75 1.4)
+			(end 1.75 -1.4)
+			(stroke
+				(width 0.1)
+				(type solid)
+			)
+			(layer "F.Fab")
+		)
+		(fp_text user "${REFERENCE}"
+			(at 0 0 0)
+			(layer "F.Fab")
+			(effects
+				(font
+					(size 0.88 0.88)
+					(thickness 0.13)
+				)
+			)
+		)
+		(pad "1" smd roundrect
+			(at -1.54 0)
+			(size 1.34 2.39)
+			(layers "F.Cu" "F.Mask" "F.Paste")
+			(roundrect_rratio 0.186567)
+			(net 2 "+3V3D")
+			(pinfunction "+")
+			(pintype "passive")
+		)
+		(pad "2" smd roundrect
+			(at 1.54 0)
+			(size 1.34 2.39)
+			(layers "F.Cu" "F.Mask" "F.Paste")
+			(roundrect_rratio 0.186567)
+			(net 18 "DGND")
+			(pinfunction "-")
+			(pintype "passive")
+		)
+		(path "/f2ddac78-dfb2-5fca-85c9-7df848496316")
+	)
+	(footprint "Capacitor_SMD:C_0805_2012Metric"
+		(at 80.27 40.79)
+		(layer "F.Cu")
+		(fp_text reference "C3"
+			(at 0 -1.68 0)
+			(layer "F.SilkS")
+			(effects
+				(font
+					(size 1 1)
+					(thickness 0.15)
+				)
+			)
+		)
+		(fp_text value "100nF"
+			(at 0 1.68 0)
+			(layer "F.Fab")
+			(effects
+				(font
+					(size 1 1)
+					(thickness 0.15)
+				)
+			)
+		)
+		(attr smd)
+		(fp_line
+			(start -0.261252 -0.735)
+			(end 0.261252 -0.735)
+			(stroke
+				(width 0.12)
+				(type solid)
+			)
+			(layer "F.SilkS")
+		)
+		(fp_line
+			(start -0.261252 0.735)
+			(end 0.261252 0.735)
+			(stroke
+				(width 0.12)
+				(type solid)
+			)
+			(layer "F.SilkS")
+		)
+		(fp_rect
+			(start -1.7 -0.98)
+			(end 1.7 0.98)
+			(stroke
+				(width 0.05)
+				(type solid)
+			)
+			(fill none)
+			(layer "F.CrtYd")
+		)
+		(fp_rect
+			(start -1 -0.625)
+			(end 1 0.625)
+			(stroke
+				(width 0.1)
+				(type solid)
+			)
+			(fill none)
+			(layer "F.Fab")
+		)
+		(fp_text user "${REFERENCE}"
+			(at 0 0 0)
+			(layer "F.Fab")
+			(effects
+				(font
+					(size 0.5 0.5)
+					(thickness 0.08)
+				)
+			)
+		)
+		(pad "1" smd roundrect
+			(at -0.95 0)
+			(size 1 1.45)
+			(layers "F.Cu" "F.Mask" "F.Paste")
+			(roundrect_rratio 0.25)
+			(net 4 "+5V_RAW")
+			(pinfunction "~")
+			(pintype "passive")
+		)
+		(pad "2" smd roundrect
+			(at 0.95 0)
+			(size 1 1.45)
+			(layers "F.Cu" "F.Mask" "F.Paste")
+			(roundrect_rratio 0.25)
+			(net 18 "DGND")
+			(pinfunction "~")
+			(pintype "passive")
+		)
+		(path "/6bf82e3a-f51c-5d69-825c-09621edcba36")
+	)
+	(footprint "Capacitor_SMD:C_0805_2012Metric"
+		(at 84.87 40.79)
+		(layer "F.Cu")
+		(fp_text reference "C4"
+			(at 0 -1.68 0)
+			(layer "F.SilkS")
+			(effects
+				(font
+					(size 1 1)
+					(thickness 0.15)
+				)
+			)
+		)
+		(fp_text value "100nF"
+			(at 0 1.68 0)
+			(layer "F.Fab")
+			(effects
+				(font
+					(size 1 1)
+					(thickness 0.15)
+				)
+			)
+		)
+		(attr smd)
+		(fp_line
+			(start -0.261252 -0.735)
+			(end 0.261252 -0.735)
+			(stroke
+				(width 0.12)
+				(type solid)
+			)
+			(layer "F.SilkS")
+		)
+		(fp_line
+			(start -0.261252 0.735)
+			(end 0.261252 0.735)
+			(stroke
+				(width 0.12)
+				(type solid)
+			)
+			(layer "F.SilkS")
+		)
+		(fp_rect
+			(start -1.7 -0.98)
+			(end 1.7 0.98)
+			(stroke
+				(width 0.05)
+				(type solid)
+			)
+			(fill none)
+			(layer "F.CrtYd")
+		)
+		(fp_rect
+			(start -1 -0.625)
+			(end 1 0.625)
+			(stroke
+				(width 0.1)
+				(type solid)
+			)
+			(fill none)
+			(layer "F.Fab")
+		)
+		(fp_text user "${REFERENCE}"
+			(at 0 0 0)
+			(layer "F.Fab")
+			(effects
+				(font
+					(size 0.5 0.5)
+					(thickness 0.08)
+				)
+			)
+		)
+		(pad "1" smd roundrect
+			(at -0.95 0)
+			(size 1 1.45)
+			(layers "F.Cu" "F.Mask" "F.Paste")
+			(roundrect_rratio 0.25)
+			(net 2 "+3V3D")
+			(pinfunction "~")
+			(pintype "passive")
+		)
+		(pad "2" smd roundrect
+			(at 0.95 0)
+			(size 1 1.45)
+			(layers "F.Cu" "F.Mask" "F.Paste")
+			(roundrect_rratio 0.25)
+			(net 18 "DGND")
+			(pinfunction "~")
+			(pintype "passive")
+		)
+		(path "/b61858f0-1931-5664-a6a0-edc40f40beb9")
+	)
+	(footprint "Inductor_SMD:L_0805_2012Metric"
+		(at 68.08 45.16)
+		(layer "F.Cu")
+		(fp_text reference "FB1"
+			(at 0 -1.55 0)
+			(layer "F.SilkS")
+			(effects
+				(font
+					(size 1 1)
+					(thickness 0.15)
+				)
+			)
+		)
+		(fp_text value "BLM21PG221SN1D"
+			(at 0 1.55 0)
+			(layer "F.Fab")
+			(effects
+				(font
+					(size 1 1)
+					(thickness 0.15)
+				)
+			)
+		)
+		(attr smd)
+		(fp_line
+			(start -0.399622 -0.56)
+			(end 0.399622 -0.56)
+			(stroke
+				(width 0.12)
+				(type solid)
+			)
+			(layer "F.SilkS")
+		)
+		(fp_line
+			(start -0.399622 0.56)
+			(end 0.399622 0.56)
+			(stroke
+				(width 0.12)
+				(type solid)
+			)
+			(layer "F.SilkS")
+		)
+		(fp_rect
+			(start -1.75 -0.85)
+			(end 1.75 0.85)
+			(stroke
+				(width 0.05)
+				(type solid)
+			)
+			(fill none)
+			(layer "F.CrtYd")
+		)
+		(fp_rect
+			(start -1 -0.45)
+			(end 1 0.45)
+			(stroke
+				(width 0.1)
+				(type solid)
+			)
+			(fill none)
+			(layer "F.Fab")
+		)
+		(fp_text user "${REFERENCE}"
+			(at 0 0 0)
+			(layer "F.Fab")
+			(effects
+				(font
+					(size 0.5 0.5)
+					(thickness 0.08)
+				)
+			)
+		)
+		(pad "1" smd roundrect
+			(at -1.0625 0)
+			(size 0.875 1.2)
+			(layers "F.Cu" "F.Mask" "F.Paste")
+			(roundrect_rratio 0.25)
+			(net 4 "+5V_RAW")
+			(pinfunction "~")
+			(pintype "passive")
+		)
+		(pad "2" smd roundrect
+			(at 1.0625 0)
+			(size 0.875 1.2)
+			(layers "F.Cu" "F.Mask" "F.Paste")
+			(roundrect_rratio 0.25)
+			(net 3 "+5VA")
+			(pinfunction "~")
+			(pintype "passive")
+		)
+		(path "/00305b07-a983-5aa4-8927-794cb37b8405")
+	)
+	(footprint "Capacitor_SMD:C_0603_1608Metric"
+		(at 72.51 45.04)
+		(layer "F.Cu")
+		(fp_text reference "C10"
+			(at 0 -1.43 0)
+			(layer "F.SilkS")
+			(effects
+				(font
+					(size 1 1)
+					(thickness 0.15)
+				)
+			)
+		)
+		(fp_text value "100nF"
+			(at 0 1.43 0)
+			(layer "F.Fab")
+			(effects
+				(font
+					(size 1 1)
+					(thickness 0.15)
+				)
+			)
+		)
+		(attr smd)
+		(fp_line
+			(start -0.14058 -0.51)
+			(end 0.14058 -0.51)
+			(stroke
+				(width 0.12)
+				(type solid)
+			)
+			(layer "F.SilkS")
+		)
+		(fp_line
+			(start -0.14058 0.51)
+			(end 0.14058 0.51)
+			(stroke
+				(width 0.12)
+				(type solid)
+			)
+			(layer "F.SilkS")
+		)
+		(fp_rect
+			(start -1.48 -0.73)
+			(end 1.48 0.73)
+			(stroke
+				(width 0.05)
+				(type solid)
+			)
+			(fill none)
+			(layer "F.CrtYd")
+		)
+		(fp_rect
+			(start -0.8 -0.4)
+			(end 0.8 0.4)
+			(stroke
+				(width 0.1)
+				(type solid)
+			)
+			(fill none)
+			(layer "F.Fab")
+		)
+		(fp_text user "${REFERENCE}"
+			(at 0 0 0)
+			(layer "F.Fab")
+			(effects
+				(font
+					(size 0.4 0.4)
+					(thickness 0.06)
+				)
+			)
+		)
+		(pad "1" smd roundrect
+			(at -0.775 0)
+			(size 0.9 0.95)
+			(layers "F.Cu" "F.Mask" "F.Paste")
+			(roundrect_rratio 0.25)
+			(net 3 "+5VA")
+			(pinfunction "~")
+			(pintype "passive")
+		)
+		(pad "2" smd roundrect
+			(at 0.775 0)
+			(size 0.9 0.95)
+			(layers "F.Cu" "F.Mask" "F.Paste")
+			(roundrect_rratio 0.25)
+			(net 12 "AGND")
+			(pinfunction "~")
+			(pintype "passive")
+		)
+		(path "/76944e16-f7b2-580b-a3c8-5e8c9d9a0945")
+	)
+	(footprint "Capacitor_SMD:C_0603_1608Metric"
+		(at 76.67 45.04)
+		(layer "F.Cu")
+		(fp_text reference "C9"
+			(at 0 -1.43 0)
+			(layer "F.SilkS")
+			(effects
+				(font
+					(size 1 1)
+					(thickness 0.15)
+				)
+			)
+		)
+		(fp_text value "1uF"
+			(at 0 1.43 0)
+			(layer "F.Fab")
+			(effects
+				(font
+					(size 1 1)
+					(thickness 0.15)
+				)
+			)
+		)
+		(attr smd)
+		(fp_line
+			(start -0.14058 -0.51)
+			(end 0.14058 -0.51)
+			(stroke
+				(width 0.12)
+				(type solid)
+			)
+			(layer "F.SilkS")
+		)
+		(fp_line
+			(start -0.14058 0.51)
+			(end 0.14058 0.51)
+			(stroke
+				(width 0.12)
+				(type solid)
+			)
+			(layer "F.SilkS")
+		)
+		(fp_rect
+			(start -1.48 -0.73)
+			(end 1.48 0.73)
+			(stroke
+				(width 0.05)
+				(type solid)
+			)
+			(fill none)
+			(layer "F.CrtYd")
+		)
+		(fp_rect
+			(start -0.8 -0.4)
+			(end 0.8 0.4)
+			(stroke
+				(width 0.1)
+				(type solid)
+			)
+			(fill none)
+			(layer "F.Fab")
+		)
+		(fp_text user "${REFERENCE}"
+			(at 0 0 0)
+			(layer "F.Fab")
+			(effects
+				(font
+					(size 0.4 0.4)
+					(thickness 0.06)
+				)
+			)
+		)
+		(pad "1" smd roundrect
+			(at -0.775 0)
+			(size 0.9 0.95)
+			(layers "F.Cu" "F.Mask" "F.Paste")
+			(roundrect_rratio 0.25)
+			(net 61 "VREF_2V5")
+			(pinfunction "~")
+			(pintype "passive")
+		)
+		(pad "2" smd roundrect
+			(at 0.775 0)
+			(size 0.9 0.95)
+			(layers "F.Cu" "F.Mask" "F.Paste")
+			(roundrect_rratio 0.25)
+			(net 12 "AGND")
+			(pinfunction "~")
+			(pintype "passive")
+		)
+		(path "/d7a1fea3-25d0-5e8e-8d92-3c900602ec6a")
+	)
+	(footprint "Crystal:Crystal_SMD_HC49-SD"
+		(at 73.08 52.86)
 		(layer "F.Cu")
 		(fp_text reference "Y1"
 			(at 0 -3.55 0)
@@ -14274,8 +14274,8 @@
 		)
 		(path "/00c68340-bad0-5ba1-bb06-fc4cde866547")
 	)
-	(footprint "CP_EIA-3528-21_Kemet-B"
-		(at 69.08 33.46)
+	(footprint "Capacitor_Tantalum_SMD:CP_EIA-3528-21_Kemet-B"
+		(at 83.49 51.66)
 		(layer "F.Cu")
 		(fp_text reference "C29"
 			(at 0 -2.35 0)
@@ -14410,8 +14410,78 @@
 		)
 		(path "/8350ff87-d363-58a8-ac18-0ea74903d006")
 	)
-	(footprint "C_0603_1608Metric"
-		(at 53.4 39.44)
+	(footprint "TestPoint:TestPoint_Pad_D1.5mm"
+		(at 67.58 58.16)
+		(layer "F.Cu")
+		(fp_text reference "TP8"
+			(at 0 -1.648 0)
+			(layer "F.SilkS")
+			(tstamp df8ad89a-4372-48a1-959d-41a6068fbd8e)
+			(effects
+				(font
+					(size 1 1)
+					(thickness 0.15)
+				)
+			)
+		)
+		(fp_text value "VREF_2V5"
+			(at 0 1.75 0)
+			(layer "F.Fab")
+			(tstamp bd63ee48-4a53-41ce-9f1d-e4ce2bbaee53)
+			(effects
+				(font
+					(size 1 1)
+					(thickness 0.15)
+				)
+			)
+		)
+		(attr exclude_from_pos_files exclude_from_bom)
+		(fp_circle
+			(center 0 0)
+			(end 0 0.95)
+			(stroke
+				(width 0.12)
+				(type solid)
+			)
+			(fill none)
+			(layer "F.SilkS")
+			(tstamp 188606f7-41cf-4150-b22a-1b8f5885c87d)
+		)
+		(fp_circle
+			(center 0 0)
+			(end 1.25 0)
+			(stroke
+				(width 0.05)
+				(type solid)
+			)
+			(fill none)
+			(layer "F.CrtYd")
+			(tstamp c1a41909-dd0d-4698-8873-fe0292742945)
+		)
+		(fp_text user "${REFERENCE}"
+			(at 0 -1.65 0)
+			(layer "F.Fab")
+			(tstamp e27ec8d6-1f94-40cd-a4aa-0963d435fbb8)
+			(effects
+				(font
+					(size 1 1)
+					(thickness 0.15)
+				)
+			)
+		)
+		(pad "1" smd circle
+			(at 0 0)
+			(size 1.5 1.5)
+			(layers "F.Cu" "F.Mask")
+			(tstamp 8a03cd79-fadf-4c81-9b59-724c470e191a)
+			(net 61 "VREF_2V5")
+			(pinfunction "1")
+			(pintype "passive")
+		)
+		(path "/a41644a8-1928-522c-87f5-d9f4d1be3ccb")
+	)
+	(footprint "Capacitor_SMD:C_0603_1608Metric"
+		(at 71.51 57.64)
 		(layer "F.Cu")
 		(fp_text reference "C24"
 			(at 0 -1.43 0)
@@ -14502,8 +14572,8 @@
 		)
 		(path "/a8de25ca-af41-5fb0-b56b-19edada7d7de")
 	)
-	(footprint "C_0603_1608Metric"
-		(at 57.56 39.44)
+	(footprint "Capacitor_SMD:C_0603_1608Metric"
+		(at 75.67 57.64)
 		(layer "F.Cu")
 		(fp_text reference "C25"
 			(at 0 -1.43 0)
@@ -14594,8 +14664,8 @@
 		)
 		(path "/b26abca0-c518-53d3-84a7-b2a46cdae7a8")
 	)
-	(footprint "C_0603_1608Metric"
-		(at 61.72 39.44)
+	(footprint "Capacitor_SMD:C_0603_1608Metric"
+		(at 79.83 57.64)
 		(layer "F.Cu")
 		(fp_text reference "C26"
 			(at 0 -1.43 0)
@@ -14686,8 +14756,8 @@
 		)
 		(path "/f7943876-11eb-59bf-83e4-ff8388278741")
 	)
-	(footprint "C_0603_1608Metric"
-		(at 65.88 39.44)
+	(footprint "Capacitor_SMD:C_0603_1608Metric"
+		(at 83.99 57.64)
 		(layer "F.Cu")
 		(fp_text reference "C27"
 			(at 0 -1.43 0)
@@ -14778,8 +14848,8 @@
 		)
 		(path "/c723da1c-a7bd-5280-861d-e3afb7252984")
 	)
-	(footprint "C_0603_1608Metric"
-		(at 70.04 39.44)
+	(footprint "Capacitor_SMD:C_0603_1608Metric"
+		(at 67.81 61.34)
 		(layer "F.Cu")
 		(fp_text reference "C28"
 			(at 0 -1.43 0)
@@ -14870,8 +14940,8 @@
 		)
 		(path "/f6449cfd-d764-5c16-8882-b043c4e65970")
 	)
-	(footprint "C_0603_1608Metric"
-		(at 53.4 42.1)
+	(footprint "Capacitor_SMD:C_0603_1608Metric"
+		(at 71.97 61.34)
 		(layer "F.Cu")
 		(fp_text reference "C30"
 			(at 0 -1.43 0)
@@ -14962,8 +15032,8 @@
 		)
 		(path "/eceff5d8-09e6-5c56-a3db-aac2ccd5cd10")
 	)
-	(footprint "R_0603_1608Metric"
-		(at 57.56 42.1)
+	(footprint "Resistor_SMD:R_0603_1608Metric"
+		(at 76.13 61.34)
 		(layer "F.Cu")
 		(fp_text reference "R15"
 			(at 0 -1.43 0)
@@ -15054,8 +15124,8 @@
 		)
 		(path "/6ea24129-5700-514a-b20c-6c581decddd4")
 	)
-	(footprint "R_0603_1608Metric"
-		(at 61.72 42.1)
+	(footprint "Resistor_SMD:R_0603_1608Metric"
+		(at 80.29 61.34)
 		(layer "F.Cu")
 		(fp_text reference "R16"
 			(at 0 -1.43 0)
@@ -15146,8 +15216,8 @@
 		)
 		(path "/a27ed100-16f8-5ae9-8dbe-74774c3c94b9")
 	)
-	(footprint "R_0603_1608Metric"
-		(at 65.88 42.1)
+	(footprint "Resistor_SMD:R_0603_1608Metric"
+		(at 84.45 61.34)
 		(layer "F.Cu")
 		(fp_text reference "R17"
 			(at 0 -1.43 0)
@@ -15238,8 +15308,8 @@
 		)
 		(path "/85604272-343c-5d11-96b7-bf254160fb15")
 	)
-	(footprint "R_0603_1608Metric"
-		(at 70.04 42.1)
+	(footprint "Resistor_SMD:R_0603_1608Metric"
+		(at 67.81 64)
 		(layer "F.Cu")
 		(fp_text reference "R18"
 			(at 0 -1.43 0)
@@ -15330,8 +15400,8 @@
 		)
 		(path "/dc0bbd4e-ecb3-59c1-971c-7815a10e0c03")
 	)
-	(footprint "R_0603_1608Metric"
-		(at 53.4 44.76)
+	(footprint "Resistor_SMD:R_0603_1608Metric"
+		(at 71.97 64)
 		(layer "F.Cu")
 		(fp_text reference "R19"
 			(at 0 -1.43 0)
@@ -15422,8 +15492,8 @@
 		)
 		(path "/514805f4-fb97-52da-88b8-36304177ff47")
 	)
-	(footprint "R_0603_1608Metric"
-		(at 57.56 44.76)
+	(footprint "Resistor_SMD:R_0603_1608Metric"
+		(at 76.13 64)
 		(layer "F.Cu")
 		(fp_text reference "R20"
 			(at 0 -1.43 0)
@@ -15514,78 +15584,8 @@
 		)
 		(path "/5bee9dda-f135-5ac2-967b-100b7784f27a")
 	)
-	(footprint "TestPoint_Pad_D1.5mm"
-		(at 60.24 44.03)
-		(layer "F.Cu")
-		(fp_text reference "TP8"
-			(at 0 -1.648 0)
-			(layer "F.SilkS")
-			(tstamp df8ad89a-4372-48a1-959d-41a6068fbd8e)
-			(effects
-				(font
-					(size 1 1)
-					(thickness 0.15)
-				)
-			)
-		)
-		(fp_text value "VREF_2V5"
-			(at 0 1.75 0)
-			(layer "F.Fab")
-			(tstamp bd63ee48-4a53-41ce-9f1d-e4ce2bbaee53)
-			(effects
-				(font
-					(size 1 1)
-					(thickness 0.15)
-				)
-			)
-		)
-		(attr exclude_from_pos_files exclude_from_bom)
-		(fp_circle
-			(center 0 0)
-			(end 0 0.95)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(fill none)
-			(layer "F.SilkS")
-			(tstamp 188606f7-41cf-4150-b22a-1b8f5885c87d)
-		)
-		(fp_circle
-			(center 0 0)
-			(end 1.25 0)
-			(stroke
-				(width 0.05)
-				(type solid)
-			)
-			(fill none)
-			(layer "F.CrtYd")
-			(tstamp c1a41909-dd0d-4698-8873-fe0292742945)
-		)
-		(fp_text user "${REFERENCE}"
-			(at 0 -1.65 0)
-			(layer "F.Fab")
-			(tstamp e27ec8d6-1f94-40cd-a4aa-0963d435fbb8)
-			(effects
-				(font
-					(size 1 1)
-					(thickness 0.15)
-				)
-			)
-		)
-		(pad "1" smd circle
-			(at 0 0)
-			(size 1.5 1.5)
-			(layers "F.Cu" "F.Mask")
-			(tstamp 8a03cd79-fadf-4c81-9b59-724c470e191a)
-			(net 61 "VREF_2V5")
-			(pinfunction "1")
-			(pintype "passive")
-		)
-		(path "/a41644a8-1928-522c-87f5-d9f4d1be3ccb")
-	)
-	(footprint "PinHeader_1x05_P2.54mm_Vertical"
-		(at 83.01 1.77)
+	(footprint "Connector_PinHeader_2.54mm:PinHeader_1x05_P2.54mm_Vertical"
+		(at 97.42 1.77)
 		(layer "F.Cu")
 		(fp_text reference "J2"
 			(at 0 -2.38 0)
@@ -15774,8 +15774,8 @@
 		)
 		(path "/8e1260d1-1a4f-51e8-84b5-825390db9da6")
 	)
-	(footprint "LQFP-64_10x10mm_P0.5mm"
-		(at 87.94 21.6)
+	(footprint "Package_QFP:LQFP-64_10x10mm_P0.5mm"
+		(at 102.35 21.6)
 		(layer "F.Cu")
 		(fp_text reference "U9"
 			(at 0 -7.4 0)
@@ -16567,8 +16567,8 @@
 		)
 		(path "/2bcf7385-331a-55f5-9568-3e60e189fc57")
 	)
-	(footprint "USB_C_Receptacle_GCT_USB4085"
-		(at 83.54 30.56)
+	(footprint "Connector_USB:USB_C_Receptacle_GCT_USB4085"
+		(at 97.95 30.56)
 		(layer "F.Cu")
 		(fp_text reference "J3"
 			(at 2.975 -1.8 0)
@@ -16961,8 +16961,8 @@
 		)
 		(path "/37dc645e-f6f9-5615-be4f-7ff878f7e33a")
 	)
-	(footprint "SW_PUSH_6mm"
-		(at 82.74 42.37)
+	(footprint "Button_Switch_THT:SW_PUSH_6mm"
+		(at 97.15 42.37)
 		(layer "F.Cu")
 		(fp_text reference "SW1"
 			(at 3.25 -2 0)
@@ -17261,8 +17261,8 @@
 		)
 		(path "/7e36b397-05c9-5f7b-90b1-c46fa1bd8aaa")
 	)
-	(footprint "Crystal_SMD_HC49-SD"
-		(at 87.99 52.42)
+	(footprint "Crystal:Crystal_SMD_HC49-SD"
+		(at 102.4 52.42)
 		(layer "F.Cu")
 		(fp_text reference "Y2"
 			(at 0 -3.55 0)
@@ -17400,8 +17400,8 @@
 		)
 		(path "/05b27d90-6578-5e19-8df7-342c46d2b5de")
 	)
-	(footprint "SOT-23-6"
-		(at 83.29 58.17)
+	(footprint "Package_TO_SOT_SMD:SOT-23-6"
+		(at 97.7 58.17)
 		(layer "F.Cu")
 		(fp_text reference "U10"
 			(at 0 -2.4 0)
@@ -17680,8 +17680,8 @@
 		)
 		(path "/a3e7ebc2-b2e2-5d67-b6d5-013a70143501")
 	)
-	(footprint "C_0805_2012Metric"
-		(at 88.24 57.45)
+	(footprint "Capacitor_SMD:C_0805_2012Metric"
+		(at 102.65 57.45)
 		(layer "F.Cu")
 		(fp_text reference "C39"
 			(at 0 -1.68 0)
@@ -17772,8 +17772,8 @@
 		)
 		(path "/194cbbca-4c7a-5c58-8f8b-d7048330a585")
 	)
-	(footprint "LED_0805_2012Metric"
-		(at 92.82 57.42)
+	(footprint "LED_SMD:LED_0805_2012Metric"
+		(at 107.23 57.42)
 		(layer "F.Cu")
 		(fp_text reference "LED1"
 			(at 0 -1.65 0)
@@ -17908,8 +17908,8 @@
 		)
 		(path "/5e3c8fcc-0b82-5c31-a5e1-3c0380d444ec")
 	)
-	(footprint "L_0805_2012Metric"
-		(at 82.99 61.92)
+	(footprint "Inductor_SMD:L_0805_2012Metric"
+		(at 97.4 61.92)
 		(layer "F.Cu")
 		(fp_text reference "FB2"
 			(at 0 -1.55 0)
@@ -18000,8 +18000,8 @@
 		)
 		(path "/bded0470-d910-5647-9b5b-4778f8e46f30")
 	)
-	(footprint "C_0603_1608Metric"
-		(at 87.42 61.8)
+	(footprint "Capacitor_SMD:C_0603_1608Metric"
+		(at 101.83 61.8)
 		(layer "F.Cu")
 		(fp_text reference "C32"
 			(at 0 -1.43 0)
@@ -18092,8 +18092,8 @@
 		)
 		(path "/462829a4-ba92-5ae1-ab83-8a4b813daa79")
 	)
-	(footprint "C_0603_1608Metric"
-		(at 91.58 61.8)
+	(footprint "Capacitor_SMD:C_0603_1608Metric"
+		(at 105.99 61.8)
 		(layer "F.Cu")
 		(fp_text reference "C33"
 			(at 0 -1.43 0)
@@ -18184,8 +18184,8 @@
 		)
 		(path "/add7a003-2f09-553e-8cea-c7ab2a617784")
 	)
-	(footprint "C_0603_1608Metric"
-		(at 95.74 61.8)
+	(footprint "Capacitor_SMD:C_0603_1608Metric"
+		(at 97.13 64.7)
 		(layer "F.Cu")
 		(fp_text reference "C34"
 			(at 0 -1.43 0)
@@ -18276,8 +18276,8 @@
 		)
 		(path "/c2baaf49-d7ed-5cf5-9a9f-2c2187ede239")
 	)
-	(footprint "C_0603_1608Metric"
-		(at 82.72 64.7)
+	(footprint "Capacitor_SMD:C_0603_1608Metric"
+		(at 101.29 64.7)
 		(layer "F.Cu")
 		(fp_text reference "C35"
 			(at 0 -1.43 0)
@@ -18368,8 +18368,8 @@
 		)
 		(path "/1cbea35d-446c-53ab-a7a1-2d1e52f77572")
 	)
-	(footprint "C_0603_1608Metric"
-		(at 86.88 64.7)
+	(footprint "Capacitor_SMD:C_0603_1608Metric"
+		(at 105.45 64.7)
 		(layer "F.Cu")
 		(fp_text reference "C36"
 			(at 0 -1.43 0)
@@ -18460,8 +18460,8 @@
 		)
 		(path "/08d025d4-583f-58dd-9c6d-41e7976107ea")
 	)
-	(footprint "C_0603_1608Metric"
-		(at 91.04 64.7)
+	(footprint "Capacitor_SMD:C_0603_1608Metric"
+		(at 97.13 67.36)
 		(layer "F.Cu")
 		(fp_text reference "C37"
 			(at 0 -1.43 0)
@@ -18552,8 +18552,8 @@
 		)
 		(path "/8b2bcfd5-c8d0-5aa2-84a4-b8f6cb21babb")
 	)
-	(footprint "C_0603_1608Metric"
-		(at 95.2 64.7)
+	(footprint "Capacitor_SMD:C_0603_1608Metric"
+		(at 101.29 67.36)
 		(layer "F.Cu")
 		(fp_text reference "C38"
 			(at 0 -1.43 0)
@@ -18644,8 +18644,8 @@
 		)
 		(path "/07f8a05d-6a18-5208-8e90-da5c94762854")
 	)
-	(footprint "C_0603_1608Metric"
-		(at 82.72 67.36)
+	(footprint "Capacitor_SMD:C_0603_1608Metric"
+		(at 105.45 67.36)
 		(layer "F.Cu")
 		(fp_text reference "C40"
 			(at 0 -1.43 0)
@@ -18736,8 +18736,8 @@
 		)
 		(path "/5f7d4fab-61e5-5491-b497-2c0405474591")
 	)
-	(footprint "C_0603_1608Metric"
-		(at 86.88 67.36)
+	(footprint "Capacitor_SMD:C_0603_1608Metric"
+		(at 97.13 70.02)
 		(layer "F.Cu")
 		(fp_text reference "C41"
 			(at 0 -1.43 0)
@@ -18828,8 +18828,8 @@
 		)
 		(path "/c3f1fd5c-ce9c-5bfd-9939-6954980c4189")
 	)
-	(footprint "C_0603_1608Metric"
-		(at 91.04 67.36)
+	(footprint "Capacitor_SMD:C_0603_1608Metric"
+		(at 101.29 70.02)
 		(layer "F.Cu")
 		(fp_text reference "C42"
 			(at 0 -1.43 0)
@@ -18920,8 +18920,8 @@
 		)
 		(path "/f9606c3e-972c-53cc-9323-3315fcd6d54f")
 	)
-	(footprint "C_0603_1608Metric"
-		(at 95.2 67.36)
+	(footprint "Capacitor_SMD:C_0603_1608Metric"
+		(at 105.45 70.02)
 		(layer "F.Cu")
 		(fp_text reference "C43"
 			(at 0 -1.43 0)
@@ -19012,8 +19012,8 @@
 		)
 		(path "/32d1d045-94f1-5f78-b1fe-e946d485a367")
 	)
-	(footprint "R_0603_1608Metric"
-		(at 82.72 70.02)
+	(footprint "Resistor_SMD:R_0603_1608Metric"
+		(at 97.13 72.68)
 		(layer "F.Cu")
 		(fp_text reference "R21"
 			(at 0 -1.43 0)
@@ -19104,8 +19104,8 @@
 		)
 		(path "/eb8a20c7-130b-5a64-8a83-9c118a6488bb")
 	)
-	(footprint "R_0603_1608Metric"
-		(at 86.88 70.02)
+	(footprint "Resistor_SMD:R_0603_1608Metric"
+		(at 101.29 72.68)
 		(layer "F.Cu")
 		(fp_text reference "R22"
 			(at 0 -1.43 0)
@@ -19196,8 +19196,8 @@
 		)
 		(path "/4d53621b-7d38-5f0c-80e0-f2d8f6f52714")
 	)
-	(footprint "R_0603_1608Metric"
-		(at 91.04 70.02)
+	(footprint "Resistor_SMD:R_0603_1608Metric"
+		(at 105.45 72.68)
 		(layer "F.Cu")
 		(fp_text reference "R23"
 			(at 0 -1.43 0)
@@ -19288,8 +19288,8 @@
 		)
 		(path "/3d390977-6736-5d08-99ee-97154dfff66c")
 	)
-	(footprint "R_0603_1608Metric"
-		(at 95.2 70.02)
+	(footprint "Resistor_SMD:R_0603_1608Metric"
+		(at 97.13 75.34)
 		(layer "F.Cu")
 		(fp_text reference "R24"
 			(at 0 -1.43 0)
@@ -19380,8 +19380,8 @@
 		)
 		(path "/2b9c24ab-0480-520b-a498-ece11314aaca")
 	)
-	(footprint "R_0603_1608Metric"
-		(at 82.72 72.68)
+	(footprint "Resistor_SMD:R_0603_1608Metric"
+		(at 101.29 75.34)
 		(layer "F.Cu")
 		(fp_text reference "R25"
 			(at 0 -1.43 0)
@@ -19472,8 +19472,8 @@
 		)
 		(path "/02a20df2-e19e-5b8f-b8fa-de3cc55646f4")
 	)
-	(footprint "R_0603_1608Metric"
-		(at 86.88 72.68)
+	(footprint "Resistor_SMD:R_0603_1608Metric"
+		(at 105.45 75.34)
 		(layer "F.Cu")
 		(fp_text reference "R26"
 			(at 0 -1.43 0)
@@ -19564,8 +19564,8 @@
 		)
 		(path "/aeb7792d-ddee-5d56-9e8e-4b32ba803123")
 	)
-	(footprint "R_0603_1608Metric"
-		(at 91.04 72.68)
+	(footprint "Resistor_SMD:R_0603_1608Metric"
+		(at 97.13 78)
 		(layer "F.Cu")
 		(fp_text reference "R27"
 			(at 0 -1.43 0)
@@ -19656,8 +19656,8 @@
 		)
 		(path "/2784296c-d2c9-5f7b-a918-08da3a65a433")
 	)
-	(footprint "R_0603_1608Metric"
-		(at 95.2 72.68)
+	(footprint "Resistor_SMD:R_0603_1608Metric"
+		(at 101.29 78)
 		(layer "F.Cu")
 		(fp_text reference "R28"
 			(at 0 -1.43 0)
@@ -19748,8 +19748,8 @@
 		)
 		(path "/02e1b4bc-b6b2-5399-bac6-17dd16a99102")
 	)
-	(footprint "R_0603_1608Metric"
-		(at 82.72 75.34)
+	(footprint "Resistor_SMD:R_0603_1608Metric"
+		(at 105.45 78)
 		(layer "F.Cu")
 		(fp_text reference "R29"
 			(at 0 -1.43 0)
@@ -19840,8 +19840,8 @@
 		)
 		(path "/7b3b82d2-4f3f-5f71-8f3c-99cc905961ae")
 	)
-	(footprint "R_0805_2012Metric"
-		(at 38.02 12.85)
+	(footprint "Resistor_SMD:R_0805_2012Metric"
+		(at 52.43 12.85)
 		(layer "F.Cu")
 		(fp_text reference "R31"
 			(at 0 -1.65 0)
@@ -19932,8 +19932,8 @@
 		)
 		(path "/65365bcf-82b8-55d4-8cc1-e55126304c68")
 	)
-	(footprint "SSOP-28_5.3x10.2mm_P0.65mm"
-		(at 38.02 5.35)
+	(footprint "Package_SO:SSOP-28_5.3x10.2mm_P0.65mm"
+		(at 52.43 5.35)
 		(layer "F.Cu")
 		(fp_text reference "U8"
 			(at 0 -6.05 0)
@@ -20387,8 +20387,8 @@
 		(path "/df539ccd-105e-5910-848a-a8dc25616196")
 	)
 	(gr_line
-		(start -8.5 -8.5)
-		(end 105.72 -8.5)
+		(start -9.95 -9.95)
+		(end 119.1 -9.95)
 		(stroke
 			(width 0.1)
 			(type default)
@@ -20397,8 +20397,8 @@
 		(tstamp 70fc65d7-beda-51b1-afd9-f351d2f87f00)
 	)
 	(gr_line
-		(start 105.72 -8.5)
-		(end 105.72 87.98)
+		(start 119.1 -9.95)
+		(end 119.1 98.45)
 		(stroke
 			(width 0.1)
 			(type default)
@@ -20407,8 +20407,8 @@
 		(tstamp 14617b60-c560-5c5c-939a-b54e8b6b98bc)
 	)
 	(gr_line
-		(start 105.72 87.98)
-		(end -8.5 87.98)
+		(start 119.1 98.45)
+		(end -9.95 98.45)
 		(stroke
 			(width 0.1)
 			(type default)
@@ -20417,8 +20417,8 @@
 		(tstamp f5ca69b0-b328-5965-97c1-b85fd9028086)
 	)
 	(gr_line
-		(start -8.5 87.98)
-		(end -8.5 -8.5)
+		(start -9.95 98.45)
+		(end -9.95 -9.95)
 		(stroke
 			(width 0.1)
 			(type default)
@@ -20429,7 +20429,7 @@
 	(footprint "MountingHole:MountingHole_3.2mm_M3_Pad"
 		(layer "F.Cu")
 		(tstamp 04cde775-7dca-59ee-9e7f-1d0a7f9f9a82)
-		(at -3 -3)
+		(at -4.45 -4.45)
 		(attr through_hole exclude_from_pos_files exclude_from_bom)
 		(fp_text reference "H1"
 			(at 0 -4)
@@ -20476,7 +20476,7 @@
 	(footprint "MountingHole:MountingHole_3.2mm_M3_Pad"
 		(layer "F.Cu")
 		(tstamp c1ecf085-be04-5f2f-ba70-f0fa4cb7849a)
-		(at 100.22 -3)
+		(at 113.6 -4.45)
 		(attr through_hole exclude_from_pos_files exclude_from_bom)
 		(fp_text reference "H2"
 			(at 0 -4)
@@ -20523,7 +20523,7 @@
 	(footprint "MountingHole:MountingHole_3.2mm_M3_Pad"
 		(layer "F.Cu")
 		(tstamp c701e7c9-1d44-5b29-b959-e9dbd9f40841)
-		(at -3 82.48)
+		(at -4.45 92.95)
 		(attr through_hole exclude_from_pos_files exclude_from_bom)
 		(fp_text reference "H3"
 			(at 0 -4)
@@ -20570,7 +20570,7 @@
 	(footprint "MountingHole:MountingHole_3.2mm_M3_Pad"
 		(layer "F.Cu")
 		(tstamp aa54e918-4e43-565a-bdba-7084b70f5212)
-		(at 100.22 82.48)
+		(at 113.6 92.95)
 		(attr through_hole exclude_from_pos_files exclude_from_bom)
 		(fp_text reference "H4"
 			(at 0 -4)
@@ -20632,10 +20632,10 @@
 		)
 		(polygon
 			(pts
-				(xy -7.5 -7.5)
-				(xy 37.02 -7.5)
-				(xy 37.02 86.98)
-				(xy -7.5 86.98)
+				(xy -8.95 -8.95)
+				(xy 51.43 -8.95)
+				(xy 51.43 97.45)
+				(xy -8.95 97.45)
 			)
 		)
 	)
@@ -20657,10 +20657,10 @@
 		)
 		(polygon
 			(pts
-				(xy 39.02 -7.5)
-				(xy 104.72 -7.5)
-				(xy 104.72 86.98)
-				(xy 39.02 86.98)
+				(xy 53.43 -8.95)
+				(xy 118.1 -8.95)
+				(xy 118.1 97.45)
+				(xy 53.43 97.45)
 			)
 		)
 	)

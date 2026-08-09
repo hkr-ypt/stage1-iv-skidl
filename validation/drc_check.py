@@ -130,18 +130,35 @@ def _layer_of(node):
 
 
 def _graphic_points(node):
-    """Every (x, y) a graphic primitive is defined by."""
-    pts = []
+    """Every (x, y) a graphic primitive occupies.
+
+    A circle is stored as centre + a point on the rim. Taking the bounding box
+    of those two points understates the shape by half its diameter — which is
+    how this file certified a board as courtyard-clean while KiCad found 45
+    overlaps on it. Circles expand to centre +/- radius.
+    """
+    kids = {}
     for c in node:
-        if not isinstance(c, list):
-            continue
-        h = _head(c)
-        if h in ("start", "end", "center", "mid") and len(c) > 2:
-            pts.append((_f(c[1]), _f(c[2])))
-        elif h == "pts":
-            for p in c:
-                if isinstance(p, list) and _head(p) == "xy" and len(p) > 2:
-                    pts.append((_f(p[1]), _f(p[2])))
+        if isinstance(c, list) and c:
+            kids.setdefault(_head(c), []).append(c)
+
+    if _head(node) in ("fp_circle", "gr_circle", "circle"):
+        ctr = kids.get("center", [None])[0]
+        end = kids.get("end", [None])[0]
+        if ctr is not None and end is not None and len(ctr) > 2 and len(end) > 2:
+            cx, cy = _f(ctr[1]), _f(ctr[2])
+            r = math.hypot(_f(end[1]) - cx, _f(end[2]) - cy)
+            return [(cx - r, cy - r), (cx + r, cy + r)]
+
+    pts = []
+    for key in ("start", "end", "center", "mid"):
+        for c in kids.get(key, []):
+            if len(c) > 2:
+                pts.append((_f(c[1]), _f(c[2])))
+    for c in kids.get("pts", []):
+        for p in c:
+            if isinstance(p, list) and _head(p) == "xy" and len(p) > 2:
+                pts.append((_f(p[1]), _f(p[2])))
     return pts
 
 
@@ -609,6 +626,116 @@ def check_board_parity(board):
 # Real DRC
 # ---------------------------------------------------------------------------
 
+def _drc_via_pcbnew(board_path):
+    """Run DRC through KiCad's Python bindings. Returns (report_text, note).
+
+    ``kicad-cli pcb drc`` arrived in KiCad 8, but ``pcbnew.WriteDRCReport()``
+    exists in the SWIG bindings from KiCad 7 — so a KiCad 7 machine, where the
+    CLI cannot run DRC, still can. This project previously reported DRC as
+    unrunnable on the strength of the CLI alone; that was wrong, and it is why
+    three real board defects reached a reviewer.
+    """
+    try:
+        import pcbnew                                    # noqa: PLC0415
+    except ImportError:
+        return None, "KiCad's pcbnew Python module is not importable"
+    if not hasattr(pcbnew, "WriteDRCReport"):
+        return None, (f"pcbnew {pcbnew.GetBuildVersion()} has no "
+                      f"WriteDRCReport()")
+    with tempfile.TemporaryDirectory() as tmp:
+        out = os.path.join(tmp, "drc.rpt")
+        board = pcbnew.LoadBoard(board_path)
+        ok = pcbnew.WriteDRCReport(board, out, pcbnew.EDA_UNITS_MILLIMETRES,
+                                   True)
+        if not ok or not os.path.isfile(out):
+            # KiCad HAS DRC and refused to run it. The usual cause is a custom
+            # rules file it cannot compile, which blocks DRC for the user
+            # entirely. False (not None) marks it as a hard failure: reporting
+            # SKIPPED here would hide our own broken file behind the same
+            # message used when KiCad simply is not installed.
+            return False, (f"pcbnew {pcbnew.GetBuildVersion()} HAS DRC but "
+                           f"refused to run it. The usual cause is a "
+                           f"stage1_iv.kicad_dru KiCad cannot compile - it is "
+                           f"parsed with the DSN lexer, whose comment "
+                           f"character is '#' as the first non-blank character "
+                           f"of a line. This blocks DRC for anyone opening the "
+                           f"project.")
+        with open(out, encoding="utf-8") as fh:
+            return fh.read(), f"pcbnew {pcbnew.GetBuildVersion()}"
+
+
+def parse_drc_report(text):
+    """[{type, severity, description, refs}] from a KiCad text DRC report.
+
+    ``refs`` is the set of footprint references the violation names, which is
+    what lets an intra-footprint clearance violation be told apart from a real
+    one. Severity is KiCad's own word for it, not this file's opinion.
+    """
+    import re
+    out, cur = [], None
+    for line in text.splitlines():
+        m = re.match(r"^\[([a-z_]+)\]:\s*(.*)$", line)
+        if m:
+            cur = {"type": m.group(1), "severity": "error",
+                   "description": m.group(2).strip(), "refs": []}
+            out.append(cur)
+            continue
+        if cur is None:
+            continue
+        sev = re.search(r"Severity:\s*(\w+)", line)
+        if sev:
+            cur["severity"] = sev.group(1).lower()
+        item = re.search(r"\bof (\S+?)(?: on \S+)?$", line.rstrip())
+        if item:
+            cur["refs"].append(item.group(1))
+        m2 = re.search(r"Footprint (\S+)$", line.rstrip())
+        if m2:
+            cur["refs"].append(m2.group(1))
+    return out
+
+
+def _pcbnew_major():
+    try:
+        import pcbnew                                    # noqa: PLC0415
+        return int(str(pcbnew.GetBuildVersion()).lstrip("v").split(".")[0])
+    except Exception:
+        return None
+
+
+def classify_violations(violations):
+    """Split DRC output into routing, not-evaluatable-here, and real defects.
+
+    There are exactly two escapes, both narrow, and neither is a judgement call:
+
+    * ``unconnected_items`` is the ratsnest — this board is unrouted on purpose.
+    * a ``clearance`` error between two pads of ONE footprint that
+      ``stage1_iv.kicad_dru`` covers, when the KiCad running DRC predates
+      ``memberOfFootprint()`` (KiCad 8). On such a KiCad the scoped rule is
+      inert, so the violation says nothing about the board. It is only
+      admissible because :func:`check_rule_satisfiability` has already checked
+      that same pad pair against the rule, from source.
+
+    Everything KiCad calls an *error* and neither escape covers is a defect.
+    Everything KiCad calls a *warning* is reported, never silently dropped, but
+    does not fail the build — that is KiCad's severity, not this file's.
+    """
+    covered = _dru_covered_refs()
+    stale_kicad = (_pcbnew_major() or 99) < 8
+
+    routing, inert, warnings, defects = [], [], [], []
+    for v in violations:
+        if v["type"] in ROUTING_VIOLATIONS:
+            routing.append(v)
+        elif (v["type"] == "clearance" and stale_kicad
+              and len(set(v["refs"])) == 1 and v["refs"][0] in covered):
+            inert.append(v)
+        elif v.get("severity") == "warning":
+            warnings.append(v)
+        else:
+            defects.append(v)
+    return routing, inert, warnings, defects
+
+
 def kicad_drc_available():
     """(path, reason) — the kicad-cli that can run DRC, or why none can."""
     exe = shutil.which("kicad-cli")
@@ -631,7 +758,14 @@ def run_kicad_drc(board_path):
     """Run DRC and return (violations, note). Raises nothing on violations."""
     exe, reason = kicad_drc_available()
     if exe is None:
-        return None, reason
+        # No `kicad-cli pcb drc` — try the Python bindings, which have had
+        # WriteDRCReport() since KiCad 7.
+        text, note = _drc_via_pcbnew(board_path)
+        if text is False:
+            return False, note
+        if text is not None:
+            return parse_drc_report(text), note
+        return None, f"{reason}; {note}"
     with tempfile.TemporaryDirectory() as tmp:
         report = os.path.join(tmp, "drc.json")
         proc = subprocess.run(
@@ -693,12 +827,15 @@ def run_drc_check(board_path=BOARD_FILE, run_kicad=True):
     # --- real DRC -------------------------------------------------------
     violations, note = (None, "not requested") if not run_kicad else \
         run_kicad_drc(board_path)
-    if violations is None:
+    if violations is False:
+        results["kicad_drc"] = {"status": "FAIL", "reason": note,
+                                "problems": [note]}
+        failures.append(f"kicad_drc: {note}")
+    elif violations is None:
         results["kicad_drc"] = {"status": "SKIPPED", "reason": note,
                                 "problems": []}
     else:
-        routing = [v for v in violations if v["type"] in ROUTING_VIOLATIONS]
-        defects = [v for v in violations if v["type"] not in ROUTING_VIOLATIONS]
+        routing, inert, warns, defects = classify_violations(violations)
         by_type = {}
         for v in violations:
             by_type[v["type"]] = by_type.get(v["type"], 0) + 1
@@ -706,6 +843,10 @@ def run_drc_check(board_path=BOARD_FILE, run_kicad=True):
             "status": "PASS" if not defects else "FAIL",
             "problems": [f"{v['type']}: {v['description']}" for v in defects],
             "routing_violations": len(routing),
+            "warnings": len(warns),
+            "warning_types": sorted({v["type"] for v in warns}),
+            "not_evaluatable_here": len(inert),
+            "ran_with": note,
             "by_type": by_type,
         }
         failures.extend(f"kicad_drc: {v['type']}: {v['description']}"
@@ -777,9 +918,18 @@ def main(argv=None):
         print("  UNKNOWN in this environment — see the reason above, and run")
         print("  DRC in KiCad 8 or later before believing anything about it.")
     else:
+        print(f"  DRC ran with {drc.get('ran_with', 'kicad-cli')}")
         print(f"  KiCad reported {drc['routing_violations']} "
               f"unconnected_items (this file predicted "
               f"{report['ratsnest']}).")
+        if drc.get("warnings"):
+            print(f"  {drc['warnings']} warning(s): "
+                  f"{', '.join(drc['warning_types'])}")
+        if drc.get("not_evaluatable_here"):
+            print(f"  {drc['not_evaluatable_here']} clearance violation(s) "
+                  f"inside a single footprint could not be judged: this KiCad "
+                  f"predates memberOfFootprint(), so stage1_iv.kicad_dru is "
+                  f"inert here. check_rule_satisfiability covered them.")
         print("  Those are connections a human still has to route. They are not")
         print("  a pass and they are not a defect. See docs/pcb_generation.md.")
     return 0

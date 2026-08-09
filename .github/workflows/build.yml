@@ -196,7 +196,11 @@ jobs:
       # job on any other violation class and reports the ratsnest as a count.
       # Where kicad-cli has no `pcb drc` (KiCad 7), it says SKIPPED — DRC is
       # never reported as passing on the strength of not having been run.
-      - name: KiCad DRC (only if kicad-cli provides it)
+      # DRC really runs here: kicad-cli gained `pcb drc` in KiCad 8, but
+      # pcbnew.WriteDRCReport() has existed since KiCad 7, and drc_check.py
+      # falls back to it. A KiCad that HAS DRC and refuses to run it — an
+      # uncompilable stage1_iv.kicad_dru, say — is a hard failure, not a skip.
+      - name: KiCad DRC
         run: python3 validation/drc_check.py
 
   build-without-kicad:
