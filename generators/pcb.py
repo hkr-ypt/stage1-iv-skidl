@@ -107,8 +107,34 @@ ZONE_GAP = 2.0                       # AGND zone to DGND zone, see docs
 SILK_TEXT_HEIGHT = 1.0
 SILK_TEXT_THICKNESS = FAB["silk_line_width"]        # F9
 SILK_TEXT_GAP = 0.3                  # clear space around a designator
-# KiCad's stroke font advances about 0.72 x the glyph height per character.
-SILK_CHAR_ASPECT = 0.72
+# KiCad's stroke font advances roughly one glyph height per character, plus
+# inter-character spacing. 0.72 was measured off a rendered SVG and was WRONG
+# for this purpose: it understated the width by about a third, which is why 47
+# designators landed on copper and 69 on other silk while this project's own
+# check reported zero. 1.15 is deliberately generous - overestimating the box
+# costs board area, underestimating it costs a DRC warning per part.
+SILK_CHAR_ADVANCE = 1.15
+# KiCad flags silk that comes within this of copper or other silk. It is a
+# clearance, not an overlap: two objects 0.6 mm apart were reported.
+SILK_CLEARANCE = 0.25
+# Solder-mask openings are slightly larger than the pads they expose, and
+# silk_over_copper is really "silk over the mask aperture".
+SOLDER_MASK_MARGIN = 0.05
+
+
+def silk_text_box(text, cx, cy, height=None, clearance=SILK_CLEARANCE):
+    """The area a piece of silkscreen text needs, centred on (cx, cy).
+
+    THE single definition, imported by validation/drc_check.py so the placer
+    and the checker cannot disagree. They did: each had its own copy of this
+    formula, the checker's was the smaller, and it certified as clean a board
+    KiCad then reported 161 silkscreen warnings on.
+    """
+    height = SILK_TEXT_HEIGHT if height is None else height
+    w = SILK_CHAR_ADVANCE * height * len(text) + SILK_TEXT_THICKNESS
+    h = height + SILK_TEXT_THICKNESS
+    return (cx - w / 2 - clearance, cy - h / 2 - clearance,
+            cx + w / 2 + clearance, cy + h / 2 + clearance)
 
 # Shelf packing on courtyard bounding boxes wastes roughly half the area
 # (rectangles of very different heights on shared shelves). 0.45 is measured
@@ -735,11 +761,7 @@ def _zone(net_code, net_name, poly, index, clearance, min_width):
 # =====================================================================
 
 def _silk_bbox(text, cx, cy):
-    """Bounding box a designator occupies, plus its required clear space."""
-    w = SILK_CHAR_ASPECT * SILK_TEXT_HEIGHT * len(text) + SILK_TEXT_THICKNESS
-    h = SILK_TEXT_HEIGHT + SILK_TEXT_THICKNESS
-    g = SILK_TEXT_GAP
-    return (cx - w / 2 - g, cy - h / 2 - g, cx + w / 2 + g, cy + h / 2 + g)
+    return silk_text_box(text, cx, cy)
 
 
 def _overlaps(a, b):
@@ -773,10 +795,11 @@ def _silk_obstacles(items):
                     if isinstance(c, list) and str(c[0]) == "size":
                         size = (float(c[1]), float(c[2]))
                 if at and size:
-                    boxes.append((item.x + at[0] - size[0] / 2,
-                                  item.y + at[1] - size[1] / 2,
-                                  item.x + at[0] + size[0] / 2,
-                                  item.y + at[1] + size[1] / 2))
+                    m = SOLDER_MASK_MARGIN
+                    boxes.append((item.x + at[0] - size[0] / 2 - m,
+                                  item.y + at[1] - size[1] / 2 - m,
+                                  item.x + at[0] + size[0] / 2 + m,
+                                  item.y + at[1] + size[1] / 2 + m))
             elif head.startswith("fp_"):
                 layer = None
                 for c in child:
@@ -814,7 +837,9 @@ def place_references(items):
        part remains identifiable on the fabrication drawing, and the trade-off
        is reported rather than buried.
 
-    Returns the list of references that had to fall back to F.Fab.
+    Returns ``(fallbacks, boxes)`` — the references that had to fall back to
+    F.Fab, and the area every placed designator occupies, so that the
+    board-level silkscreen can avoid them too.
     """
     obstacles = _silk_obstacles(items)
     placed_text = []
@@ -827,12 +852,11 @@ def place_references(items):
         cy = item.y + item.cy
         half_w = item.w / 2
         half_h = item.h / 2
-        th = (SILK_TEXT_HEIGHT + SILK_TEXT_THICKNESS) / 2 + SILK_TEXT_GAP
-        tw = (SILK_CHAR_ASPECT * SILK_TEXT_HEIGHT * len(item.ref)
-              + SILK_TEXT_THICKNESS) / 2 + SILK_TEXT_GAP
+        box0 = silk_text_box(item.ref, 0.0, 0.0)
+        tw, th = box0[2], box0[3]
 
         chosen = None
-        for extra in [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0]:
+        for extra in [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 6.0, 8.0]:
             ring = [
                 (cx, cy - half_h - th - extra),          # above
                 (cx, cy + half_h + th + extra),          # below
@@ -859,10 +883,13 @@ def place_references(items):
             fallbacks.append(item.ref)
             continue
 
+        if not _set_reference_placement(item.node, chosen[0] - item.x,
+                                        chosen[1] - item.y, "F.SilkS"):
+            raise RuntimeError(
+                f"{item.ref}: no Reference property to position. A designator "
+                f"that cannot be moved must not be reported as placed.")
         placed_text.append(_silk_bbox(item.ref, *chosen))
-        _set_reference_placement(item.node, chosen[0] - item.x,
-                                 chosen[1] - item.y, "F.SilkS")
-    return fallbacks
+    return fallbacks, placed_text
 
 
 def _set_reference_placement(node, dx, dy, layer):
@@ -872,7 +899,7 @@ def _set_reference_placement(node, dx, dy, layer):
     and a designator nobody can read costs more at the bench than a silkscreen
     warning costs in DRC.
     """
-    for child in node:
+    for index, child in enumerate(node):
         if not (isinstance(child, list) and str(child[0]) == "property"
                 and len(child) > 2 and str(child[1]) == "Reference"):
             continue
@@ -889,8 +916,14 @@ def _set_reference_placement(node, dx, dy, layer):
                         L(A("size"), num(SILK_TEXT_HEIGHT),
                           num(SILK_TEXT_HEIGHT)),
                         L(A("thickness"), num(SILK_TEXT_THICKNESS)))))
-        node[node.index(child)] = SexpList(keep)
-        return
+        # Assign by the index we are already holding. This used to be
+        # node.index(child), an equality search - and it silently resolved to
+        # the wrong element (or failed) for 62 of 114 footprints, leaving their
+        # designators at the library default position while place_references
+        # believed it had moved them.
+        node[index] = SexpList(keep)
+        return True
+    return False
 
 
 
@@ -904,7 +937,7 @@ def _gr_text(text, x, y, layer="F.SilkS", height=SILK_TEXT_HEIGHT, key=""):
                  L(A("thickness"), num(SILK_TEXT_THICKNESS)))))
 
 
-def board_silkscreen(x0, y0, x1, y1, boundary, items, circuit):
+def board_silkscreen(x0, y0, x1, y1, boundary, items, circuit, ref_boxes=()):
     """Board-level silkscreen: identity, the ground split, and the terminals.
 
     Everything here is placed in the board margin — between the outline and the
@@ -918,13 +951,18 @@ def board_silkscreen(x0, y0, x1, y1, boundary, items, circuit):
     out = []
     margin_top = y0 + EDGE_CLEARANCE + SILK_TEXT_HEIGHT
     margin_bot = y1 - EDGE_CLEARANCE - SILK_TEXT_HEIGHT
+    obstacles = _silk_obstacles(items) + list(ref_boxes)
+
+    def emit(text, x, y, height=SILK_TEXT_HEIGHT, key=""):
+        """Emit board text and register the space it takes."""
+        obstacles.append(silk_text_box(text, x, y, height))
+        out.append(_gr_text(text, x, y, height=height, key=key))
 
     # --- identity -------------------------------------------------------
-    out.append(_gr_text("Stage 1 I-V Characterization System",
-                        x0 + (x1 - x0) / 2, margin_top, height=1.5,
-                        key="title"))
-    out.append(_gr_text("rev A  -  generated by generators/pcb.py  -  UNROUTED",
-                        x0 + (x1 - x0) / 2, margin_top + 2.2, key="rev"))
+    emit("Stage 1 I-V Characterization System", x0 + (x1 - x0) / 2,
+         margin_top, height=1.5, key="title")
+    emit("rev A  -  generated by generators/pcb.py  -  UNROUTED",
+         x0 + (x1 - x0) / 2, margin_top + 2.6, key="rev")
 
     # --- the ground split, marked so a bench user can see it ------------
     # Ticks in the margins rather than a line across the board: the split lane
@@ -944,7 +982,9 @@ def board_silkscreen(x0, y0, x1, y1, boundary, items, circuit):
     out.append(_gr_text("> DGND", boundary + 6.0, margin_bot, key="dgnd"))
 
     # --- terminal labelling ---------------------------------------------
-    obstacles = _silk_obstacles(items)
+    # The designators are obstacles too. Leaving them out is how the terminal
+    # labels came to overlap J1's and J5's reference fields.
+    obstacles = _silk_obstacles(items) + list(ref_boxes)
     by_ref = {i.ref: i for i in items}
     dut_missing = []
 
@@ -969,9 +1009,8 @@ def board_silkscreen(x0, y0, x1, y1, boundary, items, circuit):
                                (-radius * 1.6, 0), (radius * 1.6, 0)):
                     box = _silk_bbox(text, px + dx, py + dy)
                     if not any(_overlaps(box, o) for o in obstacles):
-                        obstacles.append(box)
-                        out.append(_gr_text(text, px + dx, py + dy,
-                                            key=f"{ref}.{pad_name}"))
+                        emit(text, px + dx, py + dy,
+                             key=f"{ref}.{pad_name}")
                         return True
             return False
         return False
@@ -991,11 +1030,10 @@ def board_silkscreen(x0, y0, x1, y1, boundary, items, circuit):
     legend = "J1 (bench supply), pin 1 -> 4:  " + \
              "  |  ".join(f"{n} {t.replace(' IN', '')}"
                           for n, t in j1_pins)
-    out.append(_gr_text(legend, x0 + (x1 - x0) / 2, margin_bot - 2.2,
-                        key="j1legend"))
+    emit(legend, x0 + (x1 - x0) / 2, margin_bot - 2.6, key="j1legend")
     if not j1_placed:
-        out.append(_gr_text("see J1 pinout legend below", x0 + (x1 - x0) / 2,
-                            margin_bot - 4.4, key="j1note"))
+        emit("see J1 pinout legend below", x0 + (x1 - x0) / 2,
+             margin_bot - 5.2, key="j1note")
     # The four DUT terminals - a Kelvin set, and easy to cross-connect.
     for ref, text in (("J4", "FORCE+"), ("J5", "SENSE+"),
                       ("J6", "SENSE-"), ("J7", "FORCE-")):
@@ -1091,7 +1129,7 @@ def generate_pcb(circuit, out_dir="."):
     # Designators are positioned before the board is sized, so the text is
     # inside the outline like everything else.
     all_items = [i for g in placed_blocks.values() for i in g]
-    silk_fallbacks = place_references(all_items)
+    silk_fallbacks, ref_boxes = place_references(all_items)
 
     x0, y0, x1, y1 = size_board(placed_blocks)
 
@@ -1117,7 +1155,7 @@ def generate_pcb(circuit, out_dir="."):
 
     board.extend(_edge_rect(x0, y0, x1, y1))
     board.extend(board_silkscreen(x0, y0, x1, y1, boundary, all_items,
-                                  circuit))
+                                  circuit, ref_boxes))
 
     inset = EDGE_CLEARANCE + MOUNTING_HOLE_INSET
     holes = [(x0 + inset, y0 + inset), (x1 - inset, y0 + inset),

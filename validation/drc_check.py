@@ -65,6 +65,12 @@ from libraries.netclasses import (  # noqa: E402
     classify, check_against_fab, UnclassifiedNet, NETCLASSES, DEFAULT_CLASS,
     NET_TO_CLASS, GLOBAL_MIN_HOLE_TO_HOLE, INTRA_FOOTPRINT_CLEARANCE,
 )
+# The SAME text-box model the placer uses. Imported, not reimplemented: this
+# file used to carry its own smaller copy, and that is exactly how it certified
+# a board as silkscreen-clean that KiCad reported 161 warnings on.
+from generators.pcb import (  # noqa: E402
+    silk_text_box, SILK_CLEARANCE, SOLDER_MASK_MARGIN,
+)
 
 BOARD_FILE = os.path.join(_REPO_ROOT, "stage1_iv.kicad_pcb")
 
@@ -679,10 +685,14 @@ def _silk_items(board):
                     continue
                 dx, dy, _r = _at(child)
                 x, y = fp.x + dx, fp.y + dy
-                text = str(child[2])
-                w = 0.72 * 1.0 * len(text) / 2
-                h = 1.0 / 2
-                out.append(("text", fp.ref, (x - w, y - h, x + w, y + h)))
+                size = 1.0
+                eff = _first(child, "effects")
+                font = _first(eff, "font") if eff is not None else None
+                sz = _first(font, "size") if font is not None else None
+                if sz is not None and len(sz) > 1:
+                    size = _f(sz[1])
+                out.append(("text", fp.ref,
+                            silk_text_box(str(child[2]), x, y, size)))
             elif head.startswith("fp_") and \
                     _layer_of(child) in ("F.SilkS", "B.SilkS"):
                 pts = _graphic_points(child)
@@ -705,9 +715,8 @@ def _silk_items(board):
             sz = _first(font, "size") if font is not None else None
             if sz is not None and len(sz) > 1:
                 size = _f(sz[1])
-            w = 0.72 * size * len(text) / 2
             out.append(("board-text", text,
-                        (x - w, y - size / 2, x + w, y + size / 2)))
+                        silk_text_box(text, x, y, size)))
     return out
 
 
@@ -729,18 +738,23 @@ def check_silkscreen(board):
     pads = []
     for fp in board.footprints:
         for pad in fp.pads:
-            pads.append((pad["x"] - pad["w"] / 2, pad["y"] - pad["h"] / 2,
-                         pad["x"] + pad["w"] / 2, pad["y"] + pad["h"] / 2))
+            m = SOLDER_MASK_MARGIN
+            pads.append((pad["x"] - pad["w"] / 2 - m,
+                         pad["y"] - pad["h"] / 2 - m,
+                         pad["x"] + pad["w"] / 2 + m,
+                         pad["y"] + pad["h"] / 2 + m))
 
     def hit(a, b):
         return (a[0] < b[2] - EPS and b[0] < a[2] - EPS
                 and a[1] < b[3] - EPS and b[1] < a[3] - EPS)
 
     problems = []
+    counts = {"silk_over_copper": 0, "silk_overlap": 0}
     texts = [i for i in items if i[0] in ("text", "board-text")]
     for kind, ref, box in texts:
         for pad in pads:
             if hit(box, pad):
+                counts["silk_over_copper"] += 1
                 problems.append(f"silk over copper: {ref} text sits on a pad")
                 break
     for i, (_k, ref, box) in enumerate(texts):
@@ -748,10 +762,14 @@ def check_silkscreen(board):
             if ref2 == ref:
                 continue
             if hit(box, box2):
+                counts["silk_overlap"] += 1
                 problems.append(f"silk overlap: {ref} text overlaps "
                                 f"silkscreen of {ref2}")
                 break
-    return sorted(set(problems))[:20]
+    if problems:
+        problems.insert(0, f"{counts['silk_over_copper']} silk_over_copper, "
+                           f"{counts['silk_overlap']} silk_overlap")
+    return problems[:20]
 
 
 def check_courtyards_defined(board):
