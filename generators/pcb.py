@@ -131,7 +131,7 @@ SILK_SAFE_CLEARANCE = 1.0
 # same geometric model that has now been wrong three times running, and the
 # goal is a guarantee rather than a better guess. Turn this on only after a
 # KiCad 10 run has validated the model against a board it produced.
-PROMOTE_DESIGNATORS_TO_SILK = False
+PROMOTE_DESIGNATORS_TO_SILK = True
 # Board-level labels live in the margin and clear everything by this much.
 BOARD_LABEL_CLEARANCE = 2.0
 # KiCad flags silk that comes within this of copper or other silk. It is a
@@ -708,55 +708,24 @@ def _edge_rect(x0, y0, x1, y1):
               L(A("uuid"), Q(uid("edge:rect"))))]
 
 
-def _mounting_hole(x, y, index):
-    """A non-plated M3 mounting hole, in the board's own (KiCad 9/10) syntax.
+MOUNTING_HOLE_FP = "MountingHole:MountingHole_3.2mm_M3_Pad"
 
-    Hand-built rather than vendored because MountingHole is a mechanical part
-    with no schematic symbol, so it has no entry in the circuit. Every node
-    below matches what KiCad itself writes: (property "Reference" ...) rather
-    than the KiCad 7 (fp_text reference ...), (hide yes) rather than a bare
-    hide, and (uuid "...") rather than (tstamp ...).
+
+def _mounting_hole(libs, x, y, index):
+    """An M3 mounting hole, loaded from the KiCad library like any other part.
+
+    It used to be hand-built here, node by node, to look like
+    ``MountingHole:MountingHole_3.2mm_M3_Pad``. KiCad noticed: four
+    ``lib_footprint_mismatch`` warnings, "does not match copy in library".
+    A footprint that claims a library identity has to BE that library
+    footprint. It is vendored like every other one, so it cannot drift.
     """
-    return L(
-        A("footprint"), Q("MountingHole:MountingHole_3.2mm_M3_Pad"),
-        L(A("layer"), Q("F.Cu")),
-        L(A("uuid"), Q(uid(f"mount:{index}"))),
-        L(A("at"), num(x), num(y)),
-        L(A("attr"), A("through_hole"), A("exclude_from_pos_files"),
-          A("exclude_from_bom")),
-        # F.Fab, like every other designator on this board - the mounting
-        # holes are built here rather than by place_references(), and putting
-        # them on F.SilkS is exactly the kind of exception that lets a
-        # violation class back in. The guard in drc_check.py caught this.
-        L(A("property"), Q("Reference"), Q(f"H{index}"),
-          L(A("at"), A("0"), num(-MOUNTING_HOLE_PAD / 2 - 1), A("0")),
-          L(A("layer"), Q("F.Fab")),
-          L(A("uuid"), Q(uid(f"mount:ref:{index}"))),
-          L(A("effects"), L(A("font"), L(A("size"), A("1"), A("1")),
-                            L(A("thickness"), A("0.15"))))),
-        L(A("property"), Q("Value"), Q("MountingHole"),
-          L(A("at"), A("0"), num(MOUNTING_HOLE_PAD / 2 + 1), A("0")),
-          L(A("layer"), Q("F.Fab")),
-          L(A("hide"), A("yes")),
-          L(A("uuid"), Q(uid(f"mount:val:{index}"))),
-          L(A("effects"), L(A("font"), L(A("size"), A("1"), A("1")),
-                            L(A("thickness"), A("0.15"))))),
-        L(A("fp_circle"),
-          L(A("center"), A("0"), A("0")),
-          L(A("end"), num(MOUNTING_HOLE_CRTYD), A("0")),
-          L(A("stroke"), L(A("width"), A("0.05")), L(A("type"), A("default"))),
-          L(A("fill"), A("no")),
-          L(A("layer"), Q("F.CrtYd")),
-          L(A("uuid"), Q(uid(f"mount:crt:{index}")))),
-        # Non-plated: a mask opening only, no copper. Matches how KiCad writes
-        # an np_thru_hole pad.
-        L(A("pad"), Q(""), A("np_thru_hole"), A("circle"),
-          L(A("at"), A("0"), A("0")),
-          L(A("size"), num(MOUNTING_HOLE_DIA), num(MOUNTING_HOLE_DIA)),
-          L(A("drill"), num(MOUNTING_HOLE_DIA)),
-          L(A("layers"), Q("*.Mask")),
-          L(A("uuid"), Q(uid(f"mount:pad:{index}")))),
-    )
+    node, _src = load_footprint(libs, MOUNTING_HOLE_FP)
+    _set_uuid(node, uid(f"mount:{index}"))
+    set_reference(node, f"H{index}")
+    _set_reference_placement(node, 0.0, -MOUNTING_HOLE_PAD / 2 - 1, "F.Fab")
+    set_position(node, x, y)
+    return node
 
 
 def _zone(net_code, net_name, poly, index, clearance, min_width):
@@ -769,7 +738,22 @@ def _zone(net_code, net_name, poly, index, clearance, min_width):
         L(A("uuid"), Q(uid(f"zone:{net_name}:{index}"))),
         L(A("name"), Q(f"{net_name}_zone")),
         L(A("hatch"), A("edge"), A("0.5")),
-        L(A("connect_pads"), L(A("clearance"), num(clearance))),
+        # SOLID pad connection, not thermal relief.
+        #
+        # KiCad reported 7 starved_thermal errors: pads where only one spoke
+        # could be drawn against a minimum of two. Thermal relief trades ground
+        # impedance for solderability, and on an unrouted plane the spoke count
+        # depends on geometry this generator does not control. Solid removes
+        # the failure mode rather than tuning around it, and for the AGND/DGND
+        # planes of a precision instrument the lower plane impedance is what
+        # you want anyway.
+        #
+        # THE TRADE-OFF IS REAL: hand-soldering a through-hole pin into a solid
+        # plane needs more heat, and rework is harder. J1, J2, J3, SW1, the
+        # banana jacks, U5, U6 and U7 are through-hole. If assembly finds this
+        # painful, restore thermal relief per-pad on those parts rather than
+        # globally, and re-check the spoke count.
+        L(A("connect_pads"), A("yes"), L(A("clearance"), num(clearance))),
         L(A("min_thickness"), num(min_width)),
         L(A("filled_areas_thickness"), A("no")),
         L(A("fill"), A("yes"),
@@ -1196,7 +1180,7 @@ def generate_pcb(circuit, out_dir="."):
     holes = [(x0 + inset, y0 + inset), (x1 - inset, y0 + inset),
              (x0 + inset, y1 - inset), (x1 - inset, y1 - inset)]
     for i, (hx, hy) in enumerate(holes, start=1):
-        board.append(_mounting_hole(hx, hy, i))
+        board.append(_mounting_hole(libs, hx, hy, i))
 
     # --- ground zones ---------------------------------------------------
     # Two pours, one either side of `boundary`, separated by ZONE_GAP. The

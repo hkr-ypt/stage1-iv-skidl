@@ -157,7 +157,7 @@ class UuidFactory:
 
 
 def symbol_instance_path(block, ref):
-    """The KiCad instance path of one schematic symbol: /root/sheet/symbol.
+    """The KiCad instance path of one schematic symbol.
 
     This is what a board footprint's ``(path ...)`` must contain. KiCad matches
     board footprints to schematic symbols by this string and by nothing else;
@@ -172,7 +172,13 @@ def symbol_instance_path(block, ref):
     """
     def u(key):
         return str(uuid.uuid5(UUID_NAMESPACE, key))
-    return f"/{u('sch:top')}/{u(f'top:sheetsym:{block}')}/{u(f'{block}:sym:{ref}')}"
+    # The ROOT sheet's UUID is NOT part of the path. Verified against boards
+    # KiCad itself wrote (kicad/qa/data/pcbnew): a symbol on the root sheet has
+    # a one-segment path /<symbol-uuid>, and a symbol on a child sheet has
+    # /<sheet-symbol-uuid>/<symbol-uuid>. Including the root gave a
+    # three-segment path that matched nothing, so "Update PCB from Schematic"
+    # still added all 110 footprints after the first fix.
+    return f"/{u(f'top:sheetsym:{block}')}/{u(f'{block}:sym:{ref}')}"
 
 
 def even_up(units):

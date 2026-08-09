@@ -63,11 +63,21 @@ from resolve_kicad_libs import (  # noqa: E402
 )
 
 
+# Footprints the BOARD uses that no schematic symbol names. Mounting holes are
+# mechanical: they have no symbol, so the circuit does not mention them, but
+# generators/pcb.py places them and KiCad checks them against the library like
+# any other footprint.
+BOARD_ONLY_FOOTPRINTS = ["MountingHole:MountingHole_3.2mm_M3_Pad"]
+
+
 def used_footprints():
-    """{nickname: {name}} for every footprint the live circuit names."""
+    """{nickname: {name}} for every footprint the design or the board names."""
     import main as project_main
     _n, _p, circuit = project_main.build()
     out = {}
+    for fp_id in BOARD_ONLY_FOOTPRINTS:
+        nick, name = fp_id.split(":", 1)
+        out.setdefault(nick, set()).add(name)
     for part in circuit.parts:
         fp_id = (part.footprint or "").strip()
         if ":" not in fp_id:

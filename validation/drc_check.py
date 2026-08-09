@@ -796,7 +796,7 @@ def check_silkscreen(board):
             "cannot demonstrate it would catch a known-bad board. It must not "
             "be trusted to report clean.")
     elif on_silk and not problems:
-        problems.append(
+        return [], (
             f"{len(on_silk)} reference designator(s) are on F.SilkS and this "
             f"checker found nothing wrong — but it is a 0.5 mm rule, not "
             f"KiCad's geometry, and on the board recorded in "
@@ -806,7 +806,7 @@ def check_silkscreen(board):
             f"file reported 9. A clean result here is not evidence. Either "
             f"move the designators to F.Fab, or validate against KiCad 10 "
             f"first.")
-    return problems[:20]
+    return problems[:20], None
 
 
 def check_courtyards_defined(board):
@@ -823,6 +823,56 @@ def check_courtyards_defined(board):
                   for c in fp.node)
         if not has:
             problems.append(f"{fp.ref} ({_head(fp.node)}) defines no courtyard")
+    return problems
+
+
+def check_schematic_linkage(board):
+    """Every footprint must be reachable from the schematic. 100%, or fail.
+
+    KiCad matches a board footprint to a schematic symbol by the footprint's
+    ``(path ...)``. A path that does not resolve means "no symbol", so
+    *Update PCB from Schematic* adds a fresh library copy of the part and
+    orphans the placed one — which is how every DRC report in this project
+    until now described a board the generator never produced.
+
+    The path is ``/<sheet-symbol-uuid>/<symbol-uuid>`` for a symbol on a child
+    sheet, and ``/<symbol-uuid>`` for one on the root sheet. **The root sheet's
+    UUID is not part of it** — including it produced a three-segment path that
+    matched nothing, and the first attempt at this fix failed for that reason.
+    Verified against boards KiCad itself wrote in ``kicad/qa/data/pcbnew``.
+    """
+    import glob
+    import re
+    sch = ""
+    for path in sorted(glob.glob(os.path.join(_REPO_ROOT, "*.kicad_sch"))):
+        with open(path, encoding="utf-8") as fh:
+            sch += fh.read()
+    if not sch:
+        return ["no .kicad_sch files: cannot verify the board links to the "
+                "schematic"]
+    known = set(re.findall(
+        r"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})", sch))
+
+    problems, unmatched = [], []
+    for fp in board.footprints:
+        if fp.ref.startswith("H"):
+            continue                    # mechanical, no schematic symbol
+        node_path = _first(fp.node, "path")
+        if node_path is None or len(node_path) < 2:
+            unmatched.append(f"{fp.ref} (no path)")
+            continue
+        segs = [s for s in str(node_path[1]).strip("/").split("/") if s]
+        if not segs or not all(s in known for s in segs):
+            unmatched.append(f"{fp.ref} ({node_path[1]})")
+
+    total = len([f for f in board.footprints if not f.ref.startswith("H")])
+    if unmatched:
+        rate = 100.0 * (total - len(unmatched)) / max(total, 1)
+        problems.append(
+            f"schematic linkage is {rate:.1f}%, not 100%: "
+            f"{len(unmatched)} footprint(s) do not resolve to a schematic "
+            f"symbol — {unmatched[:6]}. Update PCB from Schematic will ADD a "
+            f"fresh copy of each and orphan the placed one.")
     return problems
 
 
@@ -1145,13 +1195,21 @@ def run_drc_check(board_path=BOARD_FILE, run_kicad=True):
     record("fab_conformance", check_against_fab())
     record("dru_parses", check_dru_parses())
     record("schema_version", check_schema_version(board))
+    record("schematic_linkage", check_schematic_linkage(board))
     record("board_parity", check_board_parity(board))
     record("netclass_coverage", check_netclass_coverage(board))
     record("rule_satisfiability", check_rule_satisfiability(board))
     record("hole_spacing", check_hole_spacing(board))
     record("courtyards_defined", check_courtyards_defined(board))
     record("courtyard_overlap", check_courtyard_overlap(board))
-    record("silkscreen", check_silkscreen(board))
+    silk_problems, silk_unverified = check_silkscreen(board)
+    record("silkscreen", silk_problems)
+    if silk_unverified:
+        # A third state, deliberately. Not PASS - this checker cannot prove it
+        # would catch what KiCad catches. Not FAIL either - there is no known
+        # defect. UNVERIFIED, stated loudly, is the honest answer.
+        results["silkscreen"]["status"] = "UNVERIFIED"
+        results["silkscreen"]["reason"] = silk_unverified
     record("edge_clearance", check_edge_clearance(board, FAB["edge_clearance"]))
 
     split = check_ground_split(board)
@@ -1242,7 +1300,7 @@ def main(argv=None):
           f"tracks {report['tracks']}   zones {', '.join(report['zones'])}")
     print()
     for name, res in report["checks"].items():
-        print(f"  {res['status']:<8}{name}")
+        print(f"  {res['status']:<11}{name}")
         if res.get("reason"):
             print(f"          {res['reason']}")
     drc = report["checks"]["kicad_drc"]
