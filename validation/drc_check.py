@@ -383,7 +383,8 @@ def check_ground_split(board):
     4. No track carrying a ground net may cross the boundary.
     """
     problems = []
-    zones = {z["net"]: z for z in board.zones if z["net"] in GROUND_NETS}
+    zones = {_design_net_name(z["net"]): z for z in board.zones
+             if _design_net_name(z["net"]) in GROUND_NETS}
     for net in GROUND_NETS:
         if net not in zones:
             problems.append(f"no copper zone for {net}; the ground planes are "
@@ -405,7 +406,8 @@ def check_ground_split(board):
     gap = d["bbox"][0] - a["bbox"][2]
 
     bridges = [fp for fp in board.footprints
-               if len(fp.nets & set(GROUND_NETS)) == 2]
+               if len({_design_net_name(n) for n in fp.nets}
+                      & set(GROUND_NETS)) == 2]
     if STAR_GROUND_REF not in [fp.ref for fp in bridges]:
         problems.append(
             f"{STAR_GROUND_REF} (the star-ground resistor) does not connect "
@@ -414,10 +416,10 @@ def check_ground_split(board):
     for fp in bridges:
         wrong = []
         for pad in fp.pads:
-            if pad["net"] == "AGND" and pad["x"] > boundary:
+            if _design_net_name(pad["net"]) == "AGND" and pad["x"] > boundary:
                 wrong.append(f"pad {pad['name']} (AGND) at x={pad['x']:.3f} is "
                              f"over the DGND pour")
-            if pad["net"] == "DGND" and pad["x"] < boundary:
+            if _design_net_name(pad["net"]) == "DGND" and pad["x"] < boundary:
                 wrong.append(f"pad {pad['name']} (DGND) at x={pad['x']:.3f} is "
                              f"over the AGND pour")
         if wrong:
@@ -433,7 +435,7 @@ def check_ground_split(board):
         if len(n) > 2:
             codes[int(_f(n[1]))] = str(n[2])
     for t in board.tracks:
-        if codes.get(t["net_code"]) not in GROUND_NETS:
+        if _design_net_name(codes.get(t["net_code"], "")) not in GROUND_NETS:
             continue
         if (t["start"][0] - boundary) * (t["end"][0] - boundary) < 0:
             problems.append(
@@ -443,9 +445,15 @@ def check_ground_split(board):
     return problems, boundary, gap
 
 
+def _design_net_name(board_name):
+    """Strip KiCad's sheet-path prefix back to the design's own net name."""
+    return board_name.rsplit("/", 1)[-1] if board_name.startswith("/") \
+        else board_name
+
+
 def check_netclass_coverage(board):
     try:
-        classify(board.nets)
+        classify([_design_net_name(n) for n in board.nets])
     except UnclassifiedNet as exc:
         return [str(exc)]
     return []
@@ -457,7 +465,7 @@ def _required_clearance(net_a, net_b):
     for name in (net_a, net_b):
         if not name:
             continue
-        cls = NET_TO_CLASS.get(name)
+        cls = NET_TO_CLASS.get(_design_net_name(name))
         vals.append(NETCLASSES[cls]["clearance"] if cls
                     else DEFAULT_CLASS["clearance"])
     return max(vals) if vals else DEFAULT_CLASS["clearance"]
@@ -887,8 +895,9 @@ def check_board_parity(board):
     _n, _parts, circuit = project_main.build()
 
     want_nets = {n.name for n in circuit.get_nets() if n.name != "__NOCONNECT"}
+    have_nets_design = {_design_net_name(n) for n in board.nets}
     want_refs = {p.ref for p in circuit.parts if (p.footprint or "").strip()}
-    have_nets = set(board.nets)
+    have_nets = {_design_net_name(n) for n in board.nets}
     # Mounting holes are board-only mechanical parts with no schematic symbol.
     have_refs = {fp.ref for fp in board.footprints
                  if not fp.ref.startswith("H")}

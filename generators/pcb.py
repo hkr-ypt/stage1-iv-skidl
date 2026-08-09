@@ -1077,9 +1077,19 @@ def generate_pcb(circuit, out_dir="."):
     libs = KicadLibraries()
 
     # --- nets -----------------------------------------------------------
-    net_names = sorted({n.name for n in circuit.get_nets()
-                        if n.name != "__NOCONNECT"})
-    net_class = classify(net_names)          # raises on an unclassified net
+    # KiCad names board nets by sheet path, not by the bare SKiDL name. Ask
+    # the schematic model for the name it will compute, or every pad disagrees
+    # and Update PCB from Schematic rewrites the connectivity.
+    from generators.schematic import CircuitModel
+    model = CircuitModel(circuit)
+    flat = sorted({n.name for n in circuit.get_nets()
+                   if n.name != "__NOCONNECT"})
+    kicad_name = {n: model.board_net_name(n) for n in flat}
+    net_names = sorted(kicad_name.values())
+    # Classify the DESIGN's net names — libraries/netclasses.py is written in
+    # those terms — then carry the class over to the KiCad board name.
+    flat_class = classify(flat)              # raises on an unclassified net
+    net_class = {kicad_name[n]: c for n, c in flat_class.items()}
     codes = {"": 0}
     for i, name in enumerate(net_names, start=1):
         codes[name] = i
@@ -1091,8 +1101,9 @@ def generate_pcb(circuit, out_dir="."):
                 if type(net).__name__ == "NCNet" or net.name == "__NOCONNECT":
                     continue
                 func = getattr(getattr(pin, "func", None), "name", None) or ""
+                board_name = kicad_name[net.name]
                 pad_net.setdefault(part.ref, {})[str(pin.num)] = (
-                    codes[net.name], net.name, str(pin.name or ""),
+                    codes[board_name], board_name, str(pin.name or ""),
                     PINTYPE.get(func, "unspecified"))
 
     # --- footprints -----------------------------------------------------
@@ -1201,8 +1212,15 @@ def generate_pcb(circuit, out_dir="."):
 
     gclear = NETCLASSES["GROUND"]["clearance"]
     gwidth = NETCLASSES["GROUND"]["track_width"]
-    board.append(_zone(codes["AGND"], "AGND", agnd_poly, 1, gclear, gwidth))
-    board.append(_zone(codes["DGND"], "DGND", dgnd_poly, 1, gclear, gwidth))
+    # Zone pad-connection clearance is wider than the GROUND netclass value.
+    # KiCad reported connection_width 0.109 mm where the pour necked between
+    # the LQFP-64's 0.20 mm pad gaps to reach pad 31. Widening the ZONE's own
+    # clearance (not the netclass, and not a global rule) stops the pour
+    # entering fine-pitch pad fields at all, so no sliver can form. Pads it can
+    # no longer reach become ordinary unconnected_items, which are expected.
+    zclear = max(gclear, 0.30)
+    board.append(_zone(codes["AGND"], "AGND", agnd_poly, 1, zclear, gwidth))
+    board.append(_zone(codes["DGND"], "DGND", dgnd_poly, 1, zclear, gwidth))
 
     text = write_sexp(SexpList(board)) + "\n"
     path = os.path.join(out_dir, "stage1_iv.kicad_pcb")

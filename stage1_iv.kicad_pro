@@ -99,21 +99,21 @@
         "microvia_drill": 0.1,
         "name": "DIGITAL",
         "nets": [
-          "BOOT0",
-          "CS_ADC",
-          "CS_DAC",
-          "DRDY",
-          "LED_STATUS",
-          "MISO2",
-          "MOSI1",
-          "MOSI2",
-          "NRST",
-          "RESET_ADC",
-          "SCK1",
-          "SCK2",
-          "SWCLK",
-          "SWDIO",
-          "VBUS_SENSE"
+          "/CS_ADC",
+          "/CS_DAC",
+          "/DRDY",
+          "/MISO2",
+          "/MOSI1",
+          "/MOSI2",
+          "/RESET_ADC",
+          "/SCK1",
+          "/SCK2",
+          "/mcu/BOOT0",
+          "/mcu/LED_STATUS",
+          "/mcu/NRST",
+          "/mcu/SWCLK",
+          "/mcu/SWDIO",
+          "/mcu/VBUS_SENSE"
         ],
         "pcb_color": "rgba(0, 0, 0, 0.000)",
         "priority": 0,
@@ -134,11 +134,11 @@
         "microvia_drill": 0.1,
         "name": "FORCE",
         "nets": [
-          "F1_MID",
-          "FORCE+",
-          "FORCE-",
-          "VO_RAW",
-          "VO_SENSE"
+          "/FORCE-",
+          "/VO_SENSE",
+          "/output_buffer/VO_RAW",
+          "/protection/F1_MID",
+          "/protection/FORCE+"
         ],
         "pcb_color": "rgba(0, 0, 0, 0.000)",
         "priority": 1,
@@ -181,29 +181,29 @@
         "microvia_drill": 0.1,
         "name": "LOCAL_ANALOG",
         "nets": [
-          "ADC_AIN0",
-          "ADC_AIN1",
-          "ADC_AIN2",
-          "ADC_AIN3",
-          "ADC_XTAL1",
-          "ADC_XTAL2",
-          "CC1",
-          "CC2",
-          "DIFF_N",
-          "DIFF_P",
-          "LED_A",
-          "OPA548_ES",
-          "OPA548_ILIM",
-          "OSC_IN",
-          "OSC_OUT",
-          "SENSE_M_AMP",
-          "SENSE_P_AMP",
-          "U6_RG1",
-          "U6_RG2",
-          "U7_RG1",
-          "U7_RG2",
-          "VCAP1",
-          "VREF_HALF_RAW"
+          "/adc/ADC_AIN0",
+          "/adc/ADC_AIN1",
+          "/adc/ADC_AIN2",
+          "/adc/ADC_AIN3",
+          "/adc/ADC_XTAL1",
+          "/adc/ADC_XTAL2",
+          "/current_sense/U6_RG1",
+          "/current_sense/U6_RG2",
+          "/dac_sweep/DIFF_N",
+          "/dac_sweep/DIFF_P",
+          "/dac_sweep/VREF_HALF_RAW",
+          "/mcu/CC1",
+          "/mcu/CC2",
+          "/mcu/LED_A",
+          "/mcu/OSC_IN",
+          "/mcu/OSC_OUT",
+          "/mcu/VCAP1",
+          "/output_buffer/OPA548_ES",
+          "/output_buffer/OPA548_ILIM",
+          "/voltage_sense/SENSE_M_AMP",
+          "/voltage_sense/SENSE_P_AMP",
+          "/voltage_sense/U7_RG1",
+          "/voltage_sense/U7_RG2"
         ],
         "pcb_color": "rgba(0, 0, 0, 0.000)",
         "priority": 3,
@@ -271,14 +271,14 @@
         "microvia_drill": 0.1,
         "name": "SENSE",
         "nets": [
-          "I_SENSE_OUT",
-          "SENSE+",
-          "SENSE-",
-          "VREF_2V5",
-          "VREF_HALF",
-          "V_DAC",
-          "V_SENSE_OUT",
-          "V_SWEEP"
+          "/I_SENSE_OUT",
+          "/SENSE+",
+          "/SENSE-",
+          "/V_SENSE_OUT",
+          "/V_SWEEP",
+          "/dac_sweep/VREF_HALF",
+          "/dac_sweep/V_DAC",
+          "VREF_2V5"
         ],
         "pcb_color": "rgba(0, 0, 0, 0.000)",
         "priority": 6,
@@ -299,12 +299,12 @@
         "microvia_drill": 0.1,
         "name": "USB",
         "nets": [
-          "USB_DM",
-          "USB_DM_CONN",
-          "USB_DM_ESD",
-          "USB_DP",
-          "USB_DP_CONN",
-          "USB_DP_ESD"
+          "/mcu/USB_DM",
+          "/mcu/USB_DM_CONN",
+          "/mcu/USB_DM_ESD",
+          "/mcu/USB_DP",
+          "/mcu/USB_DP_CONN",
+          "/mcu/USB_DP_ESD"
         ],
         "pcb_color": "rgba(0, 0, 0, 0.000)",
         "priority": 7,
@@ -321,83 +321,83 @@
     "netclass_patterns": [
       {
         "netclass": "DIGITAL",
-        "pattern": "BOOT0"
+        "pattern": "/CS_ADC"
       },
       {
         "netclass": "DIGITAL",
-        "pattern": "CS_ADC"
+        "pattern": "/CS_DAC"
       },
       {
         "netclass": "DIGITAL",
-        "pattern": "CS_DAC"
+        "pattern": "/DRDY"
       },
       {
         "netclass": "DIGITAL",
-        "pattern": "DRDY"
+        "pattern": "/MISO2"
       },
       {
         "netclass": "DIGITAL",
-        "pattern": "LED_STATUS"
+        "pattern": "/MOSI1"
       },
       {
         "netclass": "DIGITAL",
-        "pattern": "MISO2"
+        "pattern": "/MOSI2"
       },
       {
         "netclass": "DIGITAL",
-        "pattern": "MOSI1"
+        "pattern": "/RESET_ADC"
       },
       {
         "netclass": "DIGITAL",
-        "pattern": "MOSI2"
+        "pattern": "/SCK1"
       },
       {
         "netclass": "DIGITAL",
-        "pattern": "NRST"
+        "pattern": "/SCK2"
       },
       {
         "netclass": "DIGITAL",
-        "pattern": "RESET_ADC"
+        "pattern": "/mcu/BOOT0"
       },
       {
         "netclass": "DIGITAL",
-        "pattern": "SCK1"
+        "pattern": "/mcu/LED_STATUS"
       },
       {
         "netclass": "DIGITAL",
-        "pattern": "SCK2"
+        "pattern": "/mcu/NRST"
       },
       {
         "netclass": "DIGITAL",
-        "pattern": "SWCLK"
+        "pattern": "/mcu/SWCLK"
       },
       {
         "netclass": "DIGITAL",
-        "pattern": "SWDIO"
+        "pattern": "/mcu/SWDIO"
       },
       {
         "netclass": "DIGITAL",
-        "pattern": "VBUS_SENSE"
+        "pattern": "/mcu/VBUS_SENSE"
       },
       {
         "netclass": "FORCE",
-        "pattern": "F1_MID"
+        "pattern": "/FORCE-"
       },
       {
         "netclass": "FORCE",
-        "pattern": "FORCE+"
+        "pattern": "/VO_SENSE"
       },
       {
         "netclass": "FORCE",
-        "pattern": "FORCE-"
+        "pattern": "/output_buffer/VO_RAW"
       },
       {
         "netclass": "FORCE",
-        "pattern": "VO_RAW"
+        "pattern": "/protection/F1_MID"
       },
       {
         "netclass": "FORCE",
-        "pattern": "VO_SENSE"
+        "pattern": "/protection/FORCE+"
       },
       {
         "netclass": "GROUND",
@@ -409,95 +409,95 @@
       },
       {
         "netclass": "LOCAL_ANALOG",
-        "pattern": "ADC_AIN0"
+        "pattern": "/adc/ADC_AIN0"
       },
       {
         "netclass": "LOCAL_ANALOG",
-        "pattern": "ADC_AIN1"
+        "pattern": "/adc/ADC_AIN1"
       },
       {
         "netclass": "LOCAL_ANALOG",
-        "pattern": "ADC_AIN2"
+        "pattern": "/adc/ADC_AIN2"
       },
       {
         "netclass": "LOCAL_ANALOG",
-        "pattern": "ADC_AIN3"
+        "pattern": "/adc/ADC_AIN3"
       },
       {
         "netclass": "LOCAL_ANALOG",
-        "pattern": "ADC_XTAL1"
+        "pattern": "/adc/ADC_XTAL1"
       },
       {
         "netclass": "LOCAL_ANALOG",
-        "pattern": "ADC_XTAL2"
+        "pattern": "/adc/ADC_XTAL2"
       },
       {
         "netclass": "LOCAL_ANALOG",
-        "pattern": "CC1"
+        "pattern": "/current_sense/U6_RG1"
       },
       {
         "netclass": "LOCAL_ANALOG",
-        "pattern": "CC2"
+        "pattern": "/current_sense/U6_RG2"
       },
       {
         "netclass": "LOCAL_ANALOG",
-        "pattern": "DIFF_N"
+        "pattern": "/dac_sweep/DIFF_N"
       },
       {
         "netclass": "LOCAL_ANALOG",
-        "pattern": "DIFF_P"
+        "pattern": "/dac_sweep/DIFF_P"
       },
       {
         "netclass": "LOCAL_ANALOG",
-        "pattern": "LED_A"
+        "pattern": "/dac_sweep/VREF_HALF_RAW"
       },
       {
         "netclass": "LOCAL_ANALOG",
-        "pattern": "OPA548_ES"
+        "pattern": "/mcu/CC1"
       },
       {
         "netclass": "LOCAL_ANALOG",
-        "pattern": "OPA548_ILIM"
+        "pattern": "/mcu/CC2"
       },
       {
         "netclass": "LOCAL_ANALOG",
-        "pattern": "OSC_IN"
+        "pattern": "/mcu/LED_A"
       },
       {
         "netclass": "LOCAL_ANALOG",
-        "pattern": "OSC_OUT"
+        "pattern": "/mcu/OSC_IN"
       },
       {
         "netclass": "LOCAL_ANALOG",
-        "pattern": "SENSE_M_AMP"
+        "pattern": "/mcu/OSC_OUT"
       },
       {
         "netclass": "LOCAL_ANALOG",
-        "pattern": "SENSE_P_AMP"
+        "pattern": "/mcu/VCAP1"
       },
       {
         "netclass": "LOCAL_ANALOG",
-        "pattern": "U6_RG1"
+        "pattern": "/output_buffer/OPA548_ES"
       },
       {
         "netclass": "LOCAL_ANALOG",
-        "pattern": "U6_RG2"
+        "pattern": "/output_buffer/OPA548_ILIM"
       },
       {
         "netclass": "LOCAL_ANALOG",
-        "pattern": "U7_RG1"
+        "pattern": "/voltage_sense/SENSE_M_AMP"
       },
       {
         "netclass": "LOCAL_ANALOG",
-        "pattern": "U7_RG2"
+        "pattern": "/voltage_sense/SENSE_P_AMP"
       },
       {
         "netclass": "LOCAL_ANALOG",
-        "pattern": "VCAP1"
+        "pattern": "/voltage_sense/U7_RG1"
       },
       {
         "netclass": "LOCAL_ANALOG",
-        "pattern": "VREF_HALF_RAW"
+        "pattern": "/voltage_sense/U7_RG2"
       },
       {
         "netclass": "POWER_HV",
@@ -529,59 +529,59 @@
       },
       {
         "netclass": "SENSE",
-        "pattern": "I_SENSE_OUT"
+        "pattern": "/I_SENSE_OUT"
       },
       {
         "netclass": "SENSE",
-        "pattern": "SENSE+"
+        "pattern": "/SENSE+"
       },
       {
         "netclass": "SENSE",
-        "pattern": "SENSE-"
+        "pattern": "/SENSE-"
+      },
+      {
+        "netclass": "SENSE",
+        "pattern": "/V_SENSE_OUT"
+      },
+      {
+        "netclass": "SENSE",
+        "pattern": "/V_SWEEP"
+      },
+      {
+        "netclass": "SENSE",
+        "pattern": "/dac_sweep/VREF_HALF"
+      },
+      {
+        "netclass": "SENSE",
+        "pattern": "/dac_sweep/V_DAC"
       },
       {
         "netclass": "SENSE",
         "pattern": "VREF_2V5"
       },
       {
-        "netclass": "SENSE",
-        "pattern": "VREF_HALF"
-      },
-      {
-        "netclass": "SENSE",
-        "pattern": "V_DAC"
-      },
-      {
-        "netclass": "SENSE",
-        "pattern": "V_SENSE_OUT"
-      },
-      {
-        "netclass": "SENSE",
-        "pattern": "V_SWEEP"
+        "netclass": "USB",
+        "pattern": "/mcu/USB_DM"
       },
       {
         "netclass": "USB",
-        "pattern": "USB_DM"
+        "pattern": "/mcu/USB_DM_CONN"
       },
       {
         "netclass": "USB",
-        "pattern": "USB_DM_CONN"
+        "pattern": "/mcu/USB_DM_ESD"
       },
       {
         "netclass": "USB",
-        "pattern": "USB_DM_ESD"
+        "pattern": "/mcu/USB_DP"
       },
       {
         "netclass": "USB",
-        "pattern": "USB_DP"
+        "pattern": "/mcu/USB_DP_CONN"
       },
       {
         "netclass": "USB",
-        "pattern": "USB_DP_CONN"
-      },
-      {
-        "netclass": "USB",
-        "pattern": "USB_DP_ESD"
+        "pattern": "/mcu/USB_DP_ESD"
       }
     ]
   },

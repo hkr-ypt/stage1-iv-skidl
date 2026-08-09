@@ -396,6 +396,30 @@ class CircuitModel:
                 self.symbols[lid] = SymbolDef(lid, part)
             self.part_sym[part.ref] = self.symbols[lid]
 
+    def board_net_name(self, net_name):
+        """The net name KiCad computes for the board, from the schematic.
+
+        KiCad does not use the bare net name on the board. It prefixes by the
+        sheet path of the highest sheet the net reaches, and *Update PCB from
+        Schematic* rewrites any pad that disagrees — which is why the update
+        log was full of "Reconnect C24 pin 1 from ADC_AIN0 to /adc/ADC_AIN0".
+
+        The three cases follow directly from the label this generator emits:
+
+        ``global_label``        the net is global; the name is bare.
+        ``hierarchical_label``  the net crosses sheets through hierarchical
+                                pins, so it resolves at the root: ``/NAME``.
+        ``label``               a plain local label, confined to one sheet:
+                                ``/<sheet>/NAME``.
+        """
+        kind = self.net_class[net_name]
+        if kind == "GLOBAL_POWER":
+            return net_name
+        if kind == "HIER_SIGNAL":
+            return f"/{net_name}"
+        block = sorted(self.net_blocks[net_name])[0]
+        return f"/{block}/{net_name}"
+
     def label_kind(self, net_name):
         return {"GLOBAL_POWER": "global_label",
                 "HIER_SIGNAL": "hierarchical_label",

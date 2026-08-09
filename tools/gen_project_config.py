@@ -172,11 +172,28 @@ def project_file():
         raise RuntimeError("netclasses violate docs/FAB_CONSTRAINTS.md:\n  - "
                            + "\n  - ".join(problems))
 
+    # Netclass membership must use the names KiCad puts on the BOARD, which are
+    # sheet-path qualified. Listing the bare design names leaves every local net
+    # in the Default class.
+    import main as project_main
+    from generators.schematic import CircuitModel
+    _n, _p, circuit = project_main.build()
+    model = CircuitModel(circuit)
+
+    def board_names(nets):
+        out = []
+        for n in nets:
+            try:
+                out.append(model.board_net_name(n))
+            except KeyError:
+                out.append(n)          # net not in the schematic model
+        return sorted(out)
+
     classes = [_netclass_entry("Default", DEFAULT_CLASS, [], 2147483647)]
     patterns = []
     for i, (name, spec) in enumerate(sorted(NETCLASSES.items())):
-        classes.append(_netclass_entry(name, spec, sorted(spec["nets"]), i))
-        for net in sorted(spec["nets"]):
+        classes.append(_netclass_entry(name, spec, board_names(spec["nets"]), i))
+        for net in board_names(spec["nets"]):
             # KiCad 8/9 assign by pattern instead of by the class's own `nets`
             # list. Both forms are written so the same project file works in
             # KiCad 7 (which reads `nets`) and 8/9 (which read patterns).
