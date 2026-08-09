@@ -44,6 +44,10 @@ jobs:
           sudo apt-get install -y -qq --no-install-recommends kicad \
             || echo "::warning::kicad-cli unavailable; KiCad-side checks SKIP"
           kicad-cli version || true
+          # pcbnew is what actually runs DRC (WriteDRCReport). It is a SWIG
+          # extension built against the DISTRO python, not the one
+          # actions/setup-python puts on PATH, so validation/drc_check.py
+          # locates a suitable interpreter itself and prints which one ran DRC.
 
       - name: Cache the pinned KiCad libraries
         id: libcache
@@ -71,6 +75,7 @@ jobs:
         run: |
           python3 tools/author_project_symbols.py --check
           python3 tools/gen_project_config.py --check
+          python3 tools/vendor_footprints.py --check
 
       - name: KiCad itself can read the generated library and schematic
         run: python3 tools/check_kicad_loads.py
@@ -89,6 +94,45 @@ jobs:
 
       - name: KiCad round-trip (KiCad's own reading of the schematic)
         run: python3 tools/kicad_roundtrip.py
+
+      - name: Board structural checks (courtyards, edges, ground split, parity)
+        run: python3 validation/drc_check.py
+
+      - name: Board clearances still match the fabrication capability
+        run: |
+          python3 - <<'PY'
+          import sys
+          from libraries.netclasses import check_against_fab, NETCLASSES, FAB
+          problems = check_against_fab()
+          if problems:
+              print("FAB CONFORMANCE FAILED:"); print("\n".join(problems))
+              sys.exit(1)
+          print(f"{len(NETCLASSES)} netclasses conform to "
+                f"docs/FAB_CONSTRAINTS.md ({FAB})")
+          PY
+
+      - name: The measured pad gap still bounds the global clearance
+        run: |
+          python3 tools/measure_pad_gaps.py --json > /tmp/gaps.json
+          python3 - <<'PY'
+          import json, sys
+          from libraries.netclasses import GLOBAL_MIN_CLEARANCE, INTRINSIC_MIN_PAD_GAP
+          tight = json.load(open("/tmp/gaps.json"))["tightest"]
+          measured = tight["min_gap_mm"]
+          if abs(measured - INTRINSIC_MIN_PAD_GAP) > 1e-6:
+              print(f"::error::libraries/netclasses.py claims the tightest pad "
+                    f"gap is {INTRINSIC_MIN_PAD_GAP} mm, but the footprint "
+                    f"files measure {measured} mm in {tight['footprint']}. "
+                    f"Update the constant and re-derive the global clearance.")
+              sys.exit(1)
+          if GLOBAL_MIN_CLEARANCE >= measured:
+              print(f"::error::global minimum clearance {GLOBAL_MIN_CLEARANCE} "
+                    f"mm is not below the measured pad gap {measured} mm")
+              sys.exit(1)
+          print(f"tightest measured pad gap {measured} mm in "
+                f"{tight['footprint']}; global clearance "
+                f"{GLOBAL_MIN_CLEARANCE} mm sits below it")
+          PY
 
       - name: Identifier audit — fail on any unresolved identifier
         run: |
@@ -117,12 +161,12 @@ jobs:
         run: |
           mkdir -p /tmp/run-a /tmp/run-b
           python3 main.py > /dev/null
-          cp ./*.kicad_sch component_manifest.md /tmp/run-a/
+          cp ./*.kicad_sch stage1_iv.kicad_pcb component_manifest.md /tmp/run-a/
           # The netlist header carries a generation timestamp; drop that one
           # line so the comparison is about content, not wall-clock time.
           sed '/(date /d' stage1_iv.net > /tmp/run-a/netlist
           python3 main.py > /dev/null
-          cp ./*.kicad_sch component_manifest.md /tmp/run-b/
+          cp ./*.kicad_sch stage1_iv.kicad_pcb component_manifest.md /tmp/run-b/
           sed '/(date /d' stage1_iv.net > /tmp/run-b/netlist
           diff -r /tmp/run-a /tmp/run-b
           echo "output is byte-identical across runs"
@@ -151,6 +195,18 @@ jobs:
             echo "(it first shipped in KiCad 8) — KiCad ERC SKIPPED, not passed."
           fi
 
+      # The board is UNROUTED on purpose, so DRC is expected to report
+      # unconnected_items and nothing else. validation/drc_check.py fails the
+      # job on any other violation class and reports the ratsnest as a count.
+      # Where kicad-cli has no `pcb drc` (KiCad 7), it says SKIPPED — DRC is
+      # never reported as passing on the strength of not having been run.
+      # DRC really runs here: kicad-cli gained `pcb drc` in KiCad 8, but
+      # pcbnew.WriteDRCReport() has existed since KiCad 7, and drc_check.py
+      # falls back to it. A KiCad that HAS DRC and refuses to run it — an
+      # uncompilable stage1_iv.kicad_dru, say — is a hard failure, not a skip.
+      - name: KiCad DRC
+        run: python3 validation/drc_check.py
+
   build-without-kicad:
     # The design must build with no KiCad at all, and must then say SKIPPED.
     runs-on: ubuntu-latest
@@ -174,4 +230,12 @@ jobs:
           grep -q "Symbol resolution ..... SKIPPED" /tmp/nokicad.log
           grep -q "Footprint resolution .. SKIPPED" /tmp/nokicad.log
           grep -q "KiCad ERC ............. NOT RUN" /tmp/nokicad.log
+          grep -q "Board .............. SKIPPED" /tmp/nokicad.log
+          grep -q "Board checks .......... SKIPPED" /tmp/nokicad.log
           echo "no-KiCad build correctly reports SKIPPED"
+      - name: The board was not emitted from guessed geometry
+        run: |
+          git diff --quiet -- stage1_iv.kicad_pcb || {
+            echo "::error::the board changed on a machine with no footprint libraries"
+            exit 1; }
+          echo "stage1_iv.kicad_pcb untouched without KiCad, as it must be"

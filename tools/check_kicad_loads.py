@@ -17,13 +17,19 @@ Nothing here re-implements a rule. It runs ``kicad-cli`` and believes it:
                                  renders
     kicad-cli sch export netlist the schematic parses and KiCad can read its
                                  connectivity
+    kicad-cli pcb export svg     the board parses and KiCad can plot its layers
 
-Both are skipped, loudly, when ``kicad-cli`` is not installed — never reported
-as a pass.
+All three are skipped, loudly, when ``kicad-cli`` is not installed — never
+reported as a pass.
+
+The board is emitted in the **KiCad 9/10 schema**, which an older ``kicad-cli``
+cannot read at all. That case reports **SKIPPED**, with the reason — never a
+pass, and never a failure either, because the board being newer than the local
+tool is not a defect in the board.
 
 Usage::
 
-    python3 tools/check_kicad_loads.py [--sym LIB] [--sch SCH]
+    python3 tools/check_kicad_loads.py [--sym LIB] [--sch SCH] [--pcb BOARD]
 
 Exit codes: 0 all checks passed, 1 KiCad rejected a file, 3 kicad-cli absent.
 """
@@ -43,6 +49,12 @@ REPO_ROOT = os.path.dirname(HERE)
 
 DEFAULT_SYM = os.path.join(REPO_ROOT, "libraries", "stage1_iv.kicad_sym")
 DEFAULT_SCH = os.path.join(REPO_ROOT, "stage1_iv.kicad_sch")
+DEFAULT_PCB = os.path.join(REPO_ROOT, "stage1_iv.kicad_pcb")
+
+# Layers the board must be able to plot. Edge.Cuts and both copper layers are
+# the ones a fabricator needs; if any of them fails to render, the board file
+# is not usable however well this project's own parser reads it.
+PCB_LAYERS = "F.Cu,B.Cu,Edge.Cuts,F.SilkS,B.SilkS,F.Mask,B.Mask"
 
 
 def _symbol_names(path):
@@ -112,10 +124,54 @@ def check_schematic(kicad_cli, path):
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+def check_board(kicad_cli, path):
+    if not os.path.isfile(path):
+        print(f"  SKIPPED — {os.path.relpath(path, REPO_ROOT)} does not exist. "
+              f"Run `python3 main.py`.")
+        return None
+    tmp = tempfile.mkdtemp(prefix="kicad-pcbcheck-")
+    try:
+        proc = subprocess.run(
+            [kicad_cli, "pcb", "export", "svg", "--output",
+             os.path.join(tmp, "board.svg"), "--layers", PCB_LAYERS, path],
+            capture_output=True, text=True)
+        out = (proc.stdout + proc.stderr).strip()
+        too_old = "more recent version" in out or "upgrade KiCad" in out
+        if too_old:
+            print(f"  SKIPPED — this kicad-cli is older than the board's "
+                  f"schema, so it cannot read "
+                  f"{os.path.relpath(path, REPO_ROOT)}.")
+            print("           The board is emitted in the KiCad 9/10 schema on "
+                  "purpose: relying on")
+            print("           KiCad's migration of an older schema is what lost "
+                  "the Edge.Cuts outline.")
+            print("           This is NOT a pass. Open the board in KiCad 9 or "
+                  "later to check it.")
+            return None
+        if proc.returncode != 0 or not os.path.isfile(
+                os.path.join(tmp, "board.svg")):
+            print(f"  [FAIL] KiCad could NOT read "
+                  f"{os.path.relpath(path, REPO_ROOT)}")
+            print(f"         kicad-cli said: {out or '(no message)'}")
+            print("         The board file is unreadable. Common causes: a "
+                  "KiCad 9 footprint node\n"
+                  "         that generators/pcb.py did not convert to v7 "
+                  "syntax — (hide yes),\n"
+                  "         (fill yes|no), (remove_unused_layers no) or a "
+                  "(property ...) field.")
+            return False
+        print(f"  [ OK ] KiCad read {os.path.relpath(path, REPO_ROOT)} and "
+              f"plotted {len(PCB_LAYERS.split(','))} layers")
+        return True
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[1])
     ap.add_argument("--sym", default=DEFAULT_SYM)
     ap.add_argument("--sch", default=DEFAULT_SCH)
+    ap.add_argument("--pcb", default=DEFAULT_PCB)
     args = ap.parse_args(argv)
 
     print("=" * 70)
@@ -133,6 +189,8 @@ def main(argv=None):
 
     ok = check_symbol_library(kicad_cli, args.sym)
     ok = check_schematic(kicad_cli, args.sch) and ok
+    board = check_board(kicad_cli, args.pcb)
+    ok = (board is not False) and ok
     return 0 if ok else 1
 
 

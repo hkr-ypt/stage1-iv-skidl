@@ -29,7 +29,12 @@ reset_copy() {
 # expect_fail <gate> <name> <python-patch-script>
 #   gate = structural : validation/footprint_check.py must fail
 #   gate = erc        : validation/erc.py must fail
-# main.py must fail in BOTH cases — it is the thing a user actually runs.
+#   gate = board      : validation/drc_check.py must fail
+# main.py must fail in EVERY case — it is the thing a user actually runs.
+#
+# `board` injections run against the board that main.py already emitted, so the
+# patch runs first, then main.py regenerates and re-checks. A board defect that
+# only main.py catches, or only drc_check.py catches, counts as MISSED.
 expect_fail() {
     local gate="$1" name="$2" patch="$3"
     reset_copy
@@ -42,8 +47,16 @@ expect_fail() {
     case "$gate" in
         structural) checker="validation/footprint_check.py" ;;
         erc)        checker="validation/erc.py" ;;
+        board)      checker="validation/drc_check.py" ;;
         *) echo "  [BUG] unknown gate $gate"; FAILURES=$((FAILURES + 1)); return ;;
     esac
+
+    # The board checks read the emitted .kicad_pcb, so it has to exist and be
+    # built from the patched source before the gate can see the defect.
+    if [ "$gate" = board ]; then
+        ( cd "$WORK/repo" && python3 main.py --pcb-only ) \
+            >"$WORK/pcb.log" 2>&1 || true
+    fi
 
     ( cd "$WORK/repo" && python3 "$checker" ) >"$WORK/gate.log" 2>&1
     gate_rc=$?
@@ -53,7 +66,8 @@ expect_fail() {
     if [ "$gate_rc" -ne 0 ] && [ "$main_rc" -ne 0 ]; then
         echo "  [CAUGHT] $name"
         echo "           $checker=$gate_rc, main.py=$main_rc"
-        grep -m2 -E "\[ERROR\]|\[ERC WARNING\]|ERC FAILED|PWR_FLAG invariant" \
+        grep -m2 -E "\[ERROR\]|\[ERC WARNING\]|ERC FAILED|PWR_FLAG invariant|\
+board defect|netclass|straddle|overlap" \
             "$WORK/gate.log" | sed 's/^/            /' || true
     else
         echo "  [MISSED] $name  ($checker=$gate_rc, main.py=$main_rc)"
@@ -139,6 +153,99 @@ p = pathlib.Path("libraries/custom_symbols.py"); s = p.read_text()
 assert "Connector_USB:USB_C_Receptacle_GCT_USB4085" in s
 p.write_text(s.replace("Connector_USB:USB_C_Receptacle_GCT_USB4085",
                        "Package_SO:VSSOP-8_3x3mm_P0.65mm"))
+'
+
+# --- the board gate --------------------------------------------------------
+
+# 9. a net in the design with no netclass: the board must refuse to be
+#    generated rather than let the net inherit somebody else's clearance
+expect_fail board "net with no netclass (LED_STATUS unclassified)" '
+import pathlib
+p = pathlib.Path("libraries/netclasses.py"); s = p.read_text()
+assert "\"LED_STATUS\"" in s
+p.write_text(s.replace("\"BOOT0\", \"LED_STATUS\", \"VBUS_SENSE\"",
+                       "\"BOOT0\", \"VBUS_SENSE\""))
+'
+
+# 10. the star resistor moved off the plane boundary: R31 no longer straddles
+#     the split, so AGND and DGND stop meeting where the schematic says they do
+expect_fail board "R31 no longer straddles the AGND/DGND split" '
+import pathlib
+p = pathlib.Path("generators/pcb.py"); s = p.read_text()
+assert "if len(sides) == 2:" in s
+p.write_text(s.replace(
+    "        if len(sides) == 2:",
+    "        if len(sides) == 2 and part.ref != \"R31\":"))
+'
+
+# 11. a placement that overlaps courtyards — the non-routing DRC violation class
+#     that a real fabrication run would reject
+expect_fail board "overlapping courtyards (negative part gutter)" '
+import pathlib
+p = pathlib.Path("generators/pcb.py"); s = p.read_text()
+assert "PART_GUTTER = 1.2" in s
+p.write_text(s.replace("PART_GUTTER = 1.2", "PART_GUTTER = -1.0"))
+'
+
+# 12. a netclass relaxed below what the fabricator can build: the board must not
+#     be emitted at all, however quiet it would make DRC
+expect_fail board "track width below the fab minimum (F3)" '
+import pathlib
+p = pathlib.Path("libraries/netclasses.py"); s = p.read_text()
+assert "\"DIGITAL\": {" in s
+head, tail = s.split("\"DIGITAL\": {", 1)
+tail = tail.replace("\"track_width\": 0.25,", "\"track_width\": 0.10,", 1)
+p.write_text(head + "\"DIGITAL\": {" + tail)
+'
+
+# 13. a netclass clearance wider than a package's own pad gap, with no scoped
+#     rule to cover it: KiCad would report clearance errors no routing can fix.
+#     This is the defect a real DRC run found and this repo's own checks missed.
+expect_fail board "netclass clearance exceeds a package's pad gap" '
+import pathlib
+p = pathlib.Path("stage1_iv.kicad_dru")
+p.write_text("(version 1)\n;; scoped rules removed\n")
+'
+
+# 14. min_hole_to_hole above the drill spacing J3 physically has
+expect_fail board "min_hole_to_hole above J3 USB-C drill spacing" '
+import pathlib
+p = pathlib.Path("libraries/netclasses.py"); s = p.read_text()
+assert "HOLE_GAP_MARGIN = 0.02" in s
+p.write_text(s.replace("HOLE_GAP_MARGIN = 0.02", "HOLE_GAP_MARGIN = -0.05"))
+'
+
+# 15. a footprint whose pad names drifted from the vendored revision - the
+#     USB-C S1 -> SH rename that broke "Update PCB from Schematic" on a KiCad 10
+#     machine. Owned by the structural gate: pin-number-to-pad-name agreement is
+#     footprint_check.py's job, and it fires before a board is ever emitted.
+#     (validation/drc_check.py::check_board_parity carries the same check for a
+#     board that somehow got written anyway.)
+expect_fail structural "vendored footprint drifts from the design (USB-C S1 -> SH)" '
+import pathlib
+p = pathlib.Path("libraries/footprints/Connector_USB.pretty/"
+                 "USB_C_Receptacle_GCT_USB4085.kicad_mod")
+s = p.read_text(); assert "\"S1\"" in s
+p.write_text(s.replace("(pad \"S1\"", "(pad \"SH\""))
+'
+
+# 16. a .kicad_dru KiCad cannot compile: DRC refuses to start entirely, so the
+#     user cannot check the board at all. This shipped once - the file used ';'
+#     comments, which the DSN lexer does not accept (it wants '#', first
+#     non-blank character of a line).
+expect_fail board "custom rules file KiCad cannot compile" '
+import pathlib
+p = pathlib.Path("stage1_iv.kicad_dru"); s = p.read_text()
+p.write_text(s.replace("# GENERATED FILE", ";; GENERATED FILE", 1))
+'
+
+# 17. the board emitted in a different schema from the footprints on it - the
+#     mismatch that cost the Edge.Cuts outline on KiCad 9
+expect_fail board "board schema does not match the vendored footprints" '
+import pathlib
+p = pathlib.Path("generators/pcb.py"); s = p.read_text()
+assert "BOARD_VERSION = \"20241229\"" in s
+p.write_text(s.replace("BOARD_VERSION = \"20241229\"", "BOARD_VERSION = \"20221018\""))
 '
 
 echo "----------------------------------------------------------------------"
