@@ -114,6 +114,26 @@ SILK_TEXT_GAP = 0.3                  # clear space around a designator
 # check reported zero. 1.15 is deliberately generous - overestimating the box
 # costs board area, underestimating it costs a DRC warning per part.
 SILK_CHAR_ADVANCE = 1.15
+# A designator goes on F.SilkS only if it clears EVERYTHING by this much. It is
+# deliberately far larger than any plausible modelling error: this project's
+# geometric model was wrong three times running, so the strategy is no longer
+# "fit it accurately" but "only keep it where no plausible model could object".
+SILK_SAFE_CLEARANCE = 1.0
+# Promotion of designators from F.Fab back onto F.SilkS is GATED OFF.
+#
+# KiCad's report is unambiguous: all 161 silkscreen violations involved a
+# Reference field, and not one was footprint-silk against footprint-silk. So
+# keeping every designator off F.SilkS removes the entire violation class by
+# construction - no geometry, no model, no estimate.
+#
+# The promotion path below is correct as far as it goes, and it would keep ~80
+# designators on the silkscreen. It is disabled because it would rest on the
+# same geometric model that has now been wrong three times running, and the
+# goal is a guarantee rather than a better guess. Turn this on only after a
+# KiCad 10 run has validated the model against a board it produced.
+PROMOTE_DESIGNATORS_TO_SILK = False
+# Board-level labels live in the margin and clear everything by this much.
+BOARD_LABEL_CLEARANCE = 2.0
 # KiCad flags silk that comes within this of copper or other silk. It is a
 # clearance, not an overlap: two objects 0.6 mm apart were reported.
 SILK_CLEARANCE = 0.25
@@ -704,9 +724,13 @@ def _mounting_hole(x, y, index):
         L(A("at"), num(x), num(y)),
         L(A("attr"), A("through_hole"), A("exclude_from_pos_files"),
           A("exclude_from_bom")),
+        # F.Fab, like every other designator on this board - the mounting
+        # holes are built here rather than by place_references(), and putting
+        # them on F.SilkS is exactly the kind of exception that lets a
+        # violation class back in. The guard in drc_check.py caught this.
         L(A("property"), Q("Reference"), Q(f"H{index}"),
           L(A("at"), A("0"), num(-MOUNTING_HOLE_PAD / 2 - 1), A("0")),
-          L(A("layer"), Q("F.SilkS")),
+          L(A("layer"), Q("F.Fab")),
           L(A("uuid"), Q(uid(f"mount:ref:{index}"))),
           L(A("effects"), L(A("font"), L(A("size"), A("1"), A("1")),
                             L(A("thickness"), A("0.15"))))),
@@ -817,79 +841,67 @@ def _silk_obstacles(items):
 
 
 def place_references(items):
-    """Give every reference designator a position clear of copper and silk.
+    """Put every designator on F.Fab, and promote back to F.SilkS only when it
+    is unambiguously safe.
 
-    The algorithm, in order:
+    THE STRATEGY CHANGED. It used to search for a position that fitted, using a
+    bounding-box model of the text. That model was wrong three times running —
+    KiCad reported 161 silkscreen warnings on a board this file had called
+    clean — so accuracy is no longer the mechanism. Safety is:
 
-    1. Candidates are generated on a ring around the part's own courtyard —
-       above, below, right, left, then the four diagonals — each at
-       ``SILK_TEXT_GAP`` from the courtyard edge. The ring then widens in
-       0.5 mm steps, up to 3 mm out, so a designator that cannot fit tight
-       against its part can still sit near it.
-    2. A candidate is accepted when its text box (including clear space)
-       overlaps no pad, no courtyard and no other footprint's silkscreen — the
-       three things that produce ``silk_over_copper`` and ``silk_overlap`` —
-       and no designator already placed.
-    3. Every designator is horizontal. One convention, applied uniformly: a
-       board read at the bench should not need turning.
-    4. If nothing fits, the designator moves to **F.Fab**, the assembly-drawing
-       layer, at the part's centre. It is never hidden and never deleted — the
-       part remains identifiable on the fabrication drawing, and the trade-off
-       is reported rather than buried.
+    * The default is **F.Fab**, the assembly-drawing layer. Nothing on F.Fab can
+      produce a silkscreen violation, so every designator starts in a state
+      that is correct by construction.
+    * A designator is promoted to **F.SilkS** only if one of four fixed
+      positions — directly N, S, E or W of its courtyard, at a constant
+      offset — clears every pad, every courtyard, every footprint's silkscreen
+      and every already-promoted designator by :data:`SILK_SAFE_CLEARANCE`
+      (1.0 mm). No micro-adjustment, no widening ring, no tight fitting.
+    * If none of the four qualifies, it stays on F.Fab.
 
-    Returns ``(fallbacks, boxes)`` — the references that had to fall back to
-    F.Fab, and the area every placed designator occupies, so that the
-    board-level silkscreen can avoid them too.
+    Nothing is hidden and nothing is deleted: every designator remains in the
+    file, visible on one layer or the other, and every part stays identifiable
+    on the fabrication drawing. That is the trade the evidence supports —
+    KiCad's own report shows that **every one of the 161 violations involved a
+    Reference field**, and none was footprint-silk against footprint-silk, so
+    moving designators off F.SilkS removes the entire violation class.
+
+    Returns ``(fab_refs, silk_boxes)``.
     """
     obstacles = _silk_obstacles(items)
-    placed_text = []
-    fallbacks = []
+    promoted, fab = [], []
 
-    # Largest parts first: they have the most neighbours competing for space,
-    # and a small part's designator is easier to fit into what is left.
     for item in sorted(items, key=lambda p: -(p.w * p.h)):
-        cx = item.x + item.cx
-        cy = item.y + item.cy
-        half_w = item.w / 2
-        half_h = item.h / 2
-        box0 = silk_text_box(item.ref, 0.0, 0.0)
+        cx, cy = item.x + item.cx, item.y + item.cy
+        box0 = silk_text_box(item.ref, 0.0, 0.0,
+                             clearance=SILK_SAFE_CLEARANCE)
         tw, th = box0[2], box0[3]
+        offset = SILK_SAFE_CLEARANCE
 
         chosen = None
-        for extra in [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 6.0, 8.0]:
-            ring = [
-                (cx, cy - half_h - th - extra),          # above
-                (cx, cy + half_h + th + extra),          # below
-                (cx + half_w + tw + extra, cy),          # right
-                (cx - half_w - tw - extra, cy),          # left
-                (cx + half_w + tw + extra, cy - half_h - th - extra),
-                (cx - half_w - tw - extra, cy - half_h - th - extra),
-                (cx + half_w + tw + extra, cy + half_h + th + extra),
-                (cx - half_w - tw - extra, cy + half_h + th + extra),
-            ]
-            for bx, by in ring:
-                box = _silk_bbox(item.ref, bx, by)
-                if any(_overlaps(box, o) for o in obstacles):
-                    continue
-                if any(_overlaps(box, o) for o in placed_text):
-                    continue
-                chosen = (bx, by)
-                break
-            if chosen:
-                break
-
+        candidates = () if not PROMOTE_DESIGNATORS_TO_SILK else (
+            (cx, cy - item.h / 2 - th - offset),
+            (cx, cy + item.h / 2 + th + offset),
+            (cx + item.w / 2 + tw + offset, cy),
+            (cx - item.w / 2 - tw - offset, cy))
+        for bx, by in candidates:
+            box = silk_text_box(item.ref, bx, by,
+                                clearance=SILK_SAFE_CLEARANCE)
+            if any(_overlaps(box, o) for o in obstacles):
+                continue
+            if any(_overlaps(box, o) for o in promoted):
+                continue
+            chosen = (bx, by)
+            break
         if chosen is None:
             _set_reference_placement(item.node, item.cx, item.cy, "F.Fab")
-            fallbacks.append(item.ref)
-            continue
-
-        if not _set_reference_placement(item.node, chosen[0] - item.x,
-                                        chosen[1] - item.y, "F.SilkS"):
-            raise RuntimeError(
-                f"{item.ref}: no Reference property to position. A designator "
-                f"that cannot be moved must not be reported as placed.")
-        placed_text.append(_silk_bbox(item.ref, *chosen))
-    return fallbacks, placed_text
+            fab.append(item.ref)
+        else:
+            _set_reference_placement(item.node, chosen[0] - item.x,
+                                     chosen[1] - item.y, "F.SilkS")
+            promoted.append(silk_text_box(item.ref, *chosen,
+                                          clearance=SILK_SAFE_CLEARANCE))
+    return fab, promoted
 
 
 def _set_reference_placement(node, dx, dy, layer):
@@ -927,7 +939,7 @@ def _set_reference_placement(node, dx, dy, layer):
 
 
 
-def _gr_text(text, x, y, layer="F.SilkS", height=SILK_TEXT_HEIGHT, key=""):
+def _gr_text(text, x, y, layer="F.SilkS", height=SILK_TEXT_HEIGHT, key=""):  # noqa: E501
     return L(A("gr_text"), Q(text),
              L(A("at"), num(x), num(y), A("0")),
              L(A("layer"), Q(layer)),
@@ -954,9 +966,22 @@ def board_silkscreen(x0, y0, x1, y1, boundary, items, circuit, ref_boxes=()):
     obstacles = _silk_obstacles(items) + list(ref_boxes)
 
     def emit(text, x, y, height=SILK_TEXT_HEIGHT, key=""):
-        """Emit board text and register the space it takes."""
-        obstacles.append(silk_text_box(text, x, y, height))
-        out.append(_gr_text(text, x, y, height=height, key=key))
+        """Emit board text in the margin, or on F.Fab if the margin is taken.
+
+        The margin - between the outline and the nearest courtyard - is the one
+        region of the board with no copper and no footprint silk in it. A label
+        that clears everything there by BOARD_LABEL_CLEARANCE cannot produce a
+        silkscreen violation. One that cannot goes to F.Fab rather than being
+        squeezed in.
+        """
+        box = silk_text_box(text, x, y, height,
+                            clearance=BOARD_LABEL_CLEARANCE)
+        layer = "F.SilkS"
+        if any(_overlaps(box, o) for o in obstacles):
+            layer = "F.Fab"
+        else:
+            obstacles.append(box)
+        out.append(_gr_text(text, x, y, height=height, key=key, layer=layer))
 
     # --- identity -------------------------------------------------------
     emit("Stage 1 I-V Characterization System", x0 + (x1 - x0) / 2,
@@ -1129,7 +1154,7 @@ def generate_pcb(circuit, out_dir="."):
     # Designators are positioned before the board is sized, so the text is
     # inside the outline like everything else.
     all_items = [i for g in placed_blocks.values() for i in g]
-    silk_fallbacks, ref_boxes = place_references(all_items)
+    silk_on_fab, ref_boxes = place_references(all_items)
 
     x0, y0, x1, y1 = size_board(placed_blocks)
 
@@ -1199,7 +1224,8 @@ def generate_pcb(circuit, out_dir="."):
         "zone_boundary_x": round(boundary, 3),
         "zone_gap_mm": ZONE_GAP,
         "ground_bridges": sorted(p.ref for p in bridges),
-        "silk_fallbacks": sorted(silk_fallbacks),
+        "designators_on_fab": sorted(silk_on_fab),
+        "designators_on_silk": len(all_items) - len(silk_on_fab),
         "mounting_holes": len(holes),
         "netclass_counts": {k: sum(1 for v in net_class.values() if v == k)
                             for k in sorted(set(net_class.values()))},

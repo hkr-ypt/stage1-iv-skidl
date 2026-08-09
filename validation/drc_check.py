@@ -720,25 +720,52 @@ def _silk_items(board):
     return out
 
 
+SILK_BASELINE = os.path.join(_REPO_ROOT, "validation", "fixtures",
+                             "kicad_silk_baseline.json")
+
+# Option A, from the brief: a conservative rule, not a model of KiCad. Any
+# silkscreen TEXT within this of copper counts as a violation. It is far wider
+# than KiCad's own rule on purpose - false positives are acceptable, false
+# negatives are what put 161 warnings past this file three times.
+SILK_RULE_CLEARANCE = 0.5
+
+
+def _load_silk_baseline():
+    try:
+        with open(SILK_BASELINE, encoding="utf-8") as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return None
+
+
 def check_silkscreen(board):
-    """Silkscreen must not sit on copper, or on other silkscreen.
+    """Silkscreen pre-filter. NOT an authority — KiCad 10 DRC is.
 
-    This is NOT KiCad's silk check and does not claim to be — it is a
-    conservative bounding-box test over the emitted file, run because the KiCad
-    in this build environment cannot open a v9 board. KiCad's own
-    ``silk_overlap`` and ``silk_over_copper`` remain the authority; this exists
-    so the generator is not shipped completely unverified.
+    Approach A from the brief: a conservative rule rather than a model of
+    KiCad's geometry. Any silkscreen text within :data:`SILK_RULE_CLEARANCE`
+    (0.5 mm) of a pad, or of another silk object, is a violation. That is
+    deliberately stricter than KiCad, because this file's previous geometric
+    model was wrong three times running and each time in the same direction —
+    it reported clean while KiCad reported 161.
 
-    Text boxes are compared against pads (``silk_over_copper``) and against
-    other silk objects (``silk_overlap``). Footprint-to-footprint silk graphics
-    are not compared with each other: those come from KiCad's own libraries and
-    are separated by the courtyard check.
+    THE HARD GUARD. Reporting "clean" is only permitted when this checker can
+    demonstrate it would have caught the known-bad board. The KiCad 10 report
+    for that board is stored in ``validation/fixtures/kicad_silk_baseline.json``
+    — 92 ``silk_over_copper``, 69 ``silk_overlap``, across 72 references, none
+    of which involved anything but a Reference field. If the current board
+    keeps any designator on F.SilkS, this checker cannot prove it would have
+    caught that, so it refuses to certify and says so.
+
+    The board it certifies is therefore one where the question does not arise:
+    every designator sits on F.Fab, which cannot produce a silkscreen violation
+    at all.
     """
+    baseline = _load_silk_baseline()
     items = _silk_items(board)
     pads = []
     for fp in board.footprints:
         for pad in fp.pads:
-            m = SOLDER_MASK_MARGIN
+            m = SOLDER_MASK_MARGIN + SILK_RULE_CLEARANCE
             pads.append((pad["x"] - pad["w"] / 2 - m,
                          pad["y"] - pad["h"] / 2 - m,
                          pad["x"] + pad["w"] / 2 + m,
@@ -749,26 +776,36 @@ def check_silkscreen(board):
                 and a[1] < b[3] - EPS and b[1] < a[3] - EPS)
 
     problems = []
-    counts = {"silk_over_copper": 0, "silk_overlap": 0}
     texts = [i for i in items if i[0] in ("text", "board-text")]
-    for kind, ref, box in texts:
-        for pad in pads:
-            if hit(box, pad):
-                counts["silk_over_copper"] += 1
-                problems.append(f"silk over copper: {ref} text sits on a pad")
+    for _kind, ref, box in texts:
+        if any(hit(box, pad) for pad in pads):
+            problems.append(f"silk text {ref} is within "
+                            f"{SILK_RULE_CLEARANCE} mm of copper")
+        for _k2, ref2, box2 in items:
+            if ref2 != ref and hit(box, box2):
+                problems.append(f"silk text {ref} is within "
+                                f"{SILK_RULE_CLEARANCE} mm of {ref2}'s "
+                                f"silkscreen")
                 break
-    for i, (_k, ref, box) in enumerate(texts):
-        for _k2, ref2, box2 in items[:]:
-            if ref2 == ref:
-                continue
-            if hit(box, box2):
-                counts["silk_overlap"] += 1
-                problems.append(f"silk overlap: {ref} text overlaps "
-                                f"silkscreen of {ref2}")
-                break
-    if problems:
-        problems.insert(0, f"{counts['silk_over_copper']} silk_over_copper, "
-                           f"{counts['silk_overlap']} silk_overlap")
+
+    # --- the guard ------------------------------------------------------
+    on_silk = [ref for kind, ref, _b in items if kind == "text"]
+    if baseline is None:
+        problems.append(
+            "the KiCad silk baseline fixture is missing, so this checker "
+            "cannot demonstrate it would catch a known-bad board. It must not "
+            "be trusted to report clean.")
+    elif on_silk and not problems:
+        problems.append(
+            f"{len(on_silk)} reference designator(s) are on F.SilkS and this "
+            f"checker found nothing wrong — but it is a 0.5 mm rule, not "
+            f"KiCad's geometry, and on the board recorded in "
+            f"{os.path.relpath(SILK_BASELINE, _REPO_ROOT)} KiCad found "
+            f"{baseline['total_silk']} violations across "
+            f"{baseline['distinct_refs_implicated']} references while this "
+            f"file reported 9. A clean result here is not evidence. Either "
+            f"move the designators to F.Fab, or validate against KiCad 10 "
+            f"first.")
     return problems[:20]
 
 
