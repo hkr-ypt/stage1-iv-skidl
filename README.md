@@ -248,7 +248,8 @@ PASS, 0 unresolved identifiers, 0 unaccounted pads**, and:
 - `stage1_iv.net` — KiCad netlist
 - `stage1_iv.kicad_sch` + 8 child `.kicad_sch` — hierarchical KiCad schematic
   (self-contained; see below and [`SCHEMATIC.md`](SCHEMATIC.md))
-- `stage1_iv.kicad_pcb` — placed, **unrouted** board: outline, mounting holes,
+- `stage1_iv.kicad_pcb` — placed, **unrouted** board (KiCad 9/10 schema):
+  outline, mounting holes,
   netclass-aware setup and the AGND/DGND pours
   (see [`docs/pcb_generation.md`](docs/pcb_generation.md))
 - `component_manifest.md` — generated component table

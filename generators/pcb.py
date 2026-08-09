@@ -19,17 +19,24 @@ plan and the honest violation count.
 
 BOARD FORMAT
 ------------
-The board is emitted in the **KiCad 7 board schema** (``version 20221018``).
-That is deliberate and it is the same reasoning as
-``tools/author_project_symbols.py``: KiCad 7 is the newest version installable
-in this environment, so a v7 board is one this project can actually hand to
-``kicad-cli`` and have parsed. KiCad 8/9 migrate v7 boards on load.
+The board is emitted in the **KiCad 9/10 board schema** (``version 20241229``),
+which is what the vendored footprints already are — so nothing is converted and
+nothing is migrated.
 
-The installed footprints are KiCad 9 files, so :func:`load_footprint` converts
-each one to v7 syntax on the way in — ``(uuid …)`` → ``(tstamp …)``,
-``(property "Reference" …)`` → ``(fp_text reference …)``, ``(hide yes)`` →
-``hide``, and the v9-only ``(version)``/``(generator)``/``(embedded_fonts)``
-nodes dropped. ``tools/check_kicad_loads.py`` verifies the result parses.
+It was previously emitted as KiCad 7, with each footprint rewritten down to v7
+syntax, on the reasoning that KiCad 7 is the newest version installable here and
+that KiCad 8/9 migrate v7 boards on load. **They do not migrate it faithfully.**
+KiCad 8 renumbered every layer — ``B.Cu`` moved from 31 to 2, ``Edge.Cuts`` from
+44 to 25 — and a reviewer's KiCad 9 reported "Board has malformed outline (no
+edges found on Edge.Cuts layer)" for a closed rectangle that KiCad 7 read
+without complaint.
+
+Emitting the schema the design's KiCad actually uses removes the migration step
+entirely, and lets the vendored footprints go in verbatim. The cost is that the
+KiCad installed in this build environment (7.x) can no longer read the board, so
+``kicad_drc`` and the board half of ``tools/check_kicad_loads.py`` report
+**SKIPPED** there — never a pass. ``validation/drc_check.py::check_schema_version``
+fails the build if the board and the footprints ever drift apart again.
 
 PLACEMENT
 ---------
@@ -66,7 +73,7 @@ from libraries.netclasses import (  # noqa: E402
     classify, check_against_fab,
 )
 
-BOARD_VERSION = "20221018"          # KiCad 7 .kicad_pcb schema
+BOARD_VERSION = "20241229"          # KiCad 9/10 .kicad_pcb schema
 GENERATOR = "stage1_iv_skidl"
 UUID_NS = _uuid.uuid5(_uuid.NAMESPACE_DNS, "stage1-iv-skidl.pcb")
 
@@ -122,88 +129,52 @@ def num(value):
 
 
 # =====================================================================
-#  Footprint loading: KiCad 9 .kicad_mod -> KiCad 7 board footprint
+#  Footprint loading: a vendored .kicad_mod goes into the board VERBATIM
 # =====================================================================
 
-_DROP_AT_TOP = {"version", "generator", "generator_version", "embedded_fonts",
-                "model", "tags", "descr"}
-
-# Nodes KiCad 9 spells "(name yes)" / "(name no)" but KiCad 7 spells as a bare
-# "(name)" when true and omits when false.
-_BOOL_FLAGS = {"remove_unused_layers", "keep_end_layers", "locked", "placed",
-               "board_only", "exclude_from_pos_files", "exclude_from_bom",
-               "allow_solder_mask_bridges", "allow_missing_courtyard",
-               "dnp", "fields_autoplaced", "unlocked", "mirror", "bold",
-               "italic"}
-
-
-def _convert(node):
-    """Recursively rewrite a v9 footprint node into v7 board syntax."""
-    if not isinstance(node, list):
-        return node
-    head = str(node[0]) if node and isinstance(node[0], str) else ""
-
-    if head == "uuid":
-        return L(A("tstamp"), *[A(str(x)) for x in node[1:]])
-
-    if head in _BOOL_FLAGS and len(node) == 2 and str(node[1]) in ("yes", "no"):
-        # v9 writes these as "(flag yes|no)"; v7 writes the bare token when set
-        # and omits it entirely when clear.
-        return L(A(head)) if str(node[1]) == "yes" else None
-
-    if head == "fill" and len(node) == 2 and str(node[1]) in ("yes", "no"):
-        # v9 graphic fill is yes/no; v7 spells the same thing solid/none.
-        return L(A("fill"), A("solid" if str(node[1]) == "yes" else "none"))
-
-    if head == "hide" and len(node) > 1:
-        # v9 "(hide yes)" is v7 bare "hide"; "(hide no)" simply disappears.
-        return A("hide") if str(node[1]) == "yes" else None
-
-    if head == "property" and len(node) > 2:
-        name, value = str(node[1]), str(node[2])
-        kind = {"Reference": "reference", "Value": "value"}.get(name)
-        if kind is None:
-            return None                      # Datasheet/Description: v7 has no slot
-        rest = [_convert(c) for c in node[3:] if isinstance(c, list)]
-        return L(A("fp_text"), A(kind), Q(value),
-                 *[r for r in rest if r is not None])
-
-    out = [node[0]] if head else []
-    for child in node[1:]:
-        if isinstance(child, list):
-            ch = str(child[0]) if child and isinstance(child[0], str) else ""
-            if ch in _DROP_AT_TOP and head == "footprint":
-                continue
-            conv = _convert(child)
-            if conv is not None:
-                out.append(conv)
-        else:
-            out.append(child)
-    return SexpList(out)
+# A standalone .kicad_mod carries these; a footprint inside a board does not.
+# Everything else - descr, tags, properties, graphics, pads, models - is copied
+# unchanged, because the file is already in the board's own schema.
+_DROP_AT_TOP = {"version", "generator", "generator_version"}
 
 
 def load_footprint(libs, fp_id):
-    """Parse a footprint from the installed libraries, converted to v7."""
+    """Parse a vendored footprint and prepare it for placement on the board.
+
+    No format conversion happens. ``libraries/footprints`` holds KiCad 9 files
+    and the board is emitted in the KiCad 9/10 schema, so the footprint is
+    already in the right syntax — which is the point: the previous version of
+    this file rewrote each footprint into KiCad 7 syntax, and relying on
+    KiCad's v7 board migration is what lost the Edge.Cuts outline on the
+    reviewer's KiCad 9.
+    """
     fp = libs.get_footprint(fp_id)
     if fp is None:
         raise RuntimeError(f"footprint {fp_id!r} does not resolve; run "
                            f"validation/footprint_check.py")
     with open(fp.file, encoding="utf-8") as fh:
         tree = parse_sexp(fh.read())
-    node = None
+    src = None
     for child in tree:
         if isinstance(child, list) and child and str(child[0]) == "footprint":
-            node = child
+            src = child
             break
-    if node is None:
+    if src is None:
         raise RuntimeError(f"{fp.file}: no (footprint ...) node")
-    node = _convert(node)
+
     # The footprint's own name in a board file is the FULL library id. Emitting
-    # the bare name makes KiCad report "The current configuration does not
-    # include the library ''" for every footprint on the board, and breaks
-    # "Update Footprints from Library".
-    node[1] = Q(fp_id)
-    return node, fp.file
+    # the bare name makes KiCad report "the current configuration does not
+    # include the library ''" for every footprint on the board.
+    out = [src[0], Q(fp_id), L(A("layer"), Q("F.Cu")),
+           L(A("uuid"), Q(uid(f"fp:{fp_id}")))]
+    for child in src[2:]:
+        if isinstance(child, list) and child and \
+                str(child[0]) in _DROP_AT_TOP:
+            continue
+        if isinstance(child, list) and child and str(child[0]) == "layer":
+            continue                    # replaced above
+        out.append(child)
+    return SexpList(out), fp.file
 
 
 def _primitive_points(node):
@@ -290,20 +261,29 @@ def set_position(node, x, y):
     node.insert(2, L(A("at"), num(x), num(y)))
 
 
-def set_reference(node, ref):
-    for child in node:
-        if (isinstance(child, list) and str(child[0]) == "fp_text"
-                and len(child) > 1 and str(child[1]) == "reference"):
-            child[2] = Q(ref)
+def _set_uuid(node, value):
+    for i, child in enumerate(node):
+        if isinstance(child, list) and str(child[0]) == "uuid":
+            node[i] = L(A("uuid"), Q(value))
             return
+
+
+def _set_property(node, name, value):
+    """Set a v9 footprint field, which is (property "Name" "value" ...)."""
+    for child in node:
+        if (isinstance(child, list) and str(child[0]) == "property"
+                and len(child) > 2 and str(child[1]) == name):
+            child[2] = Q(value)
+            return True
+    return False
+
+
+def set_reference(node, ref):
+    _set_property(node, "Reference", ref)
 
 
 def set_value(node, value):
-    for child in node:
-        if (isinstance(child, list) and str(child[0]) == "fp_text"
-                and len(child) > 1 and str(child[1]) == "value"):
-            child[2] = Q(value)
-            return
+    _set_property(node, "Value", value)
 
 
 # SKiDL pin function -> KiCad pad pintype. The board carries the same
@@ -566,18 +546,27 @@ def pack_block(items, origin_x, origin_y, max_width):
 #  Board emission
 # =====================================================================
 
+# The KiCad 9/10 layer numbering, copied from a board KiCad itself wrote
+# (kicad/qa/data/pcbnew/api_kitchen_sink.kicad_pcb @ 10.0.5). KiCad 8 renumbered
+# every layer: B.Cu moved from 31 to 2 and Edge.Cuts from 44 to 25. Emitting the
+# KiCad 7 numbering and trusting the loader to migrate it is what silently lost
+# the board outline - KiCad 9 reported "no edges found on Edge.Cuts layer" for a
+# rectangle KiCad 7 read without complaint.
 LAYERS = [
-    (0, "F.Cu", "signal"), (31, "B.Cu", "signal"),
-    (32, "B.Adhes", "user", "B.Adhesive"), (33, "F.Adhes", "user", "F.Adhesive"),
-    (34, "B.Paste", "user"), (35, "F.Paste", "user"),
-    (36, "B.SilkS", "user", "B.Silkscreen"), (37, "F.SilkS", "user", "F.Silkscreen"),
-    (38, "B.Mask", "user"), (39, "F.Mask", "user"),
-    (40, "Dwgs.User", "user", "User.Drawings"),
-    (41, "Cmts.User", "user", "User.Comments"),
-    (42, "Eco1.User", "user", "User.Eco1"), (43, "Eco2.User", "user", "User.Eco2"),
-    (44, "Edge.Cuts", "user"), (45, "Margin", "user"),
-    (46, "B.CrtYd", "user", "B.Courtyard"), (47, "F.CrtYd", "user", "F.Courtyard"),
-    (48, "B.Fab", "user"), (49, "F.Fab", "user"),
+    (0, "F.Cu", "signal"), (2, "B.Cu", "signal"),
+    (9, "F.Adhes", "user", "F.Adhesive"), (11, "B.Adhes", "user", "B.Adhesive"),
+    (13, "F.Paste", "user"), (15, "B.Paste", "user"),
+    (5, "F.SilkS", "user", "F.Silkscreen"),
+    (7, "B.SilkS", "user", "B.Silkscreen"),
+    (1, "F.Mask", "user"), (3, "B.Mask", "user"),
+    (17, "Dwgs.User", "user", "User.Drawings"),
+    (19, "Cmts.User", "user", "User.Comments"),
+    (21, "Eco1.User", "user", "User.Eco1"),
+    (23, "Eco2.User", "user", "User.Eco2"),
+    (25, "Edge.Cuts", "user"), (27, "Margin", "user"),
+    (31, "F.CrtYd", "user", "F.Courtyard"),
+    (29, "B.CrtYd", "user", "B.Courtyard"),
+    (35, "F.Fab", "user"), (33, "B.Fab", "user"),
 ]
 
 
@@ -648,45 +637,54 @@ def _edge_rect(x0, y0, x1, y1):
                      L(A("stroke"), L(A("width"), A("0.1")),
                        L(A("type"), A("default"))),
                      L(A("layer"), Q("Edge.Cuts")),
-                     L(A("tstamp"), A(uid(f"edge:{i}")))))
+                     L(A("uuid"), Q(uid(f"edge:{i}")))))
     return out
 
 
 def _mounting_hole(x, y, index):
-    """A plated-through mounting hole as a bare pad-less footprint."""
+    """A non-plated M3 mounting hole, in the board's own (KiCad 9/10) syntax.
+
+    Hand-built rather than vendored because MountingHole is a mechanical part
+    with no schematic symbol, so it has no entry in the circuit. Every node
+    below matches what KiCad itself writes: (property "Reference" ...) rather
+    than the KiCad 7 (fp_text reference ...), (hide yes) rather than a bare
+    hide, and (uuid "...") rather than (tstamp ...).
+    """
     return L(
         A("footprint"), Q("MountingHole:MountingHole_3.2mm_M3_Pad"),
         L(A("layer"), Q("F.Cu")),
-        L(A("tstamp"), A(uid(f"mount:{index}"))),
+        L(A("uuid"), Q(uid(f"mount:{index}"))),
         L(A("at"), num(x), num(y)),
         L(A("attr"), A("through_hole"), A("exclude_from_pos_files"),
           A("exclude_from_bom")),
-        L(A("fp_text"), A("reference"), Q(f"H{index}"),
-          L(A("at"), A("0"), num(-MOUNTING_HOLE_PAD / 2 - 1)),
+        L(A("property"), Q("Reference"), Q(f"H{index}"),
+          L(A("at"), A("0"), num(-MOUNTING_HOLE_PAD / 2 - 1), A("0")),
           L(A("layer"), Q("F.SilkS")),
+          L(A("uuid"), Q(uid(f"mount:ref:{index}"))),
           L(A("effects"), L(A("font"), L(A("size"), A("1"), A("1")),
-                            L(A("thickness"), A("0.15")))),
-          L(A("tstamp"), A(uid(f"mount:ref:{index}")))),
-        L(A("fp_text"), A("value"), Q("MountingHole"),
-          L(A("at"), A("0"), num(MOUNTING_HOLE_PAD / 2 + 1)),
+                            L(A("thickness"), A("0.15"))))),
+        L(A("property"), Q("Value"), Q("MountingHole"),
+          L(A("at"), A("0"), num(MOUNTING_HOLE_PAD / 2 + 1), A("0")),
           L(A("layer"), Q("F.Fab")),
-          A("hide"),
+          L(A("hide"), A("yes")),
+          L(A("uuid"), Q(uid(f"mount:val:{index}"))),
           L(A("effects"), L(A("font"), L(A("size"), A("1"), A("1")),
-                            L(A("thickness"), A("0.15")))),
-          L(A("tstamp"), A(uid(f"mount:val:{index}")))),
+                            L(A("thickness"), A("0.15"))))),
         L(A("fp_circle"),
           L(A("center"), A("0"), A("0")),
-          L(A("end"), num(MOUNTING_HOLE_PAD / 2 + 0.25), A("0")),
+          L(A("end"), num(MOUNTING_HOLE_CRTYD), A("0")),
           L(A("stroke"), L(A("width"), A("0.05")), L(A("type"), A("default"))),
-          L(A("fill"), A("none")),
+          L(A("fill"), A("no")),
           L(A("layer"), Q("F.CrtYd")),
-          L(A("tstamp"), A(uid(f"mount:crt:{index}")))),
+          L(A("uuid"), Q(uid(f"mount:crt:{index}")))),
+        # Non-plated: a mask opening only, no copper. Matches how KiCad writes
+        # an np_thru_hole pad.
         L(A("pad"), Q(""), A("np_thru_hole"), A("circle"),
           L(A("at"), A("0"), A("0")),
           L(A("size"), num(MOUNTING_HOLE_DIA), num(MOUNTING_HOLE_DIA)),
           L(A("drill"), num(MOUNTING_HOLE_DIA)),
-          L(A("layers"), Q("F&B.Cu"), Q("*.Mask")),
-          L(A("tstamp"), A(uid(f"mount:pad:{index}")))),
+          L(A("layers"), Q("*.Mask")),
+          L(A("uuid"), Q(uid(f"mount:pad:{index}")))),
     )
 
 
@@ -696,8 +694,8 @@ def _zone(net_code, net_name, poly, index, clearance, min_width):
         A("zone"),
         L(A("net"), A(net_code)),
         L(A("net_name"), Q(net_name)),
-        L(A("layers"), Q("F&B.Cu")),
-        L(A("tstamp"), A(uid(f"zone:{net_name}:{index}"))),
+        L(A("layers"), Q("F.Cu"), Q("B.Cu")),
+        L(A("uuid"), Q(uid(f"zone:{net_name}:{index}"))),
         L(A("name"), Q(f"{net_name}_zone")),
         L(A("hatch"), A("edge"), A("0.5")),
         L(A("connect_pads"), L(A("clearance"), num(clearance))),
@@ -763,6 +761,7 @@ def generate_pcb(circuit, out_dir="."):
     by_block, bridges = {}, []
     for part in physical:
         node, _src = load_footprint(libs, part.footprint.strip())
+        _set_uuid(node, uid(f"fp:{part.ref}"))
         set_reference(node, part.ref)
         set_value(node, str(part.value))
         assign_nets(node, pad_net.get(part.ref, {}))
@@ -798,8 +797,10 @@ def generate_pcb(circuit, out_dir="."):
     # --- assemble -------------------------------------------------------
     board = [A("kicad_pcb"),
              L(A("version"), A(BOARD_VERSION)),
-             L(A("generator"), A(GENERATOR)),
-             L(A("general"), L(A("thickness"), A("1.6"))),
+             L(A("generator"), Q(GENERATOR)),
+             L(A("generator_version"), Q("9.0")),
+             L(A("general"), L(A("thickness"), A("1.6")),
+               L(A("legacy_teardrops"), A("no"))),
              L(A("paper"), Q("A3")),
              _layers_block(),
              _setup_block()]

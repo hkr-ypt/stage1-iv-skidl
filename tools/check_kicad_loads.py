@@ -22,11 +22,10 @@ Nothing here re-implements a rule. It runs ``kicad-cli`` and believes it:
 All three are skipped, loudly, when ``kicad-cli`` is not installed — never
 reported as a pass.
 
-The board check matters for the same reason the symbol one does. The installed
-footprint libraries are KiCad 9 files and ``generators/pcb.py`` rewrites them
-into the KiCad 7 board syntax on the way in; that conversion is exactly the
-kind of thing this project's own parser would happily accept and KiCad would
-reject.
+The board is emitted in the **KiCad 9/10 schema**, which an older ``kicad-cli``
+cannot read at all. That case reports **SKIPPED**, with the reason — never a
+pass, and never a failure either, because the board being newer than the local
+tool is not a defect in the board.
 
 Usage::
 
@@ -137,6 +136,18 @@ def check_board(kicad_cli, path):
              os.path.join(tmp, "board.svg"), "--layers", PCB_LAYERS, path],
             capture_output=True, text=True)
         out = (proc.stdout + proc.stderr).strip()
+        too_old = "more recent version" in out or "upgrade KiCad" in out
+        if too_old:
+            print(f"  SKIPPED — this kicad-cli is older than the board's "
+                  f"schema, so it cannot read "
+                  f"{os.path.relpath(path, REPO_ROOT)}.")
+            print("           The board is emitted in the KiCad 9/10 schema on "
+                  "purpose: relying on")
+            print("           KiCad's migration of an older schema is what lost "
+                  "the Edge.Cuts outline.")
+            print("           This is NOT a pass. Open the board in KiCad 9 or "
+                  "later to check it.")
+            return None
         if proc.returncode != 0 or not os.path.isfile(
                 os.path.join(tmp, "board.svg")):
             print(f"  [FAIL] KiCad could NOT read "

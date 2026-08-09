@@ -239,6 +239,15 @@ p = pathlib.Path("stage1_iv.kicad_dru"); s = p.read_text()
 p.write_text(s.replace("# GENERATED FILE", ";; GENERATED FILE", 1))
 '
 
+# 17. the board emitted in a different schema from the footprints on it - the
+#     mismatch that cost the Edge.Cuts outline on KiCad 9
+expect_fail board "board schema does not match the vendored footprints" '
+import pathlib
+p = pathlib.Path("generators/pcb.py"); s = p.read_text()
+assert "BOARD_VERSION = \"20241229\"" in s
+p.write_text(s.replace("BOARD_VERSION = \"20241229\"", "BOARD_VERSION = \"20221018\""))
+'
+
 echo "----------------------------------------------------------------------"
 if [ "$FAILURES" -eq 0 ]; then
     echo "ALL INJECTED FAULTS CAUGHT — the guard works."

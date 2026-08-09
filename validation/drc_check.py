@@ -13,6 +13,7 @@ What it enforces
 =========================  ====================================================
 ``board_parity``           the board matches the circuit main.py builds now
 ``dru_parses``             the custom rules file is one KiCad can compile
+``schema_version``         board and vendored footprints share a file schema
 ``rule_satisfiability``    no clearance rule demands more than a package gives
 ``hole_spacing``           min_hole_to_hole does not exceed the parts' drills
 ``courtyard_overlap``      no two footprint courtyards intersect
@@ -188,7 +189,10 @@ class Footprint:
         self.node = node
         self.x, self.y, self.rot = _at(node)
         self.ref = ""
-        for t in _kids(node, "fp_text"):
+        for t in _kids(node, "property"):        # KiCad 9/10
+            if len(t) > 2 and str(t[1]) == "Reference":
+                self.ref = str(t[2])
+        for t in _kids(node, "fp_text"):         # KiCad 7 and earlier
             if len(t) > 2 and str(t[1]) == "reference":
                 self.ref = str(t[2])
         self.pads = []
@@ -625,6 +629,42 @@ def check_dru_parses():
     return []
 
 
+def check_schema_version(board):
+    """The board and the footprints on it must be the same file-format schema.
+
+    The board is emitted in the KiCad 9/10 schema and the vendored footprints
+    are KiCad 9 files, so they agree. They did not always: the board was once
+    emitted as KiCad 7 with the footprints rewritten down to v7 syntax, and
+    trusting KiCad's migration cost the Edge.Cuts outline — KiCad 9 reported
+    "no edges found on Edge.Cuts layer" for a rectangle that KiCad 7 read
+    perfectly, because KiCad 8 renumbered every layer (Edge.Cuts 44 -> 25).
+
+    Emitting the schema the design's KiCad actually uses removes the migration
+    step entirely. This check makes sure the two never drift apart again.
+    """
+    import glob
+    import re
+    ver = _first(board.root, "version")
+    board_ver = str(ver[1]) if ver is not None and len(ver) > 1 else None
+    if board_ver is None:
+        return ["the board has no (version ...) node"]
+
+    problems = []
+    pattern = os.path.join(_REPO_ROOT, "libraries", "footprints",
+                           "*.pretty", "*.kicad_mod")
+    for path in sorted(glob.glob(pattern)):
+        with open(path, encoding="utf-8") as fh:
+            head = fh.read(400)
+        m = re.search(r"\(version (\d+)\)", head)
+        if m and m.group(1) != board_ver:
+            problems.append(
+                f"{os.path.relpath(path, _REPO_ROOT)} is schema "
+                f"{m.group(1)} but the board is schema {board_ver}. Put them "
+                f"on the same schema rather than relying on KiCad to migrate "
+                f"one of them — see docs/pcb_generation.md.")
+    return problems[:5]
+
+
 def check_board_parity(board):
     """The board must match the circuit that main.py builds right now.
 
@@ -711,7 +751,14 @@ def _drc_via_pcbnew(board_path):
                       f"WriteDRCReport()")
     with tempfile.TemporaryDirectory() as tmp:
         out = os.path.join(tmp, "drc.rpt")
-        board = pcbnew.LoadBoard(board_path)
+        try:
+            board = pcbnew.LoadBoard(board_path)
+        except (OSError, IOError, RuntimeError) as err:
+            # The board is emitted in the KiCad 9/10 schema because that is what
+            # the design is for; an older KiCad simply cannot read it. That is a
+            # SKIP - the board's DRC state is unknown here - not a defect.
+            return None, (f"pcbnew {pcbnew.GetBuildVersion()} cannot read this "
+                          f"board: {str(err).splitlines()[0]}")
         ok = pcbnew.WriteDRCReport(board, out, pcbnew.EDA_UNITS_MILLIMETRES,
                                    True)
         if not ok or not os.path.isfile(out):
@@ -936,6 +983,7 @@ def run_drc_check(board_path=BOARD_FILE, run_kicad=True):
 
     record("fab_conformance", check_against_fab())
     record("dru_parses", check_dru_parses())
+    record("schema_version", check_schema_version(board))
     record("board_parity", check_board_parity(board))
     record("netclass_coverage", check_netclass_coverage(board))
     record("rule_satisfiability", check_rule_satisfiability(board))

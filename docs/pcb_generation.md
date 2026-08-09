@@ -370,6 +370,57 @@ An uncompilable rules file makes KiCad refuse to run DRC at all. That is now a
 **hard failure**, not a skip — reporting SKIPPED would hide our own broken file
 behind the message used when KiCad is simply absent.
 
+## The board is emitted in the KiCad 9/10 schema
+
+It used to be emitted as KiCad 7 (`version 20221018`), with each vendored
+footprint rewritten down to v7 syntax on the way in. The reasoning was that
+KiCad 7 is the newest version installable in the build environment, so a v7
+board is one this project can hand to a real tool — and that KiCad 8/9 migrate
+v7 boards on load.
+
+**They do not migrate it faithfully.** A reviewer's KiCad 9 reported:
+
+```
+[invalid_outline]: Board has malformed outline (no edges found on Edge.Cuts layer)
+```
+
+for an outline that is four `gr_line` segments forming a closed rectangle —
+every endpoint shared by exactly two segments, verified — and that KiCad 7 read
+without complaint. Reading KiCad 10's source, that exact wording is only
+produced when the list of shapes on `Edge_Cuts` is **empty**; a broken or open
+outline reports something else. So the edges were being loaded onto some other
+layer.
+
+The cause is that **KiCad 8 renumbered every layer.** From a board KiCad itself
+wrote (`kicad/qa/data/pcbnew/api_kitchen_sink.kicad_pcb` @ 10.0.5):
+
+| Layer | KiCad 7 | KiCad 9/10 |
+|---|---:|---:|
+| `B.Cu` | 31 | **2** |
+| `F.SilkS` | 37 | 5 |
+| `Edge.Cuts` | **44** | **25** |
+| `F.CrtYd` | 47 | 31 |
+
+The board now declares the KiCad 9/10 numbering and `version 20241229`, copied
+from that reference file, and the vendored footprints — already KiCad 9 files —
+go in **verbatim**. `generators/pcb.py::_convert()`, some eighty lines of v9→v7
+rewriting, is deleted: there is nothing left to convert.
+
+### What this costs, and what protects it
+
+The KiCad installed in the build environment is 7.x and **cannot read a v9
+board at all**. So `kicad_drc` and the board half of `tools/check_kicad_loads.py`
+now report **SKIPPED** with that reason. They never report a pass. Every
+structural check still runs — they read the file with this project's own parser
+— and `validation/drc_check.py::check_schema_version` fails the build if the
+board and the vendored footprints ever end up on different schemas again.
+`tools/test_guard_fails.sh` case 17 reintroduces the mismatch and shows it
+being caught.
+
+This is the same lesson as the symbol library in Prompt 2, and as the `.kicad_dru`
+comment character: **emit what the target tool actually reads, rather than
+something adjacent and trusting a conversion.**
+
 ## Note on older KiCad
 
 `kicad-cli pcb drc` first shipped in **KiCad 8**. The newest KiCad installable
