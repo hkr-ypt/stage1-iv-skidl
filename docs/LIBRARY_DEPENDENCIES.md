@@ -66,9 +66,11 @@ runtime dependency — laying out the PCB needs these libraries installed.
 | footprint | used by |
 |---|---|
 | `Button_Switch_THT:SW_PUSH_6mm` | SW1 |
+| `Capacitor_SMD:CP_Elec_6.3x5.4` | C8 |
+| `Capacitor_SMD:CP_Elec_6.3x7.7` | C7 |
+| `Capacitor_SMD:CP_Elec_8x10.5` | C5, C6 |
 | `Capacitor_SMD:C_0603_1608Metric` | C10, C11, C12, C13, C19, C20 +21 |
 | `Capacitor_SMD:C_0805_2012Metric` | C14, C15, C16, C3, C39, C4 |
-| `Capacitor_THT:CP_Radial_D8.0mm_P3.50mm` | C5, C6, C7, C8 |
 | `Capacitor_Tantalum_SMD:CP_EIA-3528-21_Kemet-B` | C1, C17, C18, C2, C29 |
 | `Connector:Banana_Jack_1Pin` | J4, J5, J6, J7 |
 | `Connector_PinHeader_2.54mm:PinHeader_1x05_P2.54mm_Vertical` | J2 |

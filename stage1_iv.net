@@ -2,7 +2,7 @@
   (version "D")
   (design
     (source "main.py")
-    (date "08/09/2026 03:48 AM")
+    (date "08/09/2026 04:58 AM")
     (tool "SKiDL (2.2.3)")
     (sheet
       (number 1)
@@ -69,7 +69,7 @@
         (field
           (name "SKiDL Tag") "FLG1")
         (field
-          (name "SKiDL Line") "blocks/power.py:93"))
+          (name "SKiDL Line") "blocks/power.py:106"))
       (libsource
         (lib "NO_LIB")
         (part "PWR_FLAG"))
@@ -105,7 +105,7 @@
         (field
           (name "SKiDL Tag") "FLG2")
         (field
-          (name "SKiDL Line") "blocks/power.py:94"))
+          (name "SKiDL Line") "blocks/power.py:107"))
       (libsource
         (lib "NO_LIB")
         (part "PWR_FLAG"))
@@ -141,7 +141,7 @@
         (field
           (name "SKiDL Tag") "FLG3")
         (field
-          (name "SKiDL Line") "blocks/power.py:95"))
+          (name "SKiDL Line") "blocks/power.py:108"))
       (libsource
         (lib "NO_LIB")
         (part "PWR_FLAG"))
@@ -177,7 +177,7 @@
         (field
           (name "SKiDL Tag") "FLG4")
         (field
-          (name "SKiDL Line") "blocks/power.py:96"))
+          (name "SKiDL Line") "blocks/power.py:109"))
       (libsource
         (lib "NO_LIB")
         (part "PWR_FLAG"))
@@ -213,7 +213,7 @@
         (field
           (name "SKiDL Tag") "FLG5")
         (field
-          (name "SKiDL Line") "blocks/power.py:106"))
+          (name "SKiDL Line") "blocks/power.py:119"))
       (libsource
         (lib "NO_LIB")
         (part "PWR_FLAG"))
@@ -249,7 +249,7 @@
         (field
           (name "SKiDL Tag") "FLG6")
         (field
-          (name "SKiDL Line") "blocks/power.py:116"))
+          (name "SKiDL Line") "blocks/power.py:129"))
       (libsource
         (lib "NO_LIB")
         (part "PWR_FLAG"))
@@ -332,7 +332,7 @@
       (tstamps "1db1b3fa-757e-56a8-a86c-957aa5a07fb5"))
     (comp
       (ref "C1")
-      (value "10uF")
+      (value "10uF/25V")
       (description "Polarized capacitor")
       (footprint "Capacitor_Tantalum_SMD:CP_EIA-3528-21_Kemet-B")
       (fields
@@ -389,7 +389,7 @@
         (field
           (name "SKiDL Tag") "C10")
         (field
-          (name "SKiDL Line") "blocks/power.py:49"))
+          (name "SKiDL Line") "blocks/power.py:62"))
       (libsource
         (lib "NO_LIB")
         (part "C"))
@@ -706,7 +706,7 @@
       (tstamps "89c18bff-9d0a-560d-9afc-db5208f57a70"))
     (comp
       (ref "C2")
-      (value "10uF")
+      (value "10uF/16V")
       (description "Polarized capacitor")
       (footprint "Capacitor_Tantalum_SMD:CP_EIA-3528-21_Kemet-B")
       (fields
@@ -1592,7 +1592,7 @@
       (ref "C5")
       (value "100uF/25V")
       (description "Polarized capacitor")
-      (footprint "Capacitor_THT:CP_Radial_D8.0mm_P3.50mm")
+      (footprint "Capacitor_SMD:CP_Elec_8x10.5")
       (fields
         (field
           (name "MPN") "generic")
@@ -1607,13 +1607,13 @@
         (field
           (name "Description") "Polarized capacitor")
         (field
-          (name "Footprint") "Capacitor_THT:CP_Radial_D8.0mm_P3.50mm")
+          (name "Footprint") "Capacitor_SMD:CP_Elec_8x10.5")
         (field
           (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "C5")
         (field
-          (name "SKiDL Line") "blocks/power.py:44"))
+          (name "SKiDL Line") "blocks/power.py:51"))
       (libsource
         (lib "NO_LIB")
         (part "C_Polarized"))
@@ -1626,7 +1626,7 @@
       (ref "C6")
       (value "100uF/25V")
       (description "Polarized capacitor")
-      (footprint "Capacitor_THT:CP_Radial_D8.0mm_P3.50mm")
+      (footprint "Capacitor_SMD:CP_Elec_8x10.5")
       (fields
         (field
           (name "MPN") "generic")
@@ -1641,13 +1641,13 @@
         (field
           (name "Description") "Polarized capacitor")
         (field
-          (name "Footprint") "Capacitor_THT:CP_Radial_D8.0mm_P3.50mm")
+          (name "Footprint") "Capacitor_SMD:CP_Elec_8x10.5")
         (field
           (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "C6")
         (field
-          (name "SKiDL Line") "blocks/power.py:45"))
+          (name "SKiDL Line") "blocks/power.py:53"))
       (libsource
         (lib "NO_LIB")
         (part "C_Polarized"))
@@ -1660,7 +1660,7 @@
       (ref "C7")
       (value "100uF/16V")
       (description "Polarized capacitor")
-      (footprint "Capacitor_THT:CP_Radial_D8.0mm_P3.50mm")
+      (footprint "Capacitor_SMD:CP_Elec_6.3x7.7")
       (fields
         (field
           (name "MPN") "generic")
@@ -1675,13 +1675,13 @@
         (field
           (name "Description") "Polarized capacitor")
         (field
-          (name "Footprint") "Capacitor_THT:CP_Radial_D8.0mm_P3.50mm")
+          (name "Footprint") "Capacitor_SMD:CP_Elec_6.3x7.7")
         (field
           (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "C7")
         (field
-          (name "SKiDL Line") "blocks/power.py:46"))
+          (name "SKiDL Line") "blocks/power.py:56"))
       (libsource
         (lib "NO_LIB")
         (part "C_Polarized"))
@@ -1694,7 +1694,7 @@
       (ref "C8")
       (value "100uF/10V")
       (description "Polarized capacitor")
-      (footprint "Capacitor_THT:CP_Radial_D8.0mm_P3.50mm")
+      (footprint "Capacitor_SMD:CP_Elec_6.3x5.4")
       (fields
         (field
           (name "MPN") "generic")
@@ -1709,13 +1709,13 @@
         (field
           (name "Description") "Polarized capacitor")
         (field
-          (name "Footprint") "Capacitor_THT:CP_Radial_D8.0mm_P3.50mm")
+          (name "Footprint") "Capacitor_SMD:CP_Elec_6.3x5.4")
         (field
           (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "C8")
         (field
-          (name "SKiDL Line") "blocks/power.py:47"))
+          (name "SKiDL Line") "blocks/power.py:59"))
       (libsource
         (lib "NO_LIB")
         (part "C_Polarized"))
@@ -1749,7 +1749,7 @@
         (field
           (name "SKiDL Tag") "C9")
         (field
-          (name "SKiDL Line") "blocks/power.py:48"))
+          (name "SKiDL Line") "blocks/power.py:61"))
       (libsource
         (lib "NO_LIB")
         (part "C"))

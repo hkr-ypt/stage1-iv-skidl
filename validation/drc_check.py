@@ -665,6 +665,112 @@ def check_schema_version(board):
     return problems[:5]
 
 
+def _silk_items(board):
+    """(kind, ref, bbox) for every silkscreen object, in board coordinates."""
+    out = []
+    for fp in board.footprints:
+        for child in fp.node:
+            if not isinstance(child, list):
+                continue
+            head = _head(child)
+            if head == "property" and len(child) > 2 and \
+                    str(child[1]) == "Reference":
+                if _layer_of(child) not in ("F.SilkS", "B.SilkS"):
+                    continue
+                dx, dy, _r = _at(child)
+                x, y = fp.x + dx, fp.y + dy
+                text = str(child[2])
+                w = 0.72 * 1.0 * len(text) / 2
+                h = 1.0 / 2
+                out.append(("text", fp.ref, (x - w, y - h, x + w, y + h)))
+            elif head.startswith("fp_") and \
+                    _layer_of(child) in ("F.SilkS", "B.SilkS"):
+                pts = _graphic_points(child)
+                if pts:
+                    out.append(("graphic", fp.ref,
+                                (fp.x + min(p[0] for p in pts),
+                                 fp.y + min(p[1] for p in pts),
+                                 fp.x + max(p[0] for p in pts),
+                                 fp.y + max(p[1] for p in pts))))
+    for node in board.root:
+        if not isinstance(node, list):
+            continue
+        if _head(node) == "gr_text" and _layer_of(node) in ("F.SilkS",
+                                                            "B.SilkS"):
+            x, y, _r = _at(node)
+            text = str(node[1])
+            size = 1.0
+            eff = _first(node, "effects")
+            font = _first(eff, "font") if eff is not None else None
+            sz = _first(font, "size") if font is not None else None
+            if sz is not None and len(sz) > 1:
+                size = _f(sz[1])
+            w = 0.72 * size * len(text) / 2
+            out.append(("board-text", text,
+                        (x - w, y - size / 2, x + w, y + size / 2)))
+    return out
+
+
+def check_silkscreen(board):
+    """Silkscreen must not sit on copper, or on other silkscreen.
+
+    This is NOT KiCad's silk check and does not claim to be — it is a
+    conservative bounding-box test over the emitted file, run because the KiCad
+    in this build environment cannot open a v9 board. KiCad's own
+    ``silk_overlap`` and ``silk_over_copper`` remain the authority; this exists
+    so the generator is not shipped completely unverified.
+
+    Text boxes are compared against pads (``silk_over_copper``) and against
+    other silk objects (``silk_overlap``). Footprint-to-footprint silk graphics
+    are not compared with each other: those come from KiCad's own libraries and
+    are separated by the courtyard check.
+    """
+    items = _silk_items(board)
+    pads = []
+    for fp in board.footprints:
+        for pad in fp.pads:
+            pads.append((pad["x"] - pad["w"] / 2, pad["y"] - pad["h"] / 2,
+                         pad["x"] + pad["w"] / 2, pad["y"] + pad["h"] / 2))
+
+    def hit(a, b):
+        return (a[0] < b[2] - EPS and b[0] < a[2] - EPS
+                and a[1] < b[3] - EPS and b[1] < a[3] - EPS)
+
+    problems = []
+    texts = [i for i in items if i[0] in ("text", "board-text")]
+    for kind, ref, box in texts:
+        for pad in pads:
+            if hit(box, pad):
+                problems.append(f"silk over copper: {ref} text sits on a pad")
+                break
+    for i, (_k, ref, box) in enumerate(texts):
+        for _k2, ref2, box2 in items[:]:
+            if ref2 == ref:
+                continue
+            if hit(box, box2):
+                problems.append(f"silk overlap: {ref} text overlaps "
+                                f"silkscreen of {ref2}")
+                break
+    return sorted(set(problems))[:20]
+
+
+def check_courtyards_defined(board):
+    """Every footprint must define a courtyard.
+
+    KiCad can be told to ignore this. It should not be: a footprint with no
+    courtyard is invisible to the overlap check, so a board can look clean
+    while parts sit on top of each other.
+    """
+    problems = []
+    for fp in board.footprints:
+        has = any(isinstance(c, list) and _head(c).startswith("fp_")
+                  and _layer_of(c) in ("F.CrtYd", "B.CrtYd")
+                  for c in fp.node)
+        if not has:
+            problems.append(f"{fp.ref} ({_head(fp.node)}) defines no courtyard")
+    return problems
+
+
 def check_board_parity(board):
     """The board must match the circuit that main.py builds right now.
 
@@ -988,7 +1094,9 @@ def run_drc_check(board_path=BOARD_FILE, run_kicad=True):
     record("netclass_coverage", check_netclass_coverage(board))
     record("rule_satisfiability", check_rule_satisfiability(board))
     record("hole_spacing", check_hole_spacing(board))
+    record("courtyards_defined", check_courtyards_defined(board))
     record("courtyard_overlap", check_courtyard_overlap(board))
+    record("silkscreen", check_silkscreen(board))
     record("edge_clearance", check_edge_clearance(board, FAB["edge_clearance"]))
 
     split = check_ground_split(board)

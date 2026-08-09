@@ -33,18 +33,31 @@ def create_power_block(n):
     R31 = R()(ref="R31", tag="R31", value="0R",
               footprint="Resistor_SMD:R_0805_2012Metric")
 
-    C1 = C_POL()(ref="C1", tag="C1", value="10uF",
-                 footprint="Capacitor_Tantalum_SMD:CP_EIA-3528-21_Kemet-B")
-    C2 = C_POL()(ref="C2", tag="C2", value="10uF",
-                 footprint="Capacitor_Tantalum_SMD:CP_EIA-3528-21_Kemet-B")
+    C1 = C_POL("Capacitor_Tantalum_SMD:CP_EIA-3528-21_Kemet-B")(
+        ref="C1", tag="C1", value="10uF/25V")
+    C2 = C_POL("Capacitor_Tantalum_SMD:CP_EIA-3528-21_Kemet-B")(
+        ref="C2", tag="C2", value="10uF/16V")
     C3 = C()(ref="C3", tag="C3", value="100nF",
              footprint="Capacitor_SMD:C_0805_2012Metric")
     C4 = C()(ref="C4", tag="C4", value="100nF",
              footprint="Capacitor_SMD:C_0805_2012Metric")
-    C5 = C_POL()(ref="C5", tag="C5", value="100uF/25V")
-    C6 = C_POL()(ref="C6", tag="C6", value="100uF/25V")
-    C7 = C_POL()(ref="C7", tag="C7", value="100uF/16V")
-    C8 = C_POL()(ref="C8", tag="C8", value="100uF/10V")
+    # Bulk reservoir capacitors. Package is chosen per instance, from the
+    # working voltage and the derating - see docs/silkscreen_and_packages.md.
+    # These four previously inherited an 8 mm through-hole radial default and
+    # were the largest parts on the board by accident rather than by choice.
+    #
+    # +/-15 V rails: 25 V rated on 15 V working is 60% of rating, comfortably
+    # inside the 80% ceiling normally applied to aluminium electrolytics.
+    C5 = C_POL("Capacitor_SMD:CP_Elec_8x10.5")(
+        ref="C5", tag="C5", value="100uF/25V")
+    C6 = C_POL("Capacitor_SMD:CP_Elec_8x10.5")(
+        ref="C6", tag="C6", value="100uF/25V")
+    # +5 V rail: 16 V rated on 5 V working is 31% of rating.
+    C7 = C_POL("Capacitor_SMD:CP_Elec_6.3x7.7")(
+        ref="C7", tag="C7", value="100uF/16V")
+    # +3V3 rail: 10 V rated on 3.3 V working is 33% of rating.
+    C8 = C_POL("Capacitor_SMD:CP_Elec_6.3x5.4")(
+        ref="C8", tag="C8", value="100uF/10V")
     C9 = C()(ref="C9", tag="C9", value="1uF")
     C10 = C()(ref="C10", tag="C10", value="100nF")
 
