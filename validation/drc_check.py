@@ -781,22 +781,31 @@ def parse_drc_report(text):
     return out
 
 
-def _pcbnew_major():
-    try:
-        import pcbnew                                    # noqa: PLC0415
-        return int(str(pcbnew.GetBuildVersion()).lstrip("v").split(".")[0])
-    except Exception:
-        return None
+def _kicad_major(ran_with):
+    """Major version of the KiCad that ACTUALLY ran DRC.
+
+    Taken from the run's own note, not by importing pcbnew here. DRC may have
+    been handed to the system interpreter (see _drc_via_system_python), in
+    which case importing pcbnew in *this* interpreter fails and any version
+    probed that way is wrong — which silently disabled the escape below and
+    failed CI. The authority on which KiCad evaluated the rules is the run.
+
+    Returns None when the version cannot be read, which is treated as
+    "modern" — the safe direction, since it keeps violations as defects.
+    """
+    import re
+    m = re.search(r"pcbnew\s+v?(\d+)\.", ran_with or "")
+    return int(m.group(1)) if m else None
 
 
-def classify_violations(violations):
+def classify_violations(violations, ran_with=""):
     """Split DRC output into routing, not-evaluatable-here, and real defects.
 
     There are exactly two escapes, both narrow, and neither is a judgement call:
 
     * ``unconnected_items`` is the ratsnest — this board is unrouted on purpose.
     * a ``clearance`` error between two pads of ONE footprint that
-      ``stage1_iv.kicad_dru`` covers, when the KiCad running DRC predates
+      ``stage1_iv.kicad_dru`` covers, when the KiCad that RAN DRC predates
       ``memberOfFootprint()`` (KiCad 8). On such a KiCad the scoped rule is
       inert, so the violation says nothing about the board. It is only
       admissible because :func:`check_rule_satisfiability` has already checked
@@ -807,7 +816,7 @@ def classify_violations(violations):
     does not fail the build — that is KiCad's severity, not this file's.
     """
     covered = _dru_covered_refs()
-    stale_kicad = (_pcbnew_major() or 99) < 8
+    stale_kicad = (_kicad_major(ran_with) or 99) < 8
 
     routing, inert, warnings, defects = [], [], [], []
     for v in violations:
@@ -923,7 +932,7 @@ def run_drc_check(board_path=BOARD_FILE, run_kicad=True):
         results["kicad_drc"] = {"status": "SKIPPED", "reason": note,
                                 "problems": []}
     else:
-        routing, inert, warns, defects = classify_violations(violations)
+        routing, inert, warns, defects = classify_violations(violations, note)
         by_type = {}
         for v in violations:
             by_type[v["type"]] = by_type.get(v["type"], 0) + 1
