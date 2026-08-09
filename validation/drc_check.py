@@ -731,11 +731,41 @@ def _drc_via_pcbnew(board_path):
             return fh.read(), f"pcbnew {pcbnew.GetBuildVersion()}"
 
 
-def _drc_via_system_python(board_path):
-    """Run DRC under the distro python, which is the one pcbnew was built for."""
-    for exe in ("/usr/bin/python3", "/usr/bin/python3.12", "/usr/bin/python3.11"):
-        if not os.path.exists(exe):
+def _other_interpreters():
+    """Interpreters on PATH that are not the one running this process.
+
+    Found with :func:`shutil.which` rather than hardcoded. No absolute path
+    belongs in this repository — ``tools/check_no_abs_paths.py`` enforces that,
+    and it caught the first version of this function — and a hardcoded system
+    interpreter path would be wrong on any system that puts it elsewhere.
+    The *versioned* names matter: a CI runner's PATH puts its own ``python3``
+    first, so the distro one is only reachable by its version number.
+    """
+    mine = os.path.realpath(sys.executable)
+    seen, out = {mine}, []
+    names = ["python3"] + [f"python3.{minor}" for minor in range(14, 8, -1)]
+    for name in names:
+        path = shutil.which(name)
+        if not path:
             continue
+        real = os.path.realpath(path)
+        if real in seen:
+            continue
+        seen.add(real)
+        out.append(path)
+    return out
+
+
+def _drc_via_system_python(board_path):
+    """Run DRC under the interpreter pcbnew was actually built for.
+
+    KiCad's pcbnew is a SWIG extension linked against the distro's Python, so
+    an environment supplying its own interpreter — actions/setup-python, a
+    venv, pyenv — cannot import it however well KiCad is installed. Each
+    candidate is tried and whichever can import pcbnew wins; nothing is assumed
+    about where it lives.
+    """
+    for exe in _other_interpreters():
         with tempfile.TemporaryDirectory() as tmp:
             out = os.path.join(tmp, "drc.rpt")
             proc = subprocess.run([exe, "-c", _DRU_SCRIPT, board_path, out],
