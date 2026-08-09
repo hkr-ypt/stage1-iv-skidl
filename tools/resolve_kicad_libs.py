@@ -64,6 +64,13 @@ REPO_ROOT = os.path.dirname(HERE)
 # Project-local symbol library (symbols with no upstream KiCad equivalent).
 PROJECT_SYMBOL_DIR = os.path.join(REPO_ROOT, "libraries")
 
+# Footprints the project vendors at the pinned upstream revision. These SHADOW
+# the installed libraries: upstream renames pads between major versions (the
+# USB-C shield pads went from S1 to SH in library 10.0.0), and a design whose
+# pad names depend on which KiCad the reviewer happens to have installed is not
+# reproducible. Populated by tools/vendor_footprints.py.
+PROJECT_FOOTPRINT_DIR = os.path.join(REPO_ROOT, "libraries", "footprints")
+
 
 class LibraryNotFound(RuntimeError):
     """Raised when no installed KiCad library tree can be located."""
@@ -508,21 +515,33 @@ class KicadLibraries:
     """
 
     def __init__(self, symbol_dir=None, footprint_dir=None,
-                 project_symbol_dir=PROJECT_SYMBOL_DIR):
+                 project_symbol_dir=PROJECT_SYMBOL_DIR,
+                 project_footprint_dir=PROJECT_FOOTPRINT_DIR,
+                 use_vendored_footprints=True):
         self.symbol_dir, self.footprint_dir, self.origin = locate_libraries(
             symbol_dir, footprint_dir)
         self.project_symbol_dir = project_symbol_dir
+        self.project_footprint_dir = (project_footprint_dir
+                                      if use_vendored_footprints else None)
 
         # nickname -> .kicad_sym path
         self._sym_files = {}
         for path, nick in self._scan_symbol_dirs():
             self._sym_files[nick] = path
-        # nickname -> .pretty dir
+        # nickname -> .pretty dir. The vendored directory is scanned last and
+        # therefore wins: what this repository committed is what it means.
         self._fp_dirs = {}
-        for entry in sorted(os.listdir(self.footprint_dir)):
-            if entry.endswith(".pretty"):
-                self._fp_dirs[entry[: -len(".pretty")]] = os.path.join(
-                    self.footprint_dir, entry)
+        self._vendored_nicks = set()
+        fp_dirs = [self.footprint_dir]
+        if self.project_footprint_dir and os.path.isdir(self.project_footprint_dir):
+            fp_dirs.append(self.project_footprint_dir)
+        for d in fp_dirs:
+            for entry in sorted(os.listdir(d)):
+                if entry.endswith(".pretty"):
+                    nick = entry[: -len(".pretty")]
+                    self._fp_dirs[nick] = os.path.join(d, entry)
+                    if d == self.project_footprint_dir:
+                        self._vendored_nicks.add(nick)
 
         self._sym_cache = {}          # nickname -> {name: Symbol}
         self._sym_name_cache = {}     # nickname -> [names]  (cheap index)
@@ -549,6 +568,7 @@ class KicadLibraries:
             "origin": self.origin,
             "symbol_libraries": len(self._sym_files),
             "footprint_libraries": len(self._fp_dirs),
+            "vendored_footprint_libraries": len(self._vendored_nicks),
         }
 
     # -------------------------------------------------------------- symbols
@@ -711,6 +731,14 @@ class KicadLibraries:
                            if e.endswith(".kicad_mod"))
         self._fp_name_cache[nickname] = names
         return names
+
+    def footprint_file(self, nickname, name):
+        """Path to one ``.kicad_mod``, or None. Used by vendor_footprints.py."""
+        d = self._fp_dirs.get(nickname)
+        if not d:
+            return None
+        path = os.path.join(d, name + ".kicad_mod")
+        return path if os.path.isfile(path) else None
 
     def get_footprint(self, fp_id):
         """Return the :class:`Footprint` for ``"Lib:Name"``, or None."""

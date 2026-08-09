@@ -25,7 +25,7 @@ which point only this table changes and the board regenerates.
 | **F8** | Copper to board edge | **0.5 mm** | routing/V-score tolerance |
 | **F9** | Silkscreen minimum line width | 0.15 mm | |
 | **F10** | Surface finish | ENIG or HASL | not constraining for this design |
-| **F11** | Minimum hole-to-hole (edge-edge) | 0.5 mm | |
+| **F11** | Minimum hole-to-hole (edge-edge) | **0.25 mm** | see the correction below |
 | **F12** | Board thickness | 1.6 mm | affects the creepage table below |
 
 ## Working voltages on this board
@@ -66,6 +66,26 @@ and reports the minimum gap for every footprint the design uses.
 these standard footprints are un-buildable as drawn. See
 `docs/pcb_generation.md` §"Global clearance" for the chosen value and its
 margin.
+
+### The same constraint on drilled holes
+
+J3's `Connector_USB:USB_C_Receptacle_GCT_USB4085` is a 0.85 mm-pitch through-
+hole receptacle with 0.40 mm drills, so adjacent holes sit **0.45 mm** apart
+edge to edge. Measured by `tools/measure_pad_gaps.py`, same as the pad gaps.
+
+**F11 was originally written as 0.5 mm and that was wrong.** A KiCad DRC run on
+a board using this table reported 14 `hole_to_hole` warnings — "min 0.4995 mm;
+actual 0.4500 mm" — every one of them between two pins of J3. The corrected
+reasoning: a USB-C receptacle is a mainstream, high-volume part that prototype
+houses fabricate constantly. If the assumed capability says it cannot be built,
+the assumption is what is wrong, not the connector. F11 is therefore 0.25 mm,
+which is the usual mechanical-drill registration floor and which the part
+clears with margin.
+
+This is a correction to an assumption, not a relaxation to silence a rule: had
+the measured 0.45 mm fallen genuinely below a *known* fabricator limit,
+`check_against_fab()` would refuse to build and the right answer would have
+been a different connector.
 
 ## Why 2 layers
 

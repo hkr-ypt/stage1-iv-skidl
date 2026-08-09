@@ -50,6 +50,8 @@ FAB = {
     "min_via_pad": 0.60,        # F7  = F5 + 2 * F6
     "edge_clearance": 0.50,     # F8
     "silk_line_width": 0.15,    # F9
+    "min_hole_to_hole": 0.25,   # F11
+
     "copper_oz": 1,             # F2
     "layers": 2,                # F1
 }
@@ -58,6 +60,37 @@ FAB = {
 INTRINSIC_MIN_PAD_GAP = 0.15
 GLOBAL_CLEARANCE_MARGIN = 0.02
 GLOBAL_MIN_CLEARANCE = round(INTRINSIC_MIN_PAD_GAP - GLOBAL_CLEARANCE_MARGIN, 3)
+
+# The same argument, for drilled holes. J3's USB4085 is a 0.85 mm-pitch THT
+# receptacle with 0.40 mm drills, leaving 0.45 mm between adjacent holes.
+# That is a property of the connector; `min_hole_to_hole` above it produces
+# hole_to_hole warnings on every adjacent pair of J3's pins that no layout
+# decision can clear. Measured, not assumed.
+INTRINSIC_MIN_HOLE_GAP = 0.45
+HOLE_GAP_MARGIN = 0.02
+GLOBAL_MIN_HOLE_TO_HOLE = round(INTRINSIC_MIN_HOLE_GAP - HOLE_GAP_MARGIN, 3)
+
+# THE INTRA-FOOTPRINT CLEARANCE RULE
+# ----------------------------------
+# A global minimum below the intrinsic pad gap is NOT sufficient on its own,
+# and assuming otherwise was a real defect in this project's first PCB pass.
+# KiCad's global minimum is a floor on what a *rule* may ask for; the clearance
+# actually enforced between two pads is the LARGER of the two nets' netclass
+# clearances. Two adjacent VSSOP-8 pads on +5VA (POWER_LV, 0.20 mm) and
+# VREF_2V5 (SENSE, 0.25 mm) are therefore checked at 0.25 mm against a 0.15 mm
+# gap the package cannot change.
+#
+# The escape hatch is a scoped custom rule, generated into stage1_iv.kicad_dru
+# by tools/gen_project_config.py: between two pads OF THE SAME FOOTPRINT, the
+# required clearance is this value rather than the netclass value.
+#
+# This is not a suppression. Nothing is excluded and no severity is downgraded:
+# the clearance rule still runs on those pads and still enforces a real number.
+# It is narrowed only where the geometry is fixed by the part and no routing
+# decision exists to satisfy the wider one. Pad-to-track, track-to-track and
+# pad-to-pad *between different footprints* are untouched, and every one of
+# those is a case where the layout genuinely can comply.
+INTRA_FOOTPRINT_CLEARANCE = GLOBAL_MIN_CLEARANCE
 
 
 # ---------------------------------------------------------------------------
@@ -267,4 +300,20 @@ def check_against_fab():
             f"global minimum clearance {GLOBAL_MIN_CLEARANCE} is not below the "
             f"intrinsic pad gap {INTRINSIC_MIN_PAD_GAP}; the VSSOP-8 and "
             f"USB4085 footprints would report unfixable clearance errors")
+    if INTRA_FOOTPRINT_CLEARANCE >= INTRINSIC_MIN_PAD_GAP:
+        problems.append(
+            f"intra-footprint clearance {INTRA_FOOTPRINT_CLEARANCE} is not "
+            f"below the intrinsic pad gap {INTRINSIC_MIN_PAD_GAP}; the custom "
+            f"rule would not make those pad pairs satisfiable")
+    if GLOBAL_MIN_HOLE_TO_HOLE >= INTRINSIC_MIN_HOLE_GAP:
+        problems.append(
+            f"min_hole_to_hole {GLOBAL_MIN_HOLE_TO_HOLE} is not below the "
+            f"intrinsic hole gap {INTRINSIC_MIN_HOLE_GAP}; J3's USB4085 would "
+            f"report unfixable hole_to_hole warnings")
+    if INTRINSIC_MIN_HOLE_GAP < FAB["min_hole_to_hole"]:
+        problems.append(
+            f"a footprint on this board drills holes {INTRINSIC_MIN_HOLE_GAP} "
+            f"mm apart, below the fabricator's F11 minimum "
+            f"{FAB['min_hole_to_hole']}. That part cannot be built by this "
+            f"process — change the part or the fabricator, not the rule.")
     return problems

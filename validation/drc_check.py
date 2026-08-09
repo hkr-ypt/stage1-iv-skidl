@@ -12,6 +12,8 @@ What it enforces
 ----------------
 =========================  ====================================================
 ``board_parity``           the board matches the circuit main.py builds now
+``rule_satisfiability``    no clearance rule demands more than a package gives
+``hole_spacing``           min_hole_to_hole does not exceed the parts' drills
 ``courtyard_overlap``      no two footprint courtyards intersect
 ``edge_clearance``         every courtyard is inside Edge.Cuts by F8
 ``ground_split``           AGND and DGND are separate copper, joined only at R31
@@ -58,7 +60,8 @@ for _p in (os.path.join(_REPO_ROOT, "tools"), _REPO_ROOT):
 
 from resolve_kicad_libs import parse_sexp  # noqa: E402
 from libraries.netclasses import (  # noqa: E402
-    classify, check_against_fab, UnclassifiedNet,
+    classify, check_against_fab, UnclassifiedNet, NETCLASSES, DEFAULT_CLASS,
+    NET_TO_CLASS, GLOBAL_MIN_HOLE_TO_HOLE, INTRA_FOOTPRINT_CLEARANCE,
 )
 
 BOARD_FILE = os.path.join(_REPO_ROOT, "stage1_iv.kicad_pcb")
@@ -142,6 +145,24 @@ def _graphic_points(node):
     return pts
 
 
+def _drill_of(pad):
+    """(dx, dy) of a pad's hole, or None for an SMD pad."""
+    d = _first(pad, "drill")
+    if d is None:
+        return None
+    nums = []
+    for tok in d[1:]:
+        if isinstance(tok, list):
+            break                       # (offset x y)
+        try:
+            nums.append(float(tok))
+        except (TypeError, ValueError):
+            continue                    # the literal "oval"
+    if not nums:
+        return None
+    return (nums[0], nums[1] if len(nums) > 1 else nums[0])
+
+
 class Footprint:
     """One placed footprint, resolved into board coordinates."""
 
@@ -161,10 +182,13 @@ class Footprint:
             size = _first(pad, "size")
             w = _f(size[1]) if size is not None and len(size) > 1 else 0.0
             h = _f(size[2]) if size is not None and len(size) > 2 else 0.0
+            if self.rot % 180.0:
+                w, h = h, w         # a 90/270 rotation swaps the pad extents
             self.pads.append({
                 "name": str(pad[1]) if len(pad) > 1 else "",
                 "x": self.x + dx, "y": self.y + dy,
                 "w": w, "h": h, "net": name,
+                "drill": _drill_of(pad),
             })
         self.bbox = self._courtyard()
 
@@ -399,6 +423,127 @@ def check_netclass_coverage(board):
     return []
 
 
+def _required_clearance(net_a, net_b):
+    """What KiCad will enforce between two pads: the larger netclass clearance."""
+    vals = []
+    for name in (net_a, net_b):
+        if not name:
+            continue
+        cls = NET_TO_CLASS.get(name)
+        vals.append(NETCLASSES[cls]["clearance"] if cls
+                    else DEFAULT_CLASS["clearance"])
+    return max(vals) if vals else DEFAULT_CLASS["clearance"]
+
+
+def _dru_covered_refs():
+    """References the generated stage1_iv.kicad_dru narrows the rule for."""
+    path = os.path.join(_REPO_ROOT, "stage1_iv.kicad_dru")
+    if not os.path.isfile(path):
+        return set()
+    import re
+    with open(path, encoding="utf-8") as fh:
+        return set(re.findall(r"memberOfFootprint\('([^']+)'\)", fh.read()))
+
+
+def check_rule_satisfiability(board):
+    """No board rule may demand more than the parts physically provide.
+
+    This is the check whose absence let a real defect through. Reasoning from
+    the *global* minimum clearance is not enough: KiCad's global minimum is a
+    floor on what a rule may ask for, not a cap on what it enforces. Between
+    two pads of different nets, the clearance actually checked is the LARGER of
+    the two netclasses' — so two adjacent VSSOP-8 pads on +5VA (POWER_LV,
+    0.20 mm) and VREF_2V5 (SENSE, 0.25 mm) get checked at 0.25 mm against a
+    0.15 mm gap the package cannot change, and DRC reports a violation that no
+    routing decision can clear.
+
+    So: for every pad pair and every hole pair inside every placed footprint,
+    compare the gap actually present against the rule that will actually be
+    applied — narrowed by ``stage1_iv.kicad_dru`` where that file covers the
+    reference. Anything still unsatisfiable is a board defect here, before
+    KiCad ever sees it.
+    """
+    covered = _dru_covered_refs()
+    problems = []
+    for fp in board.footprints:
+        if fp.ref.startswith("H"):
+            continue                        # mounting holes: no nets, no pads
+        pads = fp.pads
+        for i in range(len(pads)):
+            for j in range(i + 1, len(pads)):
+                a, b = pads[i], pads[j]
+                if a["name"] == b["name"]:
+                    continue                # one electrical pad
+                if a["net"] and a["net"] == b["net"]:
+                    continue                # same net: not a clearance check
+                need = (INTRA_FOOTPRINT_CLEARANCE if fp.ref in covered
+                        else _required_clearance(a["net"], b["net"]))
+                dx = max(abs(a["x"] - b["x"]) - (a["w"] + b["w"]) / 2, 0.0)
+                dy = max(abs(a["y"] - b["y"]) - (a["h"] + b["h"]) / 2, 0.0)
+                gap = math.hypot(dx, dy)
+                if gap < need - EPS:
+                    problems.append(
+                        f"{fp.ref} pads {a['name']}/{b['name']} are "
+                        f"{gap:.3f} mm apart but the rule that applies demands "
+                        f"{need:.3f} mm ({a['net'] or 'no net'} vs "
+                        f"{b['net'] or 'no net'}). The spacing belongs to the "
+                        f"package, so no routing can satisfy this. Either the "
+                        f"netclass clearance is wrong or {fp.ref} needs an "
+                        f"entry in stage1_iv.kicad_dru — regenerate with "
+                        f"tools/gen_project_config.py.")
+                    break
+            else:
+                continue
+            break
+    return problems
+
+
+def check_hole_spacing(board):
+    """The min_hole_to_hole rule must not exceed what the parts provide."""
+    problems = []
+    for fp in board.footprints:
+        holes = [p for p in fp.pads if p.get("drill")]
+        for i in range(len(holes)):
+            for j in range(i + 1, len(holes)):
+                a, b = holes[i], holes[j]
+                if a["name"] == b["name"]:
+                    continue
+                dx = max(abs(a["x"] - b["x"])
+                         - (a["drill"][0] + b["drill"][0]) / 2, 0.0)
+                dy = max(abs(a["y"] - b["y"])
+                         - (a["drill"][1] + b["drill"][1]) / 2, 0.0)
+                gap = math.hypot(dx, dy)
+                if gap < GLOBAL_MIN_HOLE_TO_HOLE - EPS:
+                    problems.append(
+                        f"{fp.ref} holes {a['name']}/{b['name']} are "
+                        f"{gap:.3f} mm apart but min_hole_to_hole is "
+                        f"{GLOBAL_MIN_HOLE_TO_HOLE} mm. Drill spacing belongs "
+                        f"to the package — re-derive the rule from "
+                        f"tools/measure_pad_gaps.py, do not move the part.")
+                    break
+            else:
+                continue
+            break
+    return problems
+
+
+def ratsnest_count(board):
+    """Connections KiCad will report as ``unconnected_items``, from the board.
+
+    Counted the way KiCad counts: per net, (number of *pads* on it) − 1. Pads,
+    not schematic pins — J3's shield is one pin number on four physical tabs,
+    and the ADC's thermal pad is another such case, so a pin-based count
+    understates the ratsnest. This project first reported 241 by counting pins;
+    the honest number is below.
+    """
+    per_net = {}
+    for fp in board.footprints:
+        for pad in fp.pads:
+            if pad["net"]:
+                per_net[pad["net"]] = per_net.get(pad["net"], 0) + 1
+    return sum(n - 1 for n in per_net.values() if n > 1), per_net
+
+
 def check_board_parity(board):
     """The board must match the circuit that main.py builds right now.
 
@@ -416,7 +561,34 @@ def check_board_parity(board):
     have_refs = {fp.ref for fp in board.footprints
                  if not fp.ref.startswith("H")}
 
+    # Pad-level parity — this is KiCad's "Update PCB from Schematic" check.
+    # A pin whose pad name does not exist in the footprint silently drops its
+    # net, which is exactly what the USB-C S1 -> SH upstream rename did to J3.
     problems = []
+    by_ref = {fp.ref: fp for fp in board.footprints}
+    for part in circuit.parts:
+        if not (part.footprint or "").strip():
+            continue
+        fp = by_ref.get(part.ref)
+        if fp is None:
+            continue                    # reported as a missing part below
+        pads = {p["name"] for p in fp.pads}
+        netted = {p["name"] for p in fp.pads if p["net"]}
+        for pin in part.pins:
+            num = str(pin.num)
+            if num not in pads:
+                problems.append(
+                    f"{part.ref} pin {num} ({pin.name}) has no pad named {num} "
+                    f"in {part.footprint}. KiCad reports this as \"pad {num} "
+                    f"not found\" and the connection is silently dropped. "
+                    f"Check tools/vendor_footprints.py --check: upstream "
+                    f"renames pads between library versions.")
+            elif num not in netted and any(
+                    n.name != "__NOCONNECT" for n in pin.get_nets()):
+                problems.append(
+                    f"{part.ref} pad {num} carries no net on the board but "
+                    f"pin {num} is connected in the circuit")
+
     for label, missing, extra in (
             ("net", sorted(want_nets - have_nets), sorted(have_nets - want_nets)),
             ("part", sorted(want_refs - have_refs), sorted(have_refs - want_refs))):
@@ -505,6 +677,8 @@ def run_drc_check(board_path=BOARD_FILE, run_kicad=True):
     record("fab_conformance", check_against_fab())
     record("board_parity", check_board_parity(board))
     record("netclass_coverage", check_netclass_coverage(board))
+    record("rule_satisfiability", check_rule_satisfiability(board))
+    record("hole_spacing", check_hole_spacing(board))
     record("courtyard_overlap", check_courtyard_overlap(board))
     record("edge_clearance", check_edge_clearance(board, FAB["edge_clearance"]))
 
@@ -537,8 +711,10 @@ def run_drc_check(board_path=BOARD_FILE, run_kicad=True):
         failures.extend(f"kicad_drc: {v['type']}: {v['description']}"
                         for v in defects)
 
+    rats, _per_net = ratsnest_count(board)
     report = {
         "board": os.path.relpath(board_path, _REPO_ROOT),
+        "ratsnest": rats,
         "footprints": len(board.footprints),
         "nets": len(board.nets),
         "zones": [z["net"] for z in board.zones],
@@ -592,13 +768,18 @@ def main(argv=None):
             print(f"          {res['reason']}")
     drc = report["checks"]["kicad_drc"]
     print()
+    print(f"  routing not yet done — {report['ratsnest']} connections remain")
+    print("  (counted the way KiCad counts unconnected_items: pads per net,")
+    print("   minus one. Pads, not schematic pins.)")
+    print()
     if drc["status"] == "SKIPPED":
         print("  DRC WAS NOT RUN. This is not a pass. The board's DRC state is")
         print("  UNKNOWN in this environment — see the reason above, and run")
         print("  DRC in KiCad 8 or later before believing anything about it.")
     else:
-        print(f"  routing violations (unconnected_items): "
-              f"{drc['routing_violations']}")
+        print(f"  KiCad reported {drc['routing_violations']} "
+              f"unconnected_items (this file predicted "
+              f"{report['ratsnest']}).")
         print("  Those are connections a human still has to route. They are not")
         print("  a pass and they are not a defect. See docs/pcb_generation.md.")
     return 0

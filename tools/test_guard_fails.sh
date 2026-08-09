@@ -198,6 +198,37 @@ tail = tail.replace("\"track_width\": 0.25,", "\"track_width\": 0.10,", 1)
 p.write_text(head + "\"DIGITAL\": {" + tail)
 '
 
+# 13. a netclass clearance wider than a package's own pad gap, with no scoped
+#     rule to cover it: KiCad would report clearance errors no routing can fix.
+#     This is the defect a real DRC run found and this repo's own checks missed.
+expect_fail board "netclass clearance exceeds a package's pad gap" '
+import pathlib
+p = pathlib.Path("stage1_iv.kicad_dru")
+p.write_text("(version 1)\n;; scoped rules removed\n")
+'
+
+# 14. min_hole_to_hole above the drill spacing J3 physically has
+expect_fail board "min_hole_to_hole above J3 USB-C drill spacing" '
+import pathlib
+p = pathlib.Path("libraries/netclasses.py"); s = p.read_text()
+assert "HOLE_GAP_MARGIN = 0.02" in s
+p.write_text(s.replace("HOLE_GAP_MARGIN = 0.02", "HOLE_GAP_MARGIN = -0.05"))
+'
+
+# 15. a footprint whose pad names drifted from the vendored revision - the
+#     USB-C S1 -> SH rename that broke "Update PCB from Schematic" on a KiCad 10
+#     machine. Owned by the structural gate: pin-number-to-pad-name agreement is
+#     footprint_check.py's job, and it fires before a board is ever emitted.
+#     (validation/drc_check.py::check_board_parity carries the same check for a
+#     board that somehow got written anyway.)
+expect_fail structural "vendored footprint drifts from the design (USB-C S1 -> SH)" '
+import pathlib
+p = pathlib.Path("libraries/footprints/Connector_USB.pretty/"
+                 "USB_C_Receptacle_GCT_USB4085.kicad_mod")
+s = p.read_text(); assert "\"S1\"" in s
+p.write_text(s.replace("(pad \"S1\"", "(pad \"SH\""))
+'
+
 echo "----------------------------------------------------------------------"
 if [ "$FAILURES" -eq 0 ]; then
     echo "ALL INJECTED FAULTS CAUGHT — the guard works."

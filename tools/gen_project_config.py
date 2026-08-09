@@ -49,11 +49,13 @@ sys.path.insert(0, REPO_ROOT)
 from resolve_kicad_libs import KicadLibraries, LibraryNotFound  # noqa: E402
 from libraries.netclasses import (  # noqa: E402
     NETCLASSES, DEFAULT_CLASS, FAB, GLOBAL_MIN_CLEARANCE, check_against_fab,
+    GLOBAL_MIN_HOLE_TO_HOLE, INTRA_FOOTPRINT_CLEARANCE, NET_TO_CLASS,
 )
 
 SYM_LIB_TABLE = os.path.join(REPO_ROOT, "sym-lib-table")
 FP_LIB_TABLE = os.path.join(REPO_ROOT, "fp-lib-table")
 PROJECT_FILE = os.path.join(REPO_ROOT, "stage1_iv.kicad_pro")
+DRU_FILE = os.path.join(REPO_ROOT, "stage1_iv.kicad_dru")
 DEPS_DOC = os.path.join(REPO_ROOT, "docs", "LIBRARY_DEPENDENCIES.md")
 
 PROJECT_LIB_NICK = "stage1_iv"
@@ -106,13 +108,27 @@ def sym_lib_table(upstream_symbols):
 
 
 def fp_lib_table(footprints):
-    """Project footprint library table. Paths via ${KICAD9_FOOTPRINT_DIR}."""
+    """Project footprint library table, pointing at the VENDORED footprints.
+
+    Not ``${KICADn_FOOTPRINT_DIR}``. Upstream renames pads between major
+    library versions — the USB-C shield pads became ``SH`` in library 10.0.0,
+    where this repository pins 9.0.9.1 and its symbol says ``S1`` — so a table
+    that resolves through the reader's own KiCad install makes the design's
+    pad names depend on which KiCad the reader happens to have. That is what
+    produced "J3 pad S1 not found" on a KiCad 10 machine.
+
+    ``tools/vendor_footprints.py`` commits exactly the footprints this design
+    uses, under their original nicknames, so no footprint identifier changes.
+    """
     rows = []
     for nick in sorted({fp.split(":", 1)[0] for fp in footprints}):
         rows.append(
             f'  (lib (name "{nick}")(type "KiCad")'
-            f'(uri "{FOOTPRINT_DIR_VAR}/{nick}.pretty")(options "")'
-            f'(descr "Upstream KiCad footprint library used by this design."))')
+            f'(uri "${{KIPRJMOD}}/libraries/footprints/{nick}.pretty")'
+            f'(options "")'
+            f'(descr "Vendored at the pinned upstream revision by '
+            f'tools/vendor_footprints.py. Pad names cannot drift with the '
+            f'reader\'s KiCad version - see docs/LIBRARY_DEPENDENCIES.md."))')
     return "(fp_lib_table\n  (version 7)\n" + "\n".join(rows) + "\n)\n"
 
 
@@ -192,7 +208,9 @@ def project_file():
                     "min_connection": FAB["min_track"],          # F3
                     "min_copper_edge_clearance": FAB["edge_clearance"],  # F8
                     "min_hole_clearance": FAB["min_clearance"],  # F4
-                    "min_hole_to_hole": 0.5,                     # F11
+                    # Derived from the measured 0.45 mm between J3's USB-C
+                    # pins, not from F11 directly - see libraries/netclasses.py.
+                    "min_hole_to_hole": GLOBAL_MIN_HOLE_TO_HOLE,
                     "min_microvia_diameter": 0.2,
                     "min_microvia_drill": 0.1,
                     "min_resolved_spokes": 2,
@@ -317,6 +335,113 @@ def deps_doc(upstream_symbols, project_symbols, footprints, provenance, libs):
     return "\n".join(out)
 
 
+def tight_footprints(circuit):
+    """Refs whose own pads are closer than the netclass clearance demands.
+
+    Returns ``[(ref, footprint_id, measured_gap, required_clearance)]``, sorted.
+
+    The required clearance is what KiCad will actually enforce between two pads
+    of *different nets*: the larger of the two netclasses' clearances. Where
+    that exceeds the gap the package physically has, no routing decision can
+    comply and the custom rule below applies instead.
+    """
+    sys.path.insert(0, HERE)
+    from measure_pad_gaps import pads_of
+    libs = KicadLibraries()
+
+    out = []
+    for part in sorted(circuit.parts, key=lambda p: p.ref):
+        fp_id = (part.footprint or "").strip()
+        if not fp_id:
+            continue
+        fp = libs.get_footprint(fp_id)
+        if fp is None:
+            continue
+        pads = pads_of(fp.file)
+        net_of = {}
+        for pin in part.pins:
+            for net in pin.get_nets():
+                if net.name and net.name != "__NOCONNECT":
+                    net_of[str(pin.num)] = net.name
+        worst = None
+        from measure_pad_gaps import _gap, _share_copper
+        for i in range(len(pads)):
+            for j in range(i + 1, len(pads)):
+                a, b = pads[i], pads[j]
+                if a[0] == b[0] or not _share_copper(a, b):
+                    continue
+                na, nb = net_of.get(a[0]), net_of.get(b[0])
+                if na is not None and na == nb:
+                    continue                # same net: KiCad does not check
+                need = max(
+                    NETCLASSES[NET_TO_CLASS[n]]["clearance"]
+                    if n in NET_TO_CLASS else DEFAULT_CLASS["clearance"]
+                    for n in (na, nb) if n) if (na or nb) else \
+                    DEFAULT_CLASS["clearance"]
+                gap = _gap(a, b)
+                if gap < need - 1e-9 and (worst is None or gap < worst[0]):
+                    worst = (gap, need, a[0], b[0])
+        if worst:
+            out.append((part.ref, fp_id, round(worst[0], 4), worst[1],
+                        f"{worst[2]}/{worst[3]}"))
+    return out
+
+
+def dru_file(circuit):
+    """stage1_iv.kicad_dru — the one scoped clearance rule, generated.
+
+    KiCad enforces the LARGER of two nets' netclass clearances between their
+    pads, including two pads of the same fine-pitch package whose spacing is
+    fixed by the part. The global minimum clearance does not help: it is a
+    floor on what a rule may ask for, not a cap.
+
+    This rule narrows the constraint to :data:`INTRA_FOOTPRINT_CLEARANCE`
+    between two pads of the same footprint, and *only* for the references that
+    are actually affected — each one listed with the gap measured from its
+    footprint file. Nothing is excluded and no severity is downgraded.
+    """
+    tight = tight_footprints(circuit)
+    lines = [
+        "(version 1)",
+        "",
+        ";; GENERATED FILE - do not edit by hand.",
+        ";; Regenerate with `python3 tools/gen_project_config.py`; verify with",
+        ";; `python3 tools/gen_project_config.py --check`.",
+        ";;",
+        ";; WHY THIS FILE EXISTS",
+        ";; KiCad enforces the larger of two nets' netclass clearances between",
+        ";; their pads. For two pads of the same fine-pitch package that is a",
+        ";; constraint the layout cannot satisfy: the spacing is a property of",
+        ";; the part, not of the board. The references below are exactly the",
+        ";; ones affected, each with the gap measured from its footprint file",
+        ";; by tools/measure_pad_gaps.py.",
+        ";;",
+        ";; This narrows a constraint in a scope where it is unsatisfiable. It",
+        ";; does NOT exclude a rule or downgrade a severity: clearance is still",
+        ";; checked on these pads, at "
+        f"{INTRA_FOOTPRINT_CLEARANCE} mm, and pad-to-track, track-to-track and",
+        ";; pad-to-pad between different footprints are untouched.",
+        "",
+    ]
+    if not tight:
+        lines.append(";; No footprint on this board is tighter than its "
+                     "netclass clearance.")
+        return "\n".join(lines) + "\n"
+
+    for ref, fp_id, gap, need, pair in tight:
+        lines += [
+            f";; {ref}  {fp_id}",
+            f";;   pads {pair} are {gap:.3f} mm apart; netclass would require "
+            f"{need:.2f} mm",
+            f'(rule "intra_footprint_clearance_{ref}"',
+            f'  (constraint clearance (min {INTRA_FOOTPRINT_CLEARANCE}mm))',
+            f'  (condition "A.Type == \'Pad\' && B.Type == \'Pad\' && '
+            f"A.memberOfFootprint('{ref}') && B.memberOfFootprint('{ref}')\"))",
+            "",
+        ]
+    return "\n".join(lines) + "\n"
+
+
 def _severity_overrides(project_text):
     """Any DRC/ERC severity downgrade hiding in the project file.
 
@@ -348,6 +473,7 @@ def build_all():
         SYM_LIB_TABLE: sym_lib_table(upstream_symbols),
         FP_LIB_TABLE: fp_lib_table(footprints),
         PROJECT_FILE: json.dumps(project_file(), indent=2, sort_keys=True) + "\n",
+        DRU_FILE: dru_file(circuit),
         DEPS_DOC: deps_doc(upstream_symbols, project_symbols, footprints,
                            provenance, libs),
     }, libs

@@ -71,6 +71,7 @@ jobs:
         run: |
           python3 tools/author_project_symbols.py --check
           python3 tools/gen_project_config.py --check
+          python3 tools/vendor_footprints.py --check
 
       - name: KiCad itself can read the generated library and schematic
         run: python3 tools/check_kicad_loads.py

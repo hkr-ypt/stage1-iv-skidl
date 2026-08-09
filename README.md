@@ -16,7 +16,7 @@ plus a generated component manifest.
 
 > **The board is not routed and DRC has not been run.** `generators/pcb.py`
 > places parts and writes design rules; drawing tracks is a human task, and
-> nothing in this repository claims a DRC pass. 241 connections remain.
+> nothing in this repository claims a DRC pass. 247 connections remain.
 
 ---
 
@@ -108,6 +108,7 @@ stage1-iv-skidl/
 │   ├── kicad_roundtrip.py      # verify the schematic through kicad-cli
 │   ├── check_kicad_loads.py    # KiCad itself reads the library/schematic/board
 │   ├── gen_project_config.py   # lib tables + board setup from netclasses
+│   ├── vendor_footprints.py    # pin the used footprints into the repository
 │   ├── measure_pad_gaps.py     # measure intrinsic pad gaps from the footprints
 │   └── test_guard_fails.sh     # fault-injection: prove the guard fails
 │

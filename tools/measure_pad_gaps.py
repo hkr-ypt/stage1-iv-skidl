@@ -83,6 +83,60 @@ def pads_of(path):
     return out
 
 
+def drills_of(path):
+    """[(number, x, y, dx, dy)] for every *drilled* pad in a .kicad_mod.
+
+    ``dx``/``dy`` are the hole's extents: equal for a round drill, different
+    for ``(drill oval dx dy)``. Pads with no ``(drill ...)`` are SMD and are
+    skipped — they have no hole to clash with.
+    """
+    with open(path, encoding="utf-8") as fh:
+        tree = parse_sexp(fh.read())
+    fp = _first(tree, "footprint") or _first(tree, "module")
+    if fp is None:
+        return []
+    out = []
+    for pad in _kids(fp, "pad"):
+        at = _first(pad, "at")
+        drill = _first(pad, "drill")
+        if at is None or drill is None:
+            continue
+        nums = []
+        for tok in drill[1:]:
+            if isinstance(tok, list):
+                break                       # (offset x y) — not a diameter
+            try:
+                nums.append(float(tok))
+            except (TypeError, ValueError):
+                continue                    # the literal "oval"
+        if not nums:
+            continue
+        dx = nums[0]
+        dy = nums[1] if len(nums) > 1 else nums[0]
+        x, y = _floats(at, 2)
+        out.append((str(pad[1]) if len(pad) > 1 else "", x, y, dx, dy))
+    return out
+
+
+def min_hole_gap(path):
+    """Smallest edge-to-edge distance between two holes, and the pair."""
+    holes = drills_of(path)
+    best, pair = None, None
+    for i in range(len(holes)):
+        for j in range(i + 1, len(holes)):
+            a, b = holes[i], holes[j]
+            if a[0] == b[0]:
+                continue                    # same electrical pad
+            # Oval holes are treated as their bounding rectangle, which
+            # understates the gap — the answer errs on the safe side.
+            dx = max(abs(a[1] - b[1]) - (a[3] + b[3]) / 2, 0.0)
+            dy = max(abs(a[2] - b[2]) - (a[4] + b[4]) / 2, 0.0)
+            g = math.hypot(dx, dy)
+            if best is None or g < best:
+                best, pair = g, (a[0], b[0])
+    return best, pair, len(holes)
+
+
 def _bbox(x, y, w, h, rot):
     """Axis-aligned bounding box of a rotated rectangular pad."""
     a = math.radians(rot % 180.0)
@@ -149,16 +203,24 @@ def main(argv=None):
         if fp is None:
             continue
         gap, pair, npads = min_gap(fp.file)
+        hgap, hpair, nholes = min_hole_gap(fp.file)
         rows.append({"footprint": fp_id, "refs": sorted(refs), "pads": npads,
                      "min_gap_mm": None if gap is None else round(gap, 4),
                      "between": list(pair) if pair else None,
+                     "holes": nholes,
+                     "min_hole_gap_mm": None if hgap is None else round(hgap, 4),
+                     "holes_between": list(hpair) if hpair else None,
                      "file": os.path.basename(fp.file)})
 
     measured = [r for r in rows if r["min_gap_mm"] is not None]
     tightest = min(measured, key=lambda r: r["min_gap_mm"]) if measured else None
+    drilled = [r for r in rows if r["min_hole_gap_mm"] is not None]
+    tightest_hole = (min(drilled, key=lambda r: r["min_hole_gap_mm"])
+                     if drilled else None)
 
     if args.json:
-        print(json.dumps({"footprints": rows, "tightest": tightest}, indent=2))
+        print(json.dumps({"footprints": rows, "tightest": tightest,
+                          "tightest_hole": tightest_hole}, indent=2))
         return 0
 
     print("=" * 78)
@@ -179,6 +241,24 @@ def main(argv=None):
         print("  The board's global minimum clearance must be <= this value, or")
         print("  these footprints are un-buildable as drawn. See")
         print("  docs/FAB_CONSTRAINTS.md and docs/pcb_generation.md.")
+
+    print()
+    print("=" * 78)
+    print("Intrinsic hole-to-hole gap (drilled pads only)")
+    print("=" * 78)
+    for r in sorted(drilled, key=lambda r: r["min_hole_gap_mm"]):
+        print(f"  {r['footprint']:<52}{r['holes']:>5}"
+              f"{r['min_hole_gap_mm']:>9.3f} mm  "
+              f"{'/'.join(r['holes_between'])}")
+    if tightest_hole:
+        print()
+        print(f"  TIGHTEST: {tightest_hole['min_hole_gap_mm']:.3f} mm in "
+              f"{tightest_hole['footprint']}")
+        print(f"            (holes {'/'.join(tightest_hole['holes_between'])}, "
+              f"used by {', '.join(tightest_hole['refs'])})")
+        print()
+        print("  The board's min_hole_to_hole rule must be <= this value for the")
+        print("  same reason: the drill spacing is a property of the part.")
     return 0
 
 
