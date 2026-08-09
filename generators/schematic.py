@@ -402,15 +402,15 @@ class CircuitModel:
         KiCad does not use the bare net name on the board. It prefixes by the
         sheet path of the highest sheet the net reaches, and *Update PCB from
         Schematic* rewrites any pad that disagrees — which is why the update
-        log was full of "Reconnect C24 pin 1 from ADC_AIN0 to /adc/ADC_AIN0".
+        log was full of "Reconnect C24 pin 1" onto a sheet-qualified name.
 
         The three cases follow directly from the label this generator emits:
 
         ``global_label``        the net is global; the name is bare.
         ``hierarchical_label``  the net crosses sheets through hierarchical
                                 pins, so it resolves at the root: ``/NAME``.
-        ``label``               a plain local label, confined to one sheet:
-                                ``/<sheet>/NAME``.
+        ``label``               a plain local label, confined to one sheet;
+                                the name is qualified by that sheet.
         """
         kind = self.net_class[net_name]
         if kind == "GLOBAL_POWER":

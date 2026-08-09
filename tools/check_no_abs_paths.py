@@ -66,6 +66,15 @@ EXEMPT_PATTERNS = [
     re.compile(r"^/usr/share/kicad/"),
     re.compile(r"^/dev/null$"),
     re.compile(r"^/Applications/KiCad/"),    # macOS default, quoted in docs
+    # KiCad net names. On the board and in the project file a net is named by
+    # the sheet path it resolves at - "/adc/ADC_AIN0" for a net local to the
+    # adc sheet, "/DRDY" for one that crosses sheets. Those are KiCad net
+    # names, not filesystem paths, and they are generated: the sheet names come
+    # from BLOCK_ORDER and the net names from blocks/nets.py, so nothing here
+    # is machine-specific. See generators/schematic.py::board_net_name.
+    re.compile(r"^/(" + "|".join([
+        "power", "mcu", "dac_sweep", "output_buffer", "current_sense",
+        "voltage_sense", "adc", "protection"]) + r")?/?[A-Za-z_][A-Za-z0-9_+-]*$"),
     # KiCad hierarchy paths: "/<uuid>/<uuid>" inside .kicad_sch and .net name
     # sheet instances, not the filesystem.
     re.compile(r"^/(?:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}"
