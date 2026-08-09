@@ -44,6 +44,12 @@ jobs:
           sudo apt-get install -y -qq --no-install-recommends kicad \
             || echo "::warning::kicad-cli unavailable; KiCad-side checks SKIP"
           kicad-cli version || true
+          # pcbnew is what actually runs DRC (WriteDRCReport). It is a SWIG
+          # extension built against the DISTRO python, which is NOT the one
+          # actions/setup-python puts on PATH — drc_check.py hands the job to
+          # /usr/bin/python3 for that reason. Report what is available.
+          /usr/bin/python3 -c "import pcbnew; print('pcbnew', pcbnew.GetBuildVersion())" \
+            || echo "::warning::pcbnew unavailable; real DRC will SKIP"
 
       - name: Cache the pinned KiCad libraries
         id: libcache

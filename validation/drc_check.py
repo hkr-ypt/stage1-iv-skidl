@@ -12,6 +12,7 @@ What it enforces
 ----------------
 =========================  ====================================================
 ``board_parity``           the board matches the circuit main.py builds now
+``dru_parses``             the custom rules file is one KiCad can compile
 ``rule_satisfiability``    no clearance rule demands more than a package gives
 ``hole_spacing``           min_hole_to_hole does not exceed the parts' drills
 ``courtyard_overlap``      no two footprint courtyards intersect
@@ -561,6 +562,69 @@ def ratsnest_count(board):
     return sum(n - 1 for n in per_net.values() if n > 1), per_net
 
 
+DRU_FILE = os.path.join(_REPO_ROOT, "stage1_iv.kicad_dru")
+
+_DRU_SCRIPT = """
+import sys, pcbnew
+board = pcbnew.LoadBoard(sys.argv[1])
+ok = pcbnew.WriteDRCReport(board, sys.argv[2], pcbnew.EDA_UNITS_MILLIMETRES, True)
+sys.stdout.write(pcbnew.GetBuildVersion())
+sys.exit(0 if ok else 3)
+"""
+
+
+def check_dru_parses():
+    """The custom rules file must be something KiCad can compile.
+
+    A ``.kicad_dru`` KiCad cannot parse makes it refuse to run DRC *at all* —
+    the user cannot check the board. That shipped once: the file used ``;``
+    comments, and KiCad parses it with the DSN lexer, whose comment character
+    is ``#`` and only as the first non-blank character of a line
+    (``common/dsnlexer.cpp``).
+
+    When ``pcbnew`` is available the real DRC run is the authority and this
+    check is belt-and-braces. Where it is not — a CI runner without KiCad —
+    this is the only thing standing between a broken rules file and a reviewer,
+    so it runs unconditionally. It is *necessary, not sufficient*: it confirms
+    the file is balanced s-expressions once ``#`` comment lines are removed,
+    which is exactly what the failure mode violated.
+    """
+    if not os.path.isfile(DRU_FILE):
+        return []                       # no custom rules is a valid state
+    with open(DRU_FILE, encoding="utf-8") as fh:
+        raw = fh.read()
+
+    kept = []
+    for lineno, line in enumerate(raw.splitlines(), start=1):
+        stripped = line.lstrip()
+        if stripped.startswith("#"):
+            continue                    # a comment KiCad accepts
+        if stripped.startswith(";"):
+            return [f"stage1_iv.kicad_dru line {lineno}: ';' is not a comment "
+                    f"character here. KiCad parses this file with the DSN "
+                    f"lexer, whose comment character is '#' as the FIRST "
+                    f"non-blank character of a line. KiCad will refuse to run "
+                    f"DRC at all."]
+        kept.append(line)
+
+    text = "\n".join(kept)
+    try:
+        tree = parse_sexp(text)
+    except Exception as exc:            # noqa: BLE001 - any parse failure
+        return [f"stage1_iv.kicad_dru does not parse as s-expressions "
+                f"({exc}). KiCad will refuse to run DRC at all."]
+
+    heads = [str(n[0]) for n in tree if isinstance(n, list) and n]
+    if not heads or heads[0] != "version":
+        return [f"stage1_iv.kicad_dru must begin with (version N); it begins "
+                f"with {heads[:1] or ['nothing']}"]
+    unexpected = sorted(set(heads[1:]) - {"rule"})
+    if unexpected:
+        return [f"stage1_iv.kicad_dru has top-level item(s) {unexpected}; "
+                f"only (version ...) and (rule ...) are valid"]
+    return []
+
+
 def check_board_parity(board):
     """The board must match the circuit that main.py builds right now.
 
@@ -638,7 +702,10 @@ def _drc_via_pcbnew(board_path):
     try:
         import pcbnew                                    # noqa: PLC0415
     except ImportError:
-        return None, "KiCad's pcbnew Python module is not importable"
+        # KiCad's pcbnew is a SWIG extension built against the DISTRO's python,
+        # so a CI runner using actions/setup-python cannot import it even when
+        # KiCad is installed. Hand the job to the interpreter it was built for.
+        return _drc_via_system_python(board_path)
     if not hasattr(pcbnew, "WriteDRCReport"):
         return None, (f"pcbnew {pcbnew.GetBuildVersion()} has no "
                       f"WriteDRCReport()")
@@ -662,6 +729,26 @@ def _drc_via_pcbnew(board_path):
                            f"project.")
         with open(out, encoding="utf-8") as fh:
             return fh.read(), f"pcbnew {pcbnew.GetBuildVersion()}"
+
+
+def _drc_via_system_python(board_path):
+    """Run DRC under the distro python, which is the one pcbnew was built for."""
+    for exe in ("/usr/bin/python3", "/usr/bin/python3.12", "/usr/bin/python3.11"):
+        if not os.path.exists(exe):
+            continue
+        with tempfile.TemporaryDirectory() as tmp:
+            out = os.path.join(tmp, "drc.rpt")
+            proc = subprocess.run([exe, "-c", _DRU_SCRIPT, board_path, out],
+                                  capture_output=True, text=True, timeout=1800)
+            if proc.returncode == 3:
+                return False, (f"pcbnew {proc.stdout.strip()} (via {exe}) HAS "
+                               f"DRC but refused to run it — the usual cause "
+                               f"is a stage1_iv.kicad_dru KiCad cannot compile")
+            if proc.returncode == 0 and os.path.isfile(out):
+                with open(out, encoding="utf-8") as fh:
+                    return fh.read(), f"pcbnew {proc.stdout.strip()} via {exe}"
+    return None, ("KiCad's pcbnew Python module is not importable, by this "
+                  "interpreter or the system one")
 
 
 def parse_drc_report(text):
@@ -809,6 +896,7 @@ def run_drc_check(board_path=BOARD_FILE, run_kicad=True):
         failures.extend(f"{name}: {p}" for p in problems)
 
     record("fab_conformance", check_against_fab())
+    record("dru_parses", check_dru_parses())
     record("board_parity", check_board_parity(board))
     record("netclass_coverage", check_netclass_coverage(board))
     record("rule_satisfiability", check_rule_satisfiability(board))
