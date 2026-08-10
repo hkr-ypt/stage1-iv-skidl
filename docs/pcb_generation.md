@@ -337,14 +337,57 @@ reported 161, so the model is not asked to be believed on its own terms:
 `validation/fixtures/kicad_update_pcb_baseline.json` records what KiCad 10.0.5
 actually printed on the board that had none of this metadata. `--self-test`
 strips one category back out of the current board and requires the model to
-report **the same number KiCad did** — 110, 110, 110, 110, 98, 16. CI runs the
+report **the same number KiCad did** — 110, 110, 110, 110, 98, 16, and 4 for
+the net-name escaping capture described below. CI runs the
 calibration *before* it runs the check, because a "no changes" verdict from an
 uncalibrated checker is worth nothing. `tools/test_guard_fails.sh` cases 18 and
 19 break the generator and the model in turn, and show each being caught.
 
-The 49 synthetic net names are stronger evidence still: they are byte-identical
-to the 49 `Add net unconnected-(…)` lines in the reviewer's log, spelling
-included — `unconnected-(U8-D0/CLKOUT-Pad25)`, `unconnected-(J3-SBU1-PadA8)`.
+### The four that survived, and why matching the log was not enough
+
+The first round of this work justified the 49 synthetic net names by noting
+that they were byte-identical to the 49 `Add net unconnected-(…)` lines in the
+reviewer's log. They were. **That was the wrong evidence**, and the next KiCad
+10.0.5 run said so — four changes remained:
+
+```
+Add net unconnected-(U2-TRIM/NR-Pad5).
+Reconnect U2 pin 5 from unconnected-(U2-TRIM/NR-Pad5)
+                    to unconnected-(U2-TRIM/NR-Pad5).
+Add net unconnected-(U8-D0/CLKOUT-Pad25).
+Reconnect U8 pin 25 from unconnected-(U8-D0/CLKOUT-Pad25)
+                     to unconnected-(U8-D0/CLKOUT-Pad25).
+```
+
+`Reconnect … from X to X`, with both sides printing identically, is the
+fingerprint of two different strings that render the same. A KiCad net name has
+a **stored** form — what `.kicad_pcb` holds, what the netlist carries, what
+`BOARD_NETLIST_UPDATER` compares — and a **display** form, which is the stored
+form put through `UnescapeString()` on its way to a dialog. `EscapeString(…,
+CTX_NETNAME)` is the whole difference: `/` becomes `{slash}`
+(`common/string_utils.cpp` 193-204), and `SCH_PIN::GetDefaultNetName` applies
+it to the pin name and the pad number but not to the reference.
+
+The log had already been unescaped for printing (`board_netlist_updater.cpp`
+1195-1210 wraps every net name in `UnescapeString`), so matching it byte for
+byte proved the *display* form was right and said nothing about the stored one.
+Only two pins in this design have a `/` in their name — U2 `TRIM/NR` and U8
+`D0/CLKOUT` — and they are exactly the two that remained. The board now stores
+`unconnected-(U2-TRIM{slash}NR-Pad5)`.
+
+`CircuitModel.board_net_name` applies the same rule, because
+`CONNECTION_SUBGRAPH::driverName` escapes label text identically. That one is a
+byte-for-byte no-op today — no net name or sheet name in this design contains a
+slash — and is applied anyway, since this is the second time the rule's absence
+cost mutations that no log could reveal.
+
+The fixture carries this second capture as its own calibration point:
+re-injecting the display form must yield exactly **4** `net` actions. And
+because a generator that silently stopped escaping would take the model down
+with it — both sides would agree on the wrong string and `dry_run` would
+happily report zero — `self_test` now also fails any injection that **changes
+nothing**. Verified: with `escape_netname` stubbed to the identity on both
+sides, `dry_run` returns 0 actions and the calibration still fails.
 
 ### This board now needs KiCad 10, not KiCad 9
 

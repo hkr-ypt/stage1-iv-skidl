@@ -428,9 +428,13 @@ validation:
       installable here and cannot open a 20241229 board), so it is calibrated
       first: removing each category from the board reproduces the counts KiCad
       10.0.5 actually reported - 110/110/110/110 for sheetname/sheetfile/
-      fields/units, 98 for nets, 16 for fabrication attributes. The 49
-      synthetic net names it generates are byte-identical to the 49 KiCad
-      printed.
+      fields/units, 98 for nets, 16 for fabrication attributes, and 4 for the
+      net-name escaping capture. Two KiCad 10.0.5 runs are recorded, not one:
+      the second caught net names stored in KiCad's DISPLAY form rather than
+      its stored form (EscapeString CTX_NETNAME turns '/' into '{slash}'), a
+      difference no log can show because the dialog unescapes before printing.
+      self_test also rejects any injection that changes nothing, so a
+      generator that stopped escaping cannot take the model down with it.
   kicad_roundtrip:
     module: tools/kicad_roundtrip.py
     checks: [kicad-cli sch export netlist vs stage1_iv.net, symbol/footprint

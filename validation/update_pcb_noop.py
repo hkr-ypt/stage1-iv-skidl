@@ -29,6 +29,17 @@ these rules existed, and ``self_test()`` re-injects each of those defects and
 requires this checker to report the same category with the same count. A rule
 that cannot reproduce KiCad's own numbers is a rule that is wrong.
 
+Two captures are recorded, not one, and the second is the more instructive.
+After the first six categories were fixed, KiCad still reported four changes —
+and printed both of its ``Reconnect`` lines with an identical net name on each
+side, because it unescapes net names before reporting them
+(``board_netlist_updater.cpp`` 1195-1210). The board held the display form,
+the netlist the stored one, and no log could have shown the difference. Two
+consequences for this file: the escaping rule is calibrated as its own capture,
+and ``self_test()`` fails any injection that **changes nothing** — otherwise a
+generator that quietly stopped escaping would take this model down with it and
+the two would agree, at zero, on a board that is wrong.
+
 Categories, and where each comes from in KiCad 10.0.5
 ----------------------------------------------------
 =================== ======================================================
@@ -392,14 +403,44 @@ def _restore_testpoint_attrs(root):
                                      Atom("exclude_from_bom")]))
 
 
+def _unescape_net_names(root):
+    """Store net names in their DISPLAY form, as this board once did.
+
+    ``{slash}`` back to ``/`` everywhere a net name appears. KiCad reported
+    exactly four actions for this — two nets and two pads — and printed both
+    Reconnect lines with the same name on each side, because it unescapes
+    before reporting. If the generator ever stops escaping, this injection
+    becomes a no-op and the calibration fails instead of quietly agreeing with
+    a board that is wrong.
+    """
+    from tools.resolve_kicad_libs import Atom
+
+    def fix(node):
+        for child in node:
+            if isinstance(child, list):
+                if _head(child) == "net" and len(child) > 2 \
+                        and "{slash}" in str(child[2]):
+                    child[2] = Atom(str(child[2]).replace("{slash}", "/"),
+                                    0, True)
+                fix(child)
+
+    fix(root)
+
+
+# name -> (which recorded KiCad capture holds the expected count,
+#          category it must be reported as,
+#          how to put that defect back into the current board)
 _INJECTIONS = {
-    # name -> (category it must be reported as, mutate a parsed board in place)
-    "sheetname": ("sheetname", _drop_per_footprint("sheetname")),
-    "sheetfile": ("sheetfile", _drop_per_footprint("sheetfile")),
-    "units": ("units", _drop_per_footprint("units")),
-    "fields": ("fields", _drop_fields),
-    "unconnected-nets": ("net", _drop_unconnected_nets),
-    "testpoint-attrs": ("attributes", _restore_testpoint_attrs),
+    "sheetname": ("categories", "sheetname",
+                  _drop_per_footprint("sheetname")),
+    "sheetfile": ("categories", "sheetfile",
+                  _drop_per_footprint("sheetfile")),
+    "units": ("categories", "units", _drop_per_footprint("units")),
+    "fields": ("categories", "fields", _drop_fields),
+    "unconnected-nets": ("categories", "net", _drop_unconnected_nets),
+    "testpoint-attrs": ("categories", "attributes",
+                        _restore_testpoint_attrs),
+    "netname-escaping": ("escaping_capture", "net", _unescape_net_names),
 }
 
 
@@ -435,10 +476,22 @@ def self_test(board_path=BOARD_FILE, verbose=True):
     with open(board_path, encoding="utf-8") as fh:
         text = fh.read()
 
-    for name, (category, mutate) in sorted(_INJECTIONS.items()):
+    for name, (capture, category, mutate) in sorted(_INJECTIONS.items()):
         tree = parse_sexp(text)
         root = next(c for c in tree if _head(c) == "kicad_pcb")
+        before = write_sexp(root)
         mutate(root)
+        if write_sexp(root) == before:
+            # The injection changed nothing, so the "defect" is not in the
+            # board to begin with and the count below would be vacuous. This
+            # is how a generator that quietly stopped escaping net names would
+            # otherwise pass: the board would already hold the wrong form.
+            problems.append(
+                f"injection {name!r} did not change the board. It is testing "
+                f"nothing, so its result proves nothing. Either the defect it "
+                f"reintroduces is already present in the generated board, or "
+                f"the injection is stale.")
+            continue
         with tempfile.NamedTemporaryFile("w", suffix=".kicad_pcb",
                                          delete=False,
                                          encoding="utf-8") as tmp:
@@ -448,17 +501,18 @@ def self_test(board_path=BOARD_FILE, verbose=True):
             counts = summarise(dry_run(tmp_path))
         finally:
             os.unlink(tmp_path)
-        want = baseline["categories"].get(category)
+        source = baseline if capture == "categories" else baseline[capture]
+        want = source["categories"].get(category)
         got = counts.get(category, 0)
         if verbose:
-            print(f"  inject {name:<12} -> {category}={got} "
+            print(f"  inject {name:<17} -> {category}={got} "
                   f"(KiCad 10.0.5 reported {want})")
         if got != want:
             problems.append(
-                f"removing {name} from every footprint yields {got} "
-                f"{category!r} action(s), but KiCad 10.0.5 reported {want} "
-                f"on the board that had none. This checker does not see what "
-                f"KiCad sees; fix the rule, do not trust the result.")
+                f"reintroducing {name} yields {got} {category!r} action(s), "
+                f"but KiCad 10.0.5 reported {want} on the board that carried "
+                f"that defect. This checker does not see what KiCad sees; fix "
+                f"the rule, do not trust the result.")
     return problems
 
 

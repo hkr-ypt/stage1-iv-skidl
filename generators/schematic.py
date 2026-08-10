@@ -196,6 +196,37 @@ def symbol_instance_path(block, ref):
 # definition instead of two guesses.
 
 
+def escape_netname(text):
+    """``EscapeString(text, CTX_NETNAME)`` — how KiCad STORES a net name.
+
+    A KiCad net name has two forms and they are not the same string:
+
+    * the **stored** form, which is what ``.kicad_pcb`` holds, what the KiCad
+      netlist carries, and what ``BOARD_NETLIST_UPDATER`` compares;
+    * the **display** form, which is the stored form put through
+      ``UnescapeString()`` before it reaches a dialog or a report.
+
+    ``EscapeString`` with ``CTX_NETNAME`` (common/string_utils.cpp 193-204 @
+    10.0.5) is the whole of the difference: ``/`` becomes ``{slash}``, and CR
+    and LF are dropped. Nothing else is touched.
+
+    Getting this wrong is invisible in a log. The previous version of this file
+    built the DISPLAY form and was checked against a reviewer's Update-PCB
+    log — where it matched all 49 names byte for byte, because that log had
+    already been unescaped for printing. What KiCad actually compared was the
+    stored form, so the two pins in this design whose names contain a slash
+    (U2 ``TRIM/NR``, U8 ``D0/CLKOUT``) mismatched, and the dialog reported
+
+        Add net unconnected-(U2-TRIM/NR-Pad5).
+        Reconnect U2 pin 5 from unconnected-(U2-TRIM/NR-Pad5)
+                            to unconnected-(U2-TRIM/NR-Pad5).
+
+    "Reconnect from X to X", with both sides printing identically, is the
+    signature of exactly this: two different strings that unescape to one.
+    """
+    return str(text).replace("/", "{slash}").replace("\n", "").replace("\r", "")
+
+
 def field_text(value):
     """A field value as KiCad will hold it after reading this schematic.
 
@@ -243,16 +274,22 @@ def unconnected_net_name(ref, pin_num, pin_name):
 
     with no unit token, because every symbol in this design has one unit.
 
-    This is not a reading of the source alone: the 49 names this produces are
-    byte-identical to the 49 ``Add net unconnected-(...)`` lines in the
-    reviewer's KiCad 10.0.5 "Update PCB from Schematic" log — same count, same
-    spelling, including ``unconnected-(U8-D0/CLKOUT-Pad25)`` and
-    ``unconnected-(J3-SBU1-PadA8)``.
+    The pin name and the pad number go through ``EscapeString(...,
+    CTX_NETNAME)``; the reference does not. That is not a stylistic choice —
+    it is where KiCad puts the calls, and it is the difference between
+    ``unconnected-(U2-TRIM{slash}NR-Pad5)`` (what the netlist carries and the
+    board must store) and ``unconnected-(U2-TRIM/NR-Pad5)`` (what the
+    Update-PCB dialog prints, after unescaping). See :func:`escape_netname`.
+
+    Verified against the reviewer's KiCad 10.0.5 logs in both forms: all 49
+    names match the display text of the first log, and the two that carry a
+    slash are exactly the two the second log still reported.
     """
     num, name = str(pin_num), str(pin_name or "")
     if name and name != num:
-        return f"unconnected-({ref}-{name}-Pad{num})"
-    return f"unconnected-({ref}-Pad{num})"
+        return (f"unconnected-({ref}-{escape_netname(name)}"
+                f"-Pad{escape_netname(num)})")
+    return f"unconnected-({ref}-Pad{escape_netname(num)})"
 
 
 def unconnected_pads(circuit):
@@ -556,14 +593,28 @@ class CircuitModel:
                                 pins, so it resolves at the root: ``/NAME``.
         ``label``               a plain local label, confined to one sheet;
                                 the name is qualified by that sheet.
+
+        The label text is escaped the same way a pin-derived name is:
+        ``CONNECTION_SUBGRAPH::driverName`` (connection_graph.cpp 407-415 @
+        10.0.5) returns ``EscapeString( label->GetShownText(), CTX_NETNAME )``
+        for every label class this generator emits. The slashes that separate
+        the sheet path are structural and are NOT part of any name, so they are
+        added after escaping, never before.
+
+        No net name and no block name in this design contains a character
+        ``CTX_NETNAME`` escapes, so this is a byte-for-byte no-op today. It is
+        applied anyway: the one place the rule was missing cost four Update-PCB
+        mutations that no log could show, and a net named ``FORCE/SENSE`` added
+        tomorrow would cost the same again.
         """
         kind = self.net_class[net_name]
+        escaped = escape_netname(net_name)
         if kind == "GLOBAL_POWER":
-            return net_name
+            return escaped
         if kind == "HIER_SIGNAL":
-            return f"/{net_name}"
+            return f"/{escaped}"
         block = sorted(self.net_blocks[net_name])[0]
-        return f"/{block}/{net_name}"
+        return f"/{escape_netname(block)}/{escaped}"
 
     def label_kind(self, net_name):
         return {"GLOBAL_POWER": "global_label",
