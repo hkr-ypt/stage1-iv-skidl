@@ -344,6 +344,64 @@ def set_value(node, value):
     _set_property(node, "Value", value)
 
 
+def add_field(node, ref, name, value):
+    """Add a hidden footprint field, or overwrite one that already exists.
+
+    Fields are what ``Update <ref> fields`` compares (see
+    generators/schematic.py :func:`symbol_fields`). KiCad writes them the way
+    PCB_IO_KICAD_SEXPR::format(const PCB_TEXT*) does — position relative to the
+    footprint, layer, ``(hide yes)`` when invisible, uuid, effects — and reads
+    them back through the same code path as Reference and Value, so anything
+    valid for those is valid here.
+    """
+    if _set_property(node, name, value):
+        return
+    field = L(A("property"), Q(name), Q(value),
+              L(A("at"), A("0"), A("0"), A("0")),
+              L(A("layer"), Q("F.Fab")),
+              L(A("hide"), A("yes")),
+              L(A("uuid"), Q(uid(f"field:{ref}:{name}"))),
+              L(A("effects"),
+                L(A("font"),
+                  L(A("size"), num(SILK_TEXT_HEIGHT), num(SILK_TEXT_HEIGHT)),
+                  L(A("thickness"), num(SILK_TEXT_THICKNESS)))))
+    last = 1
+    for i, child in enumerate(node):
+        if isinstance(child, list) and str(child[0]) == "property":
+            last = i
+    node.insert(last + 1, field)
+
+
+def add_unit_info(node, units):
+    """Emit ``(units (unit (name "A") (pins "1" "2" ...)))``.
+
+    The spelling is PCB_IO_KICAD_SEXPR::format(const FOOTPRINT*) (10.0.5, line
+    1286) and it round-trips through the parser at line 5253. Without it,
+    ``updateComponentUnits`` compares an empty vector against the symbol's one
+    unit and reports ``Update <ref> unit metadata`` for every footprint.
+    """
+    if not units:
+        return
+    body = [A("units")]
+    for name, pins in units:
+        body.append(L(A("unit"), L(A("name"), Q(name)),
+                      L(A("pins"), *[Q(p) for p in pins])))
+    node.append(SexpList(body))
+
+
+def strip_attrs(node, unwanted):
+    """Drop fabrication attributes the schematic does not ask for."""
+    for i, child in enumerate(node):
+        if isinstance(child, list) and child and str(child[0]) == "attr":
+            kept = [child[0]] + [c for c in child[1:]
+                                 if str(c) not in unwanted]
+            if len(kept) == 1:
+                del node[i]             # an empty (attr) is not valid syntax
+            else:
+                node[i] = SexpList(kept)
+            return
+
+
 # SKiDL pin function -> KiCad pad pintype. The board carries the same
 # electrical type the schematic does; nothing here invents one.
 PINTYPE = {
@@ -1080,14 +1138,25 @@ def generate_pcb(circuit, out_dir="."):
     # KiCad names board nets by sheet path, not by the bare SKiDL name. Ask
     # the schematic model for the name it will compute, or every pad disagrees
     # and Update PCB from Schematic rewrites the connectivity.
-    from generators.schematic import CircuitModel
+    from generators.schematic import (CircuitModel, SYMBOL_DRIVEN_FP_ATTRS,
+                                      sheet_file, sheet_name, symbol_fields,
+                                      unconnected_pads, unit_info)
     model = CircuitModel(circuit)
     flat = sorted({n.name for n in circuit.get_nets()
                    if n.name != "__NOCONNECT"})
     kicad_name = {n: model.board_net_name(n) for n in flat}
-    net_names = sorted(kicad_name.values())
+    # Every open pin gets the synthetic net KiCad would create for it. Leaving
+    # those pads with no net is not neutral: the updater then ADDS 49 nets and
+    # reconnects 49 pads, which is a connectivity change, which is exactly what
+    # "Update PCB from Schematic must be a no-op" forbids.
+    open_pads = unconnected_pads(circuit)
+    unconnected = sorted({n for pads in open_pads.values()
+                          for n in pads.values()})
+    net_names = sorted(set(kicad_name.values())) + unconnected
     # Classify the DESIGN's net names — libraries/netclasses.py is written in
-    # those terms — then carry the class over to the KiCad board name.
+    # those terms — then carry the class over to the KiCad board name. The
+    # synthetic nets are not classified here: a net with one pad carries no
+    # current between two points, and KiCad leaves them in Default.
     flat_class = classify(flat)              # raises on an unclassified net
     net_class = {kicad_name[n]: c for n, c in flat_class.items()}
     codes = {"": 0}
@@ -1105,6 +1174,15 @@ def generate_pcb(circuit, out_dir="."):
                 pad_net.setdefault(part.ref, {})[str(pin.num)] = (
                     codes[board_name], board_name, str(pin.name or ""),
                     PINTYPE.get(func, "unspecified"))
+    for part in circuit.parts:
+        for pin in part.pins:
+            name = open_pads.get(part.ref, {}).get(str(pin.num))
+            if name is None:
+                continue
+            func = getattr(getattr(pin, "func", None), "name", None) or ""
+            pad_net.setdefault(part.ref, {})[str(pin.num)] = (
+                codes[name], name, str(pin.name or ""),
+                PINTYPE.get(func, "unspecified"))
 
     # --- footprints -----------------------------------------------------
     physical = [p for p in circuit.parts if (p.footprint or "").strip()]
@@ -1127,10 +1205,19 @@ def generate_pcb(circuit, out_dir="."):
         # everything this generator had placed. That is the board the DRC
         # reports were run on.
         from generators.schematic import symbol_instance_path
+        block = getattr(part, "skidl_block", "misc")
         node.append(L(A("path"),
-                      Q(symbol_instance_path(
-                          getattr(part, "skidl_block", "misc"), part.ref))))
-        item = Placed(part.ref, node, getattr(part, "skidl_block", "misc"))
+                      Q(symbol_instance_path(block, part.ref))))
+        # Everything else "Update PCB from Schematic" would otherwise rewrite.
+        # The values are computed in generators/schematic.py, next to the
+        # schematic that defines them; see the derivation on each function.
+        node.append(L(A("sheetname"), Q(sheet_name(block))))
+        node.append(L(A("sheetfile"), Q(sheet_file(block))))
+        for fname, fvalue in symbol_fields(model, part):
+            add_field(node, part.ref, fname, fvalue)
+        add_unit_info(node, unit_info(model.part_sym[part.ref]))
+        strip_attrs(node, SYMBOL_DRIVEN_FP_ATTRS)
+        item = Placed(part.ref, node, block)
         if part.ref in bridge_pins:
             # Parts that bond to both ground systems leave their block and go
             # into the straddle lane on the plane boundary. See _ground_bridges.

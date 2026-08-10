@@ -276,6 +276,101 @@ not "vendor the entire library set"; it is 28 files the design names explicitly.
 `--check` fails if a vendored file differs from the installed library or if a
 vendored footprint is no longer used, and CI runs it.
 
+## "Update PCB from Schematic" must be a no-op
+
+This is the contract that makes every other number on this page mean anything.
+
+The board is an **artefact** of `main.py`, exactly like the schematic. If
+opening `stage1_iv.kicad_pcb` in KiCad and pressing *Tools → Update PCB from
+Schematic* changes it, then the two artefacts disagree, and every DRC result
+taken afterwards describes a board that no generator in this repository wrote.
+That is not hypothetical: four rounds of review were spent on DRC reports from
+a board whose 110 footprints KiCad had silently replaced with fresh library
+copies at default positions, because the `(path ...)` link resolved to nothing.
+
+KiCad's `BOARD_NETLIST_UPDATER` rewrites more than connectivity. On the board
+this project shipped at commit `56f6765` — by then correct on nets, with zero
+`Add` and zero `Reconnect` lines — KiCad 10.0.5 still reported **554 changes**:
+
+| What KiCad reported | Count | Why the board did not have it |
+|---|---:|---|
+| `Update <ref> sheetname to '/<block>/'` | 110 | footprints carried no `(sheetname)` |
+| `Update <ref> sheetfile to '<block>.kicad_sch'` | 110 | footprints carried no `(sheetfile)` |
+| `Update <ref> fields` | 110 | symbol fields (`MPN`, `Datasheet`, `Description`, …) were on the symbol only |
+| `Update <ref> unit metadata` | 110 | footprints carried no `(units)` |
+| `Add net unconnected-(…)` + `Connect <ref> pin n` | 49 + 49 | open pads had no net; KiCad synthesises one per pad |
+| `Remove TPn 'exclude from …' fabrication attribute` ×2 | 16 | the TestPoint footprint ships with both; no symbol asks for them |
+
+Each is now emitted from source. The values are **not** guessed from the file
+format — each is computed by the function in `generators/schematic.py` that
+cites the KiCad 10.0.5 source line it mirrors:
+
+* `sheet_name()` ← `updateComponentParameters`, which prefers
+  `COMPONENT::GetHumanReadablePath()` — the sheet **names**, slash-delimited.
+* `symbol_fields()` ← `NETLIST_EXPORTER_XML::addSymbolFields` (every
+  non-mandatory field, plus `Footprint`/`Datasheet`/`Description`) minus the
+  four the updater erases.
+* `unit_info()` ← `LIB_SYMBOL::GetUnitPinInfo()`: unit name
+  `LetterSubReference(n,'A')`, pins sorted by position, x then y, in the
+  **internal** frame where the library file's Y is negated.
+* `unconnected_net_name()` ← `SCH_PIN::GetDefaultNetName(sheet, true)`.
+
+### The `~` that would have kept 107 footprints mismatched
+
+SKiDL's default datasheet is the single character `~`. KiCad's **schematic**
+parser turns a lone `~` into the empty string for any file older than schema
+20250318, and this project emits 20230121; KiCad's **board** parser does no
+such thing. So the netlist would have carried `Datasheet=""` while the board
+carried `Datasheet="~"`, and 107 of the 110 footprints would have reported
+`Update <ref> fields` forever, for a difference invisible in both files.
+`generators/schematic.py::field_text()` normalises once, at the source both
+emitters read.
+
+### Why the checker is calibrated instead of trusted
+
+`validation/update_pcb_noop.py` re-implements those comparisons in Python. It
+is a **model** of KiCad, not KiCad — 7.0.11 is the newest version installable
+in this environment and it cannot even open a 20241229 board. This project has
+already shipped one checker that confidently reported zero problems while KiCad
+reported 161, so the model is not asked to be believed on its own terms:
+
+`validation/fixtures/kicad_update_pcb_baseline.json` records what KiCad 10.0.5
+actually printed on the board that had none of this metadata. `--self-test`
+strips one category back out of the current board and requires the model to
+report **the same number KiCad did** — 110, 110, 110, 110, 98, 16. CI runs the
+calibration *before* it runs the check, because a "no changes" verdict from an
+uncalibrated checker is worth nothing. `tools/test_guard_fails.sh` cases 18 and
+19 break the generator and the model in turn, and show each being caught.
+
+The 49 synthetic net names are stronger evidence still: they are byte-identical
+to the 49 `Add net unconnected-(…)` lines in the reviewer's log, spelling
+included — `unconnected-(U8-D0/CLKOUT-Pad25)`, `unconnected-(J3-SBU1-PadA8)`.
+
+### This board now needs KiCad 10, not KiCad 9
+
+The `(units ...)` block is read by `parseFOOTPRINT` in KiCad 10 and by nothing
+earlier: KiCad 9.0.9.1's footprint parser ends its token list at
+`…zone_connect, or component_classes` and throws on anything else. The board
+still declares `version 20241229`, because that is the schema the vendored
+footprints are in and `check_schema_version` exists to keep those two equal —
+and because raising the declared version to the `20260206` KiCad 10.0.5 writes
+would switch off KiCad 10's own 20241229→current migrations for content that
+cannot be re-tested in this environment (the newest installable KiCad here is
+7.0.11, which cannot open the board at all).
+
+The consequence is stated rather than papered over: **open this board in KiCad
+10.** KiCad 9 will report a parse error at the `units` token rather than a
+"created with a more recent version" message.
+
+### What changed on the board, and why that is the right direction
+
+The TestPoint footprints lose `exclude_from_bom` and `exclude_from_pos_files`.
+That is a real change to the board, made deliberately: the schematic is the
+source of truth, nothing in it marks TP1–TP8 excluded, and KiCad would strip
+those bits on the first update anyway. To keep test points out of the BOM, mark
+the **symbols** excluded — the attribute then arrives through the netlist and
+the board keeps it.
+
 ## Board outline, origin and mounting holes
 
 * **Origin** is the KiCad page origin; the placement starts at (0, 0) and the

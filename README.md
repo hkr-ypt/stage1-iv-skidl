@@ -248,10 +248,12 @@ PASS, 0 unresolved identifiers, 0 unaccounted pads**, and:
 - `stage1_iv.net` — KiCad netlist
 - `stage1_iv.kicad_sch` + 8 child `.kicad_sch` — hierarchical KiCad schematic
   (self-contained; see below and [`SCHEMATIC.md`](SCHEMATIC.md))
-- `stage1_iv.kicad_pcb` — placed, **unrouted** board (KiCad 9/10 schema):
-  outline, mounting holes,
-  netclass-aware setup and the AGND/DGND pours
-  (see [`docs/pcb_generation.md`](docs/pcb_generation.md))
+- `stage1_iv.kicad_pcb` — placed, **unrouted** board (KiCad 9/10 schema,
+  **opens in KiCad 10**): outline, mounting holes,
+  netclass-aware setup and the AGND/DGND pours. Opening it and pressing
+  *Update PCB from Schematic* changes **nothing** — that is a checked property,
+  not a hope (see [`docs/pcb_generation.md`](docs/pcb_generation.md) and
+  `validation/update_pcb_noop.py`)
 - `component_manifest.md` — generated component table
 
 > SKiDL prints benign `KICADn_SYMBOL_DIR` / `fp-lib-table` warnings on import

@@ -181,6 +181,151 @@ def symbol_instance_path(block, ref):
     return f"/{u(f'top:sheetsym:{block}')}/{u(f'{block}:sym:{ref}')}"
 
 
+# ---------------------------------------------------------------------------
+# What "Update PCB from Schematic" compares
+# ---------------------------------------------------------------------------
+#
+# KiCad's BOARD_NETLIST_UPDATER walks every footprint that resolves to a symbol
+# and rewrites five things that are NOT the netlist: the sheet name, the sheet
+# file, the symbol's fields, the symbol's unit metadata, and the fabrication
+# attributes. Anything the board does not already carry is reported as a
+# change, so a board that is missing them can never be a no-op even when every
+# net is right. Every value below is the value KiCad itself computes; the
+# derivation for each is cited at its definition. They live here, next to the
+# schematic they describe, so the board generator and the verifier read one
+# definition instead of two guesses.
+
+
+def field_text(value):
+    """A field value as KiCad will hold it after reading this schematic.
+
+    ``SCH_IO_KICAD_SEXPR_PARSER::parseSchField`` turns a lone ``~`` into the
+    empty string for every file older than 20250318, and this project emits
+    20230121. SKiDL's default datasheet is ``~``, so 107 of the 110 symbols
+    would arrive in KiCad holding ``""`` while the board held ``"~"`` — the
+    board's own s-expression parser does no such conversion — and every one of
+    them would report ``Update <ref> fields`` forever. Normalise once, here, so
+    the schematic and the board write the same bytes.
+    """
+    text = str(value or "")
+    return "" if text == "~" else text
+
+
+def sheet_name(block):
+    """``Update <ref> sheetname to '...'`` compares against this.
+
+    ``BOARD_NETLIST_UPDATER::updateComponentParameters`` (10.0.5, line 663)
+    prefers ``COMPONENT::GetHumanReadablePath()``, which the netlist carries as
+    ``(sheetpath (names ...))`` — i.e. ``SCH_SHEET_PATH::PathHumanReadable()``,
+    the sheet NAMES with a leading and trailing slash. Confirmed against the
+    reviewer's KiCad 10 log: ``Update C23 sheetname to '/voltage_sense/'``.
+    """
+    return f"/{block}/"
+
+
+def sheet_file(block):
+    """``Update <ref> sheetfile to '...'``: the child sheet's file name."""
+    return f"{block}.kicad_sch"
+
+
+def unconnected_net_name(ref, pin_num, pin_name):
+    """KiCad's synthetic net for a pad whose pin drives nothing.
+
+    A pin that reaches no label forms a single-item subgraph with a weak
+    driver, so ``CONNECTION_GRAPH`` renames it through
+    ``SCH_PIN::GetDefaultNetName(sheet, aForceNoConnect=true)`` (sch_pin.cpp
+    1484-1590 @ 10.0.5). That function spells the name
+
+        unconnected-(<REF>-<pin name>-Pad<pin number>)   when the pin has a
+                                                          name that differs
+                                                          from its number
+        unconnected-(<REF>-Pad<pin number>)               otherwise
+
+    with no unit token, because every symbol in this design has one unit.
+
+    This is not a reading of the source alone: the 49 names this produces are
+    byte-identical to the 49 ``Add net unconnected-(...)`` lines in the
+    reviewer's KiCad 10.0.5 "Update PCB from Schematic" log — same count, same
+    spelling, including ``unconnected-(U8-D0/CLKOUT-Pad25)`` and
+    ``unconnected-(J3-SBU1-PadA8)``.
+    """
+    num, name = str(pin_num), str(pin_name or "")
+    if name and name != num:
+        return f"unconnected-({ref}-{name}-Pad{num})"
+    return f"unconnected-({ref}-Pad{num})"
+
+
+def unconnected_pads(circuit):
+    """{ref: {pad number: net name}} for every pin this design leaves open."""
+    out = {}
+    for part in circuit.parts:
+        for pin in part.pins:
+            net = getattr(pin, "net", None)
+            name = getattr(net, "name", None) if net is not None else None
+            if net is not None and name not in (None, "", "__NOCONNECT"):
+                continue
+            out.setdefault(part.ref, {})[str(pin.num)] = \
+                unconnected_net_name(part.ref, pin.num, pin.name)
+    return out
+
+
+def unit_info(sym):
+    """``[(unit name, [pad numbers])]`` — the "unit metadata" KiCad compares.
+
+    ``NETLIST_EXPORTER_XML::addSymbolFields`` emits one ``(unit)`` per slot of
+    ``LIB_SYMBOL::GetUnitPinInfo()`` (lib_symbol.cpp 1184 @ 10.0.5). For each
+    unit that is the display name — ``LetterSubReference(n, 'A')``, so ``"A"``
+    for the single unit every symbol here has — and the unit's pins sorted by
+    position, x ascending then y ascending, de-duplicated by number.
+
+    The sort is in INTERNAL coordinates, where ``parseXY(aInvertY=true)``
+    negates the library file's Y. :class:`SymbolDef` lays its pins out down the
+    left edge and then down the right edge, so ascending internal y is
+    descending library y is exactly the order ``pin_geo`` is built in, and no
+    re-sorting is needed. Sorting explicitly anyway keeps the two independent.
+    """
+    ordered = sorted(sym.pin_geo, key=lambda g: (g[3], -g[4]))
+    pins, seen = [], set()
+    for num, _name, _tp, _lx, _ly, _angle in ordered:
+        if num and num not in seen:
+            seen.add(num)
+            pins.append(num)
+    return [("A", pins)]
+
+
+def symbol_fields(model, part):
+    """The fields ``Update <ref> fields`` compares, in netlist order.
+
+    ``NETLIST_EXPORTER_XML::addSymbolFields`` puts every non-mandatory,
+    non-private symbol field into the netlist and then appends ``Footprint``,
+    ``Datasheet`` and ``Description`` unconditionally. The updater
+    (board_netlist_updater.cpp 508-560 @ 10.0.5) drops ``Reference``,
+    ``Value``, ``Footprint`` and ``Component Class`` from that set and requires
+    the footprint to carry the rest, by name and by text — order does not
+    matter, presence and value do. A KiCad footprint always has empty
+    ``Datasheet`` and ``Description`` fields (footprint.cpp 116-117), so a
+    board that omits them mismatches every symbol that sets either.
+    """
+    sym = model.part_sym[part.ref]
+    return [(name, field_text(value)) for name, value in (
+        ("Pins_Verified", part.fields.get("Pins_Verified", "")),
+        ("MPN", part.fields.get("MPN", "")),
+        ("KiCad_Lib", part.fields.get("KiCad_Lib", "")),
+        ("Sheet", part.skidl_block),
+        ("Datasheet", getattr(part, "datasheet", "")),
+        ("Description", sym.description),
+    )]
+
+
+# Fabrication attributes KiCad strips from a footprint whose symbol does not
+# ask for them. TestPoint_Pad_D1.5mm ships with both set; nothing in the
+# schematic marks TP1..TP8 excluded, so the reviewer's log carries sixteen
+# "Remove TPn '...' fabrication attribute" lines. The board is what changes,
+# because the schematic is the source of truth: to keep the test points out of
+# the BOM, mark the SYMBOLS excluded and the attribute comes back on its own.
+SYMBOL_DRIVEN_FP_ATTRS = ("exclude_from_bom", "exclude_from_pos_files")
+
+
 def even_up(units):
     """Round grid units up to an even number (full 2.54 mm grid)."""
     return units + (units % 2)
@@ -570,15 +715,23 @@ def emit_child_sheet(model, block, path, uids):
                      f'(at {U(rx)} {U(vy + PITCH)} 0) '
                      f'(effects (font (size 1.27 1.27)) '
                      f'(justify left){flag_hide}))')
+        # Description is written EXPLICITLY, not left to be inherited from the
+        # cached library symbol. KiCad 8+ gives every symbol instance a
+        # mandatory Description field and puts its text in the netlist, which
+        # the board updater then compares against the footprint's own
+        # Description field. Emitting it here fixes that text to one known
+        # value that generators/pcb.py copies onto the footprint, so the two
+        # cannot disagree over how a v7-schema file migrates.
         hidden = [
             ("Footprint", part.footprint or ""),
-            ("Datasheet", getattr(part, "datasheet", "") or ""),
+            ("Datasheet", getattr(part, "datasheet", "")),
+            ("Description", sym.description),
             ("MPN", part.fields.get("MPN", "")),
             ("KiCad_Lib", part.fields.get("KiCad_Lib", "")),
             ("Sheet", block),
         ]
         for pname, pval in hidden:
-            props.append(f'    (property {q(pname)} {q(pval)} '
+            props.append(f'    (property {q(pname)} {q(field_text(pval))} '
                          f'(at {U(sx)} {U(sy)} 0) '
                          f'(effects (font (size 1.27 1.27)) hide))')
 

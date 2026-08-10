@@ -415,6 +415,22 @@ validation:
              uuid validity+uniqueness, no floating pins / marked no-connects,
              every net >= 2 endpoints]
     result: PASS (307 connections verified across 8 sheets)
+  update_pcb_noop:
+    module: validation/update_pcb_noop.py
+    checks: [footprint<->symbol link resolves, pad nets (including the
+             synthetic unconnected-(...) nets KiCad creates for open pins),
+             sheetname, sheetfile, symbol fields, unit metadata, fabrication
+             attributes]
+    calibration: validation/fixtures/kicad_update_pcb_baseline.json
+    result: >
+      PASS - "Update PCB from Schematic" would make 0 changes. This is a model
+      of KiCad's BOARD_NETLIST_UPDATER, not KiCad (7.0.11 is the newest
+      installable here and cannot open a 20241229 board), so it is calibrated
+      first: removing each category from the board reproduces the counts KiCad
+      10.0.5 actually reported - 110/110/110/110 for sheetname/sheetfile/
+      fields/units, 98 for nets, 16 for fabrication attributes. The 49
+      synthetic net names it generates are byte-identical to the 49 KiCad
+      printed.
   kicad_roundtrip:
     module: tools/kicad_roundtrip.py
     checks: [kicad-cli sch export netlist vs stage1_iv.net, symbol/footprint

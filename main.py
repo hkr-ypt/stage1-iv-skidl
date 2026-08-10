@@ -261,11 +261,17 @@ def capability_banner(circuit=None, erc_summary=None, checks=None,
                      if c["status"] == "PASS")
         A(f"  Board checks .......... {passed} PASS "
           f"(courtyards, edge clearance, ground split, netclasses)")
+        noop = drc_report["checks"].get("update_pcb_noop", {})
+        A(f"  Update PCB from Sch ... "
+          + ("would change NOTHING — the board and the schematic agree"
+             if noop.get("status") == "PASS"
+             else "WOULD REWRITE THE BOARD; see validation/update_pcb_noop.py"))
         drc = drc_report["checks"]["kicad_drc"]
         if drc["status"] == "SKIPPED":
             A(f"  KiCad DRC ............. NOT RUN — {drc['reason']}")
             A("                          The board's DRC state is UNKNOWN. "
-              "Run it in KiCad 8+.")
+              "Run it in KiCad 10 — the board carries a\n"
+              "                          footprint (units ...) block KiCad 9 cannot parse.")
         else:
             A(f"  KiCad DRC ............. {len(drc['problems'])} defects, "
               f"{drc['routing_violations']} unrouted connections")

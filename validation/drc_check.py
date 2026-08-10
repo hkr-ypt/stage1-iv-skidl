@@ -12,6 +12,10 @@ What it enforces
 ----------------
 =========================  ====================================================
 ``board_parity``           the board matches the circuit main.py builds now
+``update_pcb_noop``        KiCad's "Update PCB from Schematic" would change
+                           nothing — the board is not silently rewritten on open
+``update_pcb_calibration`` that model still reproduces the numbers KiCad 10.0.5
+                           actually printed (see validation/update_pcb_noop.py)
 ``dru_parses``             the custom rules file is one KiCad can compile
 ``schema_version``         board and vendored footprints share a file schema
 ``rule_satisfiability``    no clearance rule demands more than a package gives
@@ -655,6 +659,16 @@ def check_schema_version(board):
 
     Emitting the schema the design's KiCad actually uses removes the migration
     step entirely. This check makes sure the two never drift apart again.
+
+    One caveat, stated rather than hidden: the board declares 20241229 (KiCad
+    9's version) but carries one token KiCad 9 does not know — the footprint
+    ``(units ...)`` block that makes "Update PCB from Schematic" a no-op, added
+    to the footprint parser in KiCad 10. **Opening this board needs KiCad 10.**
+    KiCad 9 will stop at that token with a parse error rather than a version
+    message. The declared version is left at 20241229 on purpose: it is what
+    the vendored footprints are, and raising it would silently switch off
+    KiCad 10's own 20241229-to-current migrations for content this project
+    cannot re-test here.
     """
     import glob
     import re
@@ -884,6 +898,37 @@ def check_schematic_linkage(board):
     return problems
 
 
+def check_update_pcb_noop(board):
+    """Opening the board and pressing "Update PCB from Schematic" must do nothing.
+
+    The board is an artefact of ``main.py``, exactly like the schematic. If
+    KiCad rewrites it on open, then every DRC result taken afterwards
+    describes a board no generator in this repository wrote — which is how
+    four rounds of review were spent on a board whose 110 footprints KiCad had
+    silently replaced.
+
+    The comparison lives in validation/update_pcb_noop.py, which mirrors
+    ``BOARD_NETLIST_UPDATER`` line by line and is calibrated against the
+    reviewer's captured KiCad 10.0.5 output before it is trusted.
+    """
+    from validation.update_pcb_noop import dry_run, summarise
+    actions = dry_run(board.path)
+    if not actions:
+        return []
+    counts = summarise(actions)
+    head = "; ".join(f"{k}={v}" for k, v in sorted(counts.items()))
+    return [f"KiCad would make {len(actions)} change(s) on Update PCB from "
+            f"Schematic ({head}). The board and the schematic disagree, so "
+            f"any DRC run on this board measures something else. First "
+            f"examples: " + " | ".join(str(a) for a in actions[:4])]
+
+
+def check_update_pcb_calibration(_board):
+    """The no-op checker must still reproduce KiCad 10.0.5's own numbers."""
+    from validation.update_pcb_noop import self_test
+    return self_test(verbose=False)
+
+
 def check_board_parity(board):
     """The board must match the circuit that main.py builds right now.
 
@@ -894,8 +939,13 @@ def check_board_parity(board):
     import main as project_main
     _n, _parts, circuit = project_main.build()
 
+    from generators.schematic import unconnected_pads
     want_nets = {n.name for n in circuit.get_nets() if n.name != "__NOCONNECT"}
-    have_nets_design = {_design_net_name(n) for n in board.nets}
+    # The board also carries one synthetic net per open pin, because KiCad
+    # creates exactly those and comparing without them would call a correct
+    # board stale.
+    want_nets |= {n for pads in unconnected_pads(circuit).values()
+                  for n in pads.values()}
     want_refs = {p.ref for p in circuit.parts if (p.footprint or "").strip()}
     have_nets = {_design_net_name(n) for n in board.nets}
     # Mounting holes are board-only mechanical parts with no schematic symbol.
@@ -1206,6 +1256,8 @@ def run_drc_check(board_path=BOARD_FILE, run_kicad=True):
     record("schema_version", check_schema_version(board))
     record("schematic_linkage", check_schematic_linkage(board))
     record("board_parity", check_board_parity(board))
+    record("update_pcb_noop", check_update_pcb_noop(board))
+    record("update_pcb_calibration", check_update_pcb_calibration(board))
     record("netclass_coverage", check_netclass_coverage(board))
     record("rule_satisfiability", check_rule_satisfiability(board))
     record("hole_spacing", check_hole_spacing(board))
@@ -1321,7 +1373,9 @@ def main(argv=None):
     if drc["status"] == "SKIPPED":
         print("  DRC WAS NOT RUN. This is not a pass. The board's DRC state is")
         print("  UNKNOWN in this environment — see the reason above, and run")
-        print("  DRC in KiCad 8 or later before believing anything about it.")
+        print("  DRC in KiCad 10 before believing anything about it — the")
+        print("  board carries a footprint (units ...) block KiCad 9 cannot")
+        print("  parse; see check_schema_version.")
     else:
         print(f"  DRC ran with {drc.get('ran_with', 'kicad-cli')}")
         print(f"  KiCad reported {drc['routing_violations']} "

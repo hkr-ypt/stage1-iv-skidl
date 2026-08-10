@@ -56,6 +56,12 @@ EXEMPT_FILES = {
     "tools/install_kicad_libs.sh",
 }
 
+# The schematic's sheet names, which are also the block names. Kept as one
+# list so the two KiCad-path exemptions below cannot drift apart.
+_SHEETS = "|".join([
+    "power", "mcu", "dac_sweep", "output_buffer", "current_sense",
+    "voltage_sense", "adc", "protection"])
+
 # Path-like strings that are portable by construction.
 EXEMPT_PATTERNS = [
     re.compile(r"^/tmp/"),                   # scratch paths created at runtime
@@ -72,9 +78,12 @@ EXEMPT_PATTERNS = [
     # names, not filesystem paths, and they are generated: the sheet names come
     # from BLOCK_ORDER and the net names from blocks/nets.py, so nothing here
     # is machine-specific. See generators/schematic.py::board_net_name.
-    re.compile(r"^/(" + "|".join([
-        "power", "mcu", "dac_sweep", "output_buffer", "current_sense",
-        "voltage_sense", "adc", "protection"]) + r")?/?[A-Za-z_][A-Za-z0-9_+-]*$"),
+    re.compile(r"^/(" + _SHEETS + r")?/?[A-Za-z_][A-Za-z0-9_+-]*$"),
+    # KiCad human-readable SHEET paths: "/adc/" is SCH_SHEET_PATH::
+    # PathHumanReadable() for the adc sheet, and is what a board footprint's
+    # (sheetname ...) carries. Same generated sheet names as above, with the
+    # trailing separator KiCad writes; still not a filesystem path.
+    re.compile(r"^/(" + _SHEETS + r")/$"),
     # KiCad hierarchy paths: "/<uuid>/<uuid>" inside .kicad_sch and .net name
     # sheet instances, not the filesystem.
     re.compile(r"^/(?:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}"
