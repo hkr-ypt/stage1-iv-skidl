@@ -180,11 +180,18 @@ p.write_text(s.replace(
 
 # 11. a placement that overlaps courtyards — the non-routing DRC violation class
 #     that a real fabrication run would reject
+#     Matched by NAME, not by value: pinning the literal 1.2 here meant that
+#     raising the gutter to 2.0 for silkscreen legibility silently disarmed
+#     this injection, and CI reported "1 injected fault was NOT caught" for a
+#     defect that was never injected. An injection that cannot be applied is a
+#     broken test, so it fails loudly - but it must not be brittle either.
 expect_fail board "overlapping courtyards (negative part gutter)" '
-import pathlib
+import pathlib, re
 p = pathlib.Path("generators/pcb.py"); s = p.read_text()
-assert "PART_GUTTER = 1.2" in s
-p.write_text(s.replace("PART_GUTTER = 1.2", "PART_GUTTER = -1.0"))
+s, n = re.subn(r"^PART_GUTTER = [-0-9.]+", "PART_GUTTER = -1.0", s,
+               count=1, flags=re.M)
+assert n == 1
+p.write_text(s)
 '
 
 # 12. a netclass relaxed below what the fabricator can build: the board must not
@@ -246,6 +253,32 @@ import pathlib
 p = pathlib.Path("generators/pcb.py"); s = p.read_text()
 assert "BOARD_VERSION = \"20241229\"" in s
 p.write_text(s.replace("BOARD_VERSION = \"20241229\"", "BOARD_VERSION = \"20221018\""))
+'
+
+# 18. a board that "Update PCB from Schematic" would rewrite. This is the
+#     defect that made four rounds of DRC reports describe a board no
+#     generator wrote: KiCad silently replaced the footprints on open, so
+#     every measurement afterwards was taken on something else.
+expect_fail board "Update PCB from Schematic would change the board" '
+import pathlib
+p = pathlib.Path("generators/pcb.py"); s = p.read_text()
+old = "        node.append(L(A(\"sheetname\"), Q(sheet_name(block))))\n"
+assert old in s
+p.write_text(s.replace(old, ""))
+'
+
+# 19. the no-op checker silently stops seeing what KiCad sees. It is a model of
+#     BOARD_NETLIST_UPDATER, not KiCad itself, so it is only worth what its
+#     calibration against real KiCad 10.0.5 output is worth. Break the model
+#     and the calibration must say so - a checker that reports "0 changes"
+#     while KiCad reports 110 is the exact failure this project already
+#     shipped once, on silkscreen.
+expect_fail board "the Update-PCB model stops matching KiCad output" '
+import pathlib
+p = pathlib.Path("validation/update_pcb_noop.py"); s = p.read_text()
+old = "        if fp.sheetname != comp[\"sheetname\"]:"
+assert old in s
+p.write_text(s.replace(old, "        if False:"))
 '
 
 echo "----------------------------------------------------------------------"

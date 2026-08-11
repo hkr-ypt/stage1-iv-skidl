@@ -12,14 +12,14 @@ Total components: **118**
 | #FLG6 | AGND | n/a | power:PWR_FLAG |  | 1 Power | OK — pin numbers read from power.kicad_sym:9842 |
 | #FLG7 | VBUS | n/a | power:PWR_FLAG |  | 2 MCU | OK — pin numbers read from power.kicad_sym:9842 |
 | #FLG8 | VDDA | n/a | power:PWR_FLAG |  | 2 MCU | OK — pin numbers read from power.kicad_sym:9842 |
-| C1 | 10uF | generic | Device:C_Polarized | Capacitor_Tantalum_SMD:CP_EIA-3528-21_Kemet-B | 1 Power | OK — pin numbers read from Device.kicad_sym:5140 |
-| C2 | 10uF | generic | Device:C_Polarized | Capacitor_Tantalum_SMD:CP_EIA-3528-21_Kemet-B | 1 Power | OK — pin numbers read from Device.kicad_sym:5140 |
+| C1 | 10uF/25V | generic | Device:C_Polarized | Capacitor_Tantalum_SMD:CP_EIA-3528-21_Kemet-B | 1 Power | OK — pin numbers read from Device.kicad_sym:5140 |
+| C2 | 10uF/16V | generic | Device:C_Polarized | Capacitor_Tantalum_SMD:CP_EIA-3528-21_Kemet-B | 1 Power | OK — pin numbers read from Device.kicad_sym:5140 |
 | C3 | 100nF | generic | Device:C | Capacitor_SMD:C_0805_2012Metric | 1 Power | OK — pin numbers read from Device.kicad_sym:1761 |
 | C4 | 100nF | generic | Device:C | Capacitor_SMD:C_0805_2012Metric | 1 Power | OK — pin numbers read from Device.kicad_sym:1761 |
-| C5 | 100uF/25V | generic | Device:C_Polarized | Capacitor_THT:CP_Radial_D8.0mm_P3.50mm | 1 Power | OK — pin numbers read from Device.kicad_sym:5140 |
-| C6 | 100uF/25V | generic | Device:C_Polarized | Capacitor_THT:CP_Radial_D8.0mm_P3.50mm | 1 Power | OK — pin numbers read from Device.kicad_sym:5140 |
-| C7 | 100uF/16V | generic | Device:C_Polarized | Capacitor_THT:CP_Radial_D8.0mm_P3.50mm | 1 Power | OK — pin numbers read from Device.kicad_sym:5140 |
-| C8 | 100uF/10V | generic | Device:C_Polarized | Capacitor_THT:CP_Radial_D8.0mm_P3.50mm | 1 Power | OK — pin numbers read from Device.kicad_sym:5140 |
+| C5 | 100uF/25V | generic | Device:C_Polarized | Capacitor_SMD:CP_Elec_8x10.5 | 1 Power | OK — pin numbers read from Device.kicad_sym:5140 |
+| C6 | 100uF/25V | generic | Device:C_Polarized | Capacitor_SMD:CP_Elec_8x10.5 | 1 Power | OK — pin numbers read from Device.kicad_sym:5140 |
+| C7 | 100uF/16V | generic | Device:C_Polarized | Capacitor_SMD:CP_Elec_6.3x7.7 | 1 Power | OK — pin numbers read from Device.kicad_sym:5140 |
+| C8 | 100uF/10V | generic | Device:C_Polarized | Capacitor_SMD:CP_Elec_6.3x5.4 | 1 Power | OK — pin numbers read from Device.kicad_sym:5140 |
 | C9 | 1uF | generic | Device:C | Capacitor_SMD:C_0603_1608Metric | 1 Power | OK — pin numbers read from Device.kicad_sym:1761 |
 | C10 | 100nF | generic | Device:C | Capacitor_SMD:C_0603_1608Metric | 1 Power | OK — pin numbers read from Device.kicad_sym:1761 |
 | C11 | 100nF | generic | Device:C | Capacitor_SMD:C_0603_1608Metric | 3 DAC/Sweep | OK — pin numbers read from Device.kicad_sym:1761 |

@@ -95,6 +95,17 @@ jobs:
       - name: KiCad round-trip (KiCad's own reading of the schematic)
         run: python3 tools/kicad_roundtrip.py
 
+      # Two steps, deliberately separate. The first proves the model of
+      # BOARD_NETLIST_UPDATER still reproduces the numbers KiCad 10.0.5
+      # actually printed (validation/fixtures/kicad_update_pcb_baseline.json);
+      # only then is the second worth anything. A "no changes" verdict from an
+      # uncalibrated checker is what this project shipped on silkscreen.
+      - name: The Update-PCB model still matches real KiCad output
+        run: python3 validation/update_pcb_noop.py --self-test
+
+      - name: Update PCB from Schematic would change nothing
+        run: python3 validation/update_pcb_noop.py
+
       - name: Board structural checks (courtyards, edges, ground split, parity)
         run: python3 validation/drc_check.py
 

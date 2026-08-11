@@ -156,6 +156,213 @@ class UuidFactory:
         return val
 
 
+def symbol_instance_path(block, ref):
+    """The KiCad instance path of one schematic symbol.
+
+    This is what a board footprint's ``(path ...)`` must contain. KiCad matches
+    board footprints to schematic symbols by this string and by nothing else;
+    a footprint whose path does not resolve is treated as having no symbol, so
+    "Update PCB from Schematic" adds a fresh copy of the part and orphans the
+    placed one.
+
+    Every UUID here is a deterministic UUIDv5 over the same namespace and the
+    same keys :class:`UuidFactory` uses, so this can be computed without
+    running the schematic generator - but it must be kept in step with it,
+    which is why it lives in this file and not in generators/pcb.py.
+    """
+    def u(key):
+        return str(uuid.uuid5(UUID_NAMESPACE, key))
+    # The ROOT sheet's UUID is NOT part of the path. Verified against boards
+    # KiCad itself wrote (kicad/qa/data/pcbnew): a symbol on the root sheet has
+    # a one-segment path /<symbol-uuid>, and a symbol on a child sheet has
+    # /<sheet-symbol-uuid>/<symbol-uuid>. Including the root gave a
+    # three-segment path that matched nothing, so "Update PCB from Schematic"
+    # still added all 110 footprints after the first fix.
+    return f"/{u(f'top:sheetsym:{block}')}/{u(f'{block}:sym:{ref}')}"
+
+
+# ---------------------------------------------------------------------------
+# What "Update PCB from Schematic" compares
+# ---------------------------------------------------------------------------
+#
+# KiCad's BOARD_NETLIST_UPDATER walks every footprint that resolves to a symbol
+# and rewrites five things that are NOT the netlist: the sheet name, the sheet
+# file, the symbol's fields, the symbol's unit metadata, and the fabrication
+# attributes. Anything the board does not already carry is reported as a
+# change, so a board that is missing them can never be a no-op even when every
+# net is right. Every value below is the value KiCad itself computes; the
+# derivation for each is cited at its definition. They live here, next to the
+# schematic they describe, so the board generator and the verifier read one
+# definition instead of two guesses.
+
+
+def escape_netname(text):
+    """``EscapeString(text, CTX_NETNAME)`` — how KiCad STORES a net name.
+
+    A KiCad net name has two forms and they are not the same string:
+
+    * the **stored** form, which is what ``.kicad_pcb`` holds, what the KiCad
+      netlist carries, and what ``BOARD_NETLIST_UPDATER`` compares;
+    * the **display** form, which is the stored form put through
+      ``UnescapeString()`` before it reaches a dialog or a report.
+
+    ``EscapeString`` with ``CTX_NETNAME`` (common/string_utils.cpp 193-204 @
+    10.0.5) is the whole of the difference: ``/`` becomes ``{slash}``, and CR
+    and LF are dropped. Nothing else is touched.
+
+    Getting this wrong is invisible in a log. The previous version of this file
+    built the DISPLAY form and was checked against a reviewer's Update-PCB
+    log — where it matched all 49 names byte for byte, because that log had
+    already been unescaped for printing. What KiCad actually compared was the
+    stored form, so the two pins in this design whose names contain a slash
+    (U2 ``TRIM/NR``, U8 ``D0/CLKOUT``) mismatched, and the dialog reported
+
+        Add net unconnected-(U2-TRIM/NR-Pad5).
+        Reconnect U2 pin 5 from unconnected-(U2-TRIM/NR-Pad5)
+                            to unconnected-(U2-TRIM/NR-Pad5).
+
+    "Reconnect from X to X", with both sides printing identically, is the
+    signature of exactly this: two different strings that unescape to one.
+    """
+    return str(text).replace("/", "{slash}").replace("\n", "").replace("\r", "")
+
+
+def field_text(value):
+    """A field value as KiCad will hold it after reading this schematic.
+
+    ``SCH_IO_KICAD_SEXPR_PARSER::parseSchField`` turns a lone ``~`` into the
+    empty string for every file older than 20250318, and this project emits
+    20230121. SKiDL's default datasheet is ``~``, so 107 of the 110 symbols
+    would arrive in KiCad holding ``""`` while the board held ``"~"`` — the
+    board's own s-expression parser does no such conversion — and every one of
+    them would report ``Update <ref> fields`` forever. Normalise once, here, so
+    the schematic and the board write the same bytes.
+    """
+    text = str(value or "")
+    return "" if text == "~" else text
+
+
+def sheet_name(block):
+    """``Update <ref> sheetname to '...'`` compares against this.
+
+    ``BOARD_NETLIST_UPDATER::updateComponentParameters`` (10.0.5, line 663)
+    prefers ``COMPONENT::GetHumanReadablePath()``, which the netlist carries as
+    ``(sheetpath (names ...))`` — i.e. ``SCH_SHEET_PATH::PathHumanReadable()``,
+    the sheet NAMES with a leading and trailing slash. Confirmed against the
+    reviewer's KiCad 10 log: ``Update C23 sheetname to '/voltage_sense/'``.
+    """
+    return f"/{block}/"
+
+
+def sheet_file(block):
+    """``Update <ref> sheetfile to '...'``: the child sheet's file name."""
+    return f"{block}.kicad_sch"
+
+
+def unconnected_net_name(ref, pin_num, pin_name):
+    """KiCad's synthetic net for a pad whose pin drives nothing.
+
+    A pin that reaches no label forms a single-item subgraph with a weak
+    driver, so ``CONNECTION_GRAPH`` renames it through
+    ``SCH_PIN::GetDefaultNetName(sheet, aForceNoConnect=true)`` (sch_pin.cpp
+    1484-1590 @ 10.0.5). That function spells the name
+
+        unconnected-(<REF>-<pin name>-Pad<pin number>)   when the pin has a
+                                                          name that differs
+                                                          from its number
+        unconnected-(<REF>-Pad<pin number>)               otherwise
+
+    with no unit token, because every symbol in this design has one unit.
+
+    The pin name and the pad number go through ``EscapeString(...,
+    CTX_NETNAME)``; the reference does not. That is not a stylistic choice —
+    it is where KiCad puts the calls, and it is the difference between
+    ``unconnected-(U2-TRIM{slash}NR-Pad5)`` (what the netlist carries and the
+    board must store) and ``unconnected-(U2-TRIM/NR-Pad5)`` (what the
+    Update-PCB dialog prints, after unescaping). See :func:`escape_netname`.
+
+    Verified against the reviewer's KiCad 10.0.5 logs in both forms: all 49
+    names match the display text of the first log, and the two that carry a
+    slash are exactly the two the second log still reported.
+    """
+    num, name = str(pin_num), str(pin_name or "")
+    if name and name != num:
+        return (f"unconnected-({ref}-{escape_netname(name)}"
+                f"-Pad{escape_netname(num)})")
+    return f"unconnected-({ref}-Pad{escape_netname(num)})"
+
+
+def unconnected_pads(circuit):
+    """{ref: {pad number: net name}} for every pin this design leaves open."""
+    out = {}
+    for part in circuit.parts:
+        for pin in part.pins:
+            net = getattr(pin, "net", None)
+            name = getattr(net, "name", None) if net is not None else None
+            if net is not None and name not in (None, "", "__NOCONNECT"):
+                continue
+            out.setdefault(part.ref, {})[str(pin.num)] = \
+                unconnected_net_name(part.ref, pin.num, pin.name)
+    return out
+
+
+def unit_info(sym):
+    """``[(unit name, [pad numbers])]`` — the "unit metadata" KiCad compares.
+
+    ``NETLIST_EXPORTER_XML::addSymbolFields`` emits one ``(unit)`` per slot of
+    ``LIB_SYMBOL::GetUnitPinInfo()`` (lib_symbol.cpp 1184 @ 10.0.5). For each
+    unit that is the display name — ``LetterSubReference(n, 'A')``, so ``"A"``
+    for the single unit every symbol here has — and the unit's pins sorted by
+    position, x ascending then y ascending, de-duplicated by number.
+
+    The sort is in INTERNAL coordinates, where ``parseXY(aInvertY=true)``
+    negates the library file's Y. :class:`SymbolDef` lays its pins out down the
+    left edge and then down the right edge, so ascending internal y is
+    descending library y is exactly the order ``pin_geo`` is built in, and no
+    re-sorting is needed. Sorting explicitly anyway keeps the two independent.
+    """
+    ordered = sorted(sym.pin_geo, key=lambda g: (g[3], -g[4]))
+    pins, seen = [], set()
+    for num, _name, _tp, _lx, _ly, _angle in ordered:
+        if num and num not in seen:
+            seen.add(num)
+            pins.append(num)
+    return [("A", pins)]
+
+
+def symbol_fields(model, part):
+    """The fields ``Update <ref> fields`` compares, in netlist order.
+
+    ``NETLIST_EXPORTER_XML::addSymbolFields`` puts every non-mandatory,
+    non-private symbol field into the netlist and then appends ``Footprint``,
+    ``Datasheet`` and ``Description`` unconditionally. The updater
+    (board_netlist_updater.cpp 508-560 @ 10.0.5) drops ``Reference``,
+    ``Value``, ``Footprint`` and ``Component Class`` from that set and requires
+    the footprint to carry the rest, by name and by text — order does not
+    matter, presence and value do. A KiCad footprint always has empty
+    ``Datasheet`` and ``Description`` fields (footprint.cpp 116-117), so a
+    board that omits them mismatches every symbol that sets either.
+    """
+    sym = model.part_sym[part.ref]
+    return [(name, field_text(value)) for name, value in (
+        ("Pins_Verified", part.fields.get("Pins_Verified", "")),
+        ("MPN", part.fields.get("MPN", "")),
+        ("KiCad_Lib", part.fields.get("KiCad_Lib", "")),
+        ("Sheet", part.skidl_block),
+        ("Datasheet", getattr(part, "datasheet", "")),
+        ("Description", sym.description),
+    )]
+
+
+# Fabrication attributes KiCad strips from a footprint whose symbol does not
+# ask for them. TestPoint_Pad_D1.5mm ships with both set; nothing in the
+# schematic marks TP1..TP8 excluded, so the reviewer's log carries sixteen
+# "Remove TPn '...' fabrication attribute" lines. The board is what changes,
+# because the schematic is the source of truth: to keep the test points out of
+# the BOM, mark the SYMBOLS excluded and the attribute comes back on its own.
+SYMBOL_DRIVEN_FP_ATTRS = ("exclude_from_bom", "exclude_from_pos_files")
+
+
 def even_up(units):
     """Round grid units up to an even number (full 2.54 mm grid)."""
     return units + (units % 2)
@@ -371,6 +578,44 @@ class CircuitModel:
                 self.symbols[lid] = SymbolDef(lid, part)
             self.part_sym[part.ref] = self.symbols[lid]
 
+    def board_net_name(self, net_name):
+        """The net name KiCad computes for the board, from the schematic.
+
+        KiCad does not use the bare net name on the board. It prefixes by the
+        sheet path of the highest sheet the net reaches, and *Update PCB from
+        Schematic* rewrites any pad that disagrees — which is why the update
+        log was full of "Reconnect C24 pin 1" onto a sheet-qualified name.
+
+        The three cases follow directly from the label this generator emits:
+
+        ``global_label``        the net is global; the name is bare.
+        ``hierarchical_label``  the net crosses sheets through hierarchical
+                                pins, so it resolves at the root: ``/NAME``.
+        ``label``               a plain local label, confined to one sheet;
+                                the name is qualified by that sheet.
+
+        The label text is escaped the same way a pin-derived name is:
+        ``CONNECTION_SUBGRAPH::driverName`` (connection_graph.cpp 407-415 @
+        10.0.5) returns ``EscapeString( label->GetShownText(), CTX_NETNAME )``
+        for every label class this generator emits. The slashes that separate
+        the sheet path are structural and are NOT part of any name, so they are
+        added after escaping, never before.
+
+        No net name and no block name in this design contains a character
+        ``CTX_NETNAME`` escapes, so this is a byte-for-byte no-op today. It is
+        applied anyway: the one place the rule was missing cost four Update-PCB
+        mutations that no log could show, and a net named ``FORCE/SENSE`` added
+        tomorrow would cost the same again.
+        """
+        kind = self.net_class[net_name]
+        escaped = escape_netname(net_name)
+        if kind == "GLOBAL_POWER":
+            return escaped
+        if kind == "HIER_SIGNAL":
+            return f"/{escaped}"
+        block = sorted(self.net_blocks[net_name])[0]
+        return f"/{escape_netname(block)}/{escaped}"
+
     def label_kind(self, net_name):
         return {"GLOBAL_POWER": "global_label",
                 "HIER_SIGNAL": "hierarchical_label",
@@ -521,15 +766,23 @@ def emit_child_sheet(model, block, path, uids):
                      f'(at {U(rx)} {U(vy + PITCH)} 0) '
                      f'(effects (font (size 1.27 1.27)) '
                      f'(justify left){flag_hide}))')
+        # Description is written EXPLICITLY, not left to be inherited from the
+        # cached library symbol. KiCad 8+ gives every symbol instance a
+        # mandatory Description field and puts its text in the netlist, which
+        # the board updater then compares against the footprint's own
+        # Description field. Emitting it here fixes that text to one known
+        # value that generators/pcb.py copies onto the footprint, so the two
+        # cannot disagree over how a v7-schema file migrates.
         hidden = [
             ("Footprint", part.footprint or ""),
-            ("Datasheet", getattr(part, "datasheet", "") or ""),
+            ("Datasheet", getattr(part, "datasheet", "")),
+            ("Description", sym.description),
             ("MPN", part.fields.get("MPN", "")),
             ("KiCad_Lib", part.fields.get("KiCad_Lib", "")),
             ("Sheet", block),
         ]
         for pname, pval in hidden:
-            props.append(f'    (property {q(pname)} {q(pval)} '
+            props.append(f'    (property {q(pname)} {q(field_text(pval))} '
                          f'(at {U(sx)} {U(sy)} 0) '
                          f'(effects (font (size 1.27 1.27)) hide))')
 

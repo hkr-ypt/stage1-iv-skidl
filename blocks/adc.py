@@ -26,8 +26,8 @@ def create_adc_block(n):
     C26 = C()(ref="C26", tag="C26", value="22pF")
     C27 = C()(ref="C27", tag="C27", value="22pF")
     C28 = C()(ref="C28", tag="C28", value="100nF")
-    C29 = C_POL()(ref="C29", tag="C29", value="10uF/16V",
-                  footprint="Capacitor_Tantalum_SMD:CP_EIA-3528-21_Kemet-B")
+    C29 = C_POL("Capacitor_Tantalum_SMD:CP_EIA-3528-21_Kemet-B")(
+        ref="C29", tag="C29", value="10uF/16V")
     C30 = C()(ref="C30", tag="C30", value="100nF")
     R19 = R()(ref="R19", tag="R19", value="10k")
     R20 = R()(ref="R20", tag="R20", value="10k")

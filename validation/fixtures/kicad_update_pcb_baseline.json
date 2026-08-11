@@ -1,0 +1,46 @@
+{
+  "_source": "KiCad 10.0.5, Tools -> Update PCB from Schematic, dry-run output captured by the reviewer on stage1_iv.kicad_pcb as generated at commit 56f6765 (branch claude/kicad-silkscreen). Transcribed verbatim by counting the dialog's own message lines; nothing here is inferred.",
+  "_kicad_version": "10.0.5",
+  "_board_commit": "56f6765",
+  "_why": "validation/update_pcb_noop.py re-implements the comparisons BOARD_NETLIST_UPDATER makes. It cannot be run against KiCad in this environment (7.0.11 is the newest installable, and it cannot even open a 20241229 board), so it is calibrated instead: remove one category of metadata from the current board and the checker must report the same number KiCad reported when that metadata was absent. A checker that under-reports is the failure this project already shipped once, on silkscreen.",
+  "footprints_on_board": 110,
+  "categories": {
+    "sheetname": 110,
+    "sheetfile": 110,
+    "fields": 110,
+    "units": 110,
+    "net": 98,
+    "attributes": 16
+  },
+  "_message_lines": {
+    "Update <ref> sheetname to '<path>'.": 110,
+    "Update <ref> sheetfile to '<file>'.": 110,
+    "Update <ref> fields.": 110,
+    "Update <ref> unit metadata.": 110,
+    "Add net unconnected-(...).": 49,
+    "Connect <ref> pin <n> to unconnected-(...).": 49,
+    "Remove <ref> 'exclude from BOM' fabrication attribute.": 8,
+    "Remove <ref> 'exclude from position files' fabrication attribute.": 8,
+    "Add <ref> (a footprint the schematic has no board copy of).": 0,
+    "Reconnect <ref> pin <n> from <net> to <net>.": 0,
+    "Total warnings / errors": 0,
+    "_total_action_lines": 554
+  },
+  "_note_net_count": "KiCad prints two lines per open pad (Add net, then Connect pin), 49 + 49 = 98. update_pcb_noop.py raises one 'net' action per pad whose net is wrong and one per net missing from the board, which is the same 98 for this defect.",
+
+  "_second_capture": "A SECOND KiCad 10.0.5 run, on the board at commit adabd7e — after all six categories above were fixed. It reported exactly four lines, and they are the reason a log alone cannot calibrate this checker: both 'Reconnect' lines print the same net name on both sides, because BOARD_NETLIST_UPDATER unescapes for display (board_netlist_updater.cpp 1206-1210). The stored strings differed. The board held the display form 'unconnected-(U2-TRIM/NR-Pad5)'; the netlist carries EscapeString(..., CTX_NETNAME) = 'unconnected-(U2-TRIM{slash}NR-Pad5)'. Only two pins in this design have a '/' in the pin name, and they are exactly these two.",
+  "escaping_capture": {
+    "_board_commit": "adabd7e",
+    "_message_lines": {
+      "Add net unconnected-(U2-TRIM/NR-Pad5).": 1,
+      "Reconnect U2 pin 5 from unconnected-(U2-TRIM/NR-Pad5) to unconnected-(U2-TRIM/NR-Pad5).": 1,
+      "Add net unconnected-(U8-D0/CLKOUT-Pad25).": 1,
+      "Reconnect U8 pin 25 from unconnected-(U8-D0/CLKOUT-Pad25) to unconnected-(U8-D0/CLKOUT-Pad25).": 1,
+      "Total warnings / errors": 0,
+      "_total_action_lines": 4
+    },
+    "categories": {
+      "net": 4
+    }
+  }
+}

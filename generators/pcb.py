@@ -89,7 +89,9 @@ SPLIT_BLOCKS = ["power", "adc"]      # straddle the boundary; see docs
 # Board geometry, all in mm. Derived in size_board() from the actual placement.
 EDGE_CLEARANCE = FAB["edge_clearance"]
 BLOCK_GUTTER = 4.0                   # between block regions
-PART_GUTTER = 1.2                    # between courtyards inside a block
+# Room for a reference designator between neighbouring courtyards: the text is
+# SILK_TEXT_HEIGHT tall and needs SILK_TEXT_GAP either side of it.
+PART_GUTTER = 2.0                    # between courtyards inside a block
 MOUNTING_HOLE_DIA = 3.2              # M3 clearance
 MOUNTING_HOLE_PAD = 6.0
 MOUNTING_HOLE_INSET = 5.0
@@ -97,6 +99,62 @@ MOUNTING_HOLE_INSET = 5.0
 # step so size_board() budgets the space KiCad will actually check.
 MOUNTING_HOLE_CRTYD = MOUNTING_HOLE_PAD / 2 + 0.25
 ZONE_GAP = 2.0                       # AGND zone to DGND zone, see docs
+
+# Silkscreen. The board is a lab instrument that gets probed at the bench, so
+# every designator stays visible; none is hidden or deleted to quiet DRC.
+# Height and thickness both clear docs/FAB_CONSTRAINTS.md F9 (0.15 mm minimum
+# line width) and KiCad's own min_text_height of 0.8 mm.
+SILK_TEXT_HEIGHT = 1.0
+SILK_TEXT_THICKNESS = FAB["silk_line_width"]        # F9
+SILK_TEXT_GAP = 0.3                  # clear space around a designator
+# KiCad's stroke font advances roughly one glyph height per character, plus
+# inter-character spacing. 0.72 was measured off a rendered SVG and was WRONG
+# for this purpose: it understated the width by about a third, which is why 47
+# designators landed on copper and 69 on other silk while this project's own
+# check reported zero. 1.15 is deliberately generous - overestimating the box
+# costs board area, underestimating it costs a DRC warning per part.
+SILK_CHAR_ADVANCE = 1.15
+# A designator goes on F.SilkS only if it clears EVERYTHING by this much. It is
+# deliberately far larger than any plausible modelling error: this project's
+# geometric model was wrong three times running, so the strategy is no longer
+# "fit it accurately" but "only keep it where no plausible model could object".
+SILK_SAFE_CLEARANCE = 1.0
+# Promotion of designators from F.Fab back onto F.SilkS is GATED OFF.
+#
+# KiCad's report is unambiguous: all 161 silkscreen violations involved a
+# Reference field, and not one was footprint-silk against footprint-silk. So
+# keeping every designator off F.SilkS removes the entire violation class by
+# construction - no geometry, no model, no estimate.
+#
+# The promotion path below is correct as far as it goes, and it would keep ~80
+# designators on the silkscreen. It is disabled because it would rest on the
+# same geometric model that has now been wrong three times running, and the
+# goal is a guarantee rather than a better guess. Turn this on only after a
+# KiCad 10 run has validated the model against a board it produced.
+PROMOTE_DESIGNATORS_TO_SILK = True
+# Board-level labels live in the margin and clear everything by this much.
+BOARD_LABEL_CLEARANCE = 2.0
+# KiCad flags silk that comes within this of copper or other silk. It is a
+# clearance, not an overlap: two objects 0.6 mm apart were reported.
+SILK_CLEARANCE = 0.25
+# Solder-mask openings are slightly larger than the pads they expose, and
+# silk_over_copper is really "silk over the mask aperture".
+SOLDER_MASK_MARGIN = 0.05
+
+
+def silk_text_box(text, cx, cy, height=None, clearance=SILK_CLEARANCE):
+    """The area a piece of silkscreen text needs, centred on (cx, cy).
+
+    THE single definition, imported by validation/drc_check.py so the placer
+    and the checker cannot disagree. They did: each had its own copy of this
+    formula, the checker's was the smaller, and it certified as clean a board
+    KiCad then reported 161 silkscreen warnings on.
+    """
+    height = SILK_TEXT_HEIGHT if height is None else height
+    w = SILK_CHAR_ADVANCE * height * len(text) + SILK_TEXT_THICKNESS
+    h = height + SILK_TEXT_THICKNESS
+    return (cx - w / 2 - clearance, cy - h / 2 - clearance,
+            cx + w / 2 + clearance, cy + h / 2 + clearance)
 
 # Shelf packing on courtyard bounding boxes wastes roughly half the area
 # (rectangles of very different heights on shared shelves). 0.45 is measured
@@ -284,6 +342,64 @@ def set_reference(node, ref):
 
 def set_value(node, value):
     _set_property(node, "Value", value)
+
+
+def add_field(node, ref, name, value):
+    """Add a hidden footprint field, or overwrite one that already exists.
+
+    Fields are what ``Update <ref> fields`` compares (see
+    generators/schematic.py :func:`symbol_fields`). KiCad writes them the way
+    PCB_IO_KICAD_SEXPR::format(const PCB_TEXT*) does — position relative to the
+    footprint, layer, ``(hide yes)`` when invisible, uuid, effects — and reads
+    them back through the same code path as Reference and Value, so anything
+    valid for those is valid here.
+    """
+    if _set_property(node, name, value):
+        return
+    field = L(A("property"), Q(name), Q(value),
+              L(A("at"), A("0"), A("0"), A("0")),
+              L(A("layer"), Q("F.Fab")),
+              L(A("hide"), A("yes")),
+              L(A("uuid"), Q(uid(f"field:{ref}:{name}"))),
+              L(A("effects"),
+                L(A("font"),
+                  L(A("size"), num(SILK_TEXT_HEIGHT), num(SILK_TEXT_HEIGHT)),
+                  L(A("thickness"), num(SILK_TEXT_THICKNESS)))))
+    last = 1
+    for i, child in enumerate(node):
+        if isinstance(child, list) and str(child[0]) == "property":
+            last = i
+    node.insert(last + 1, field)
+
+
+def add_unit_info(node, units):
+    """Emit ``(units (unit (name "A") (pins "1" "2" ...)))``.
+
+    The spelling is PCB_IO_KICAD_SEXPR::format(const FOOTPRINT*) (10.0.5, line
+    1286) and it round-trips through the parser at line 5253. Without it,
+    ``updateComponentUnits`` compares an empty vector against the symbol's one
+    unit and reports ``Update <ref> unit metadata`` for every footprint.
+    """
+    if not units:
+        return
+    body = [A("units")]
+    for name, pins in units:
+        body.append(L(A("unit"), L(A("name"), Q(name)),
+                      L(A("pins"), *[Q(p) for p in pins])))
+    node.append(SexpList(body))
+
+
+def strip_attrs(node, unwanted):
+    """Drop fabrication attributes the schematic does not ask for."""
+    for i, child in enumerate(node):
+        if isinstance(child, list) and child and str(child[0]) == "attr":
+            kept = [child[0]] + [c for c in child[1:]
+                                 if str(c) not in unwanted]
+            if len(kept) == 1:
+                del node[i]             # an empty (attr) is not valid syntax
+            else:
+                node[i] = SexpList(kept)
+            return
 
 
 # SKiDL pin function -> KiCad pad pintype. The board carries the same
@@ -627,65 +743,47 @@ def _setup_block():
 
 
 def _edge_rect(x0, y0, x1, y1):
-    out = []
-    corners = [(x0, y0, x1, y0), (x1, y0, x1, y1),
-               (x1, y1, x0, y1), (x0, y1, x0, y0)]
-    for i, (ax, ay, bx, by) in enumerate(corners):
-        out.append(L(A("gr_line"),
-                     L(A("start"), num(ax), num(ay)),
-                     L(A("end"), num(bx), num(by)),
-                     L(A("stroke"), L(A("width"), A("0.1")),
-                       L(A("type"), A("default"))),
-                     L(A("layer"), Q("Edge.Cuts")),
-                     L(A("uuid"), Q(uid(f"edge:{i}")))))
-    return out
+    """The board outline, as a single gr_rect.
 
+    It was four chained gr_line segments. That is a valid outline — every
+    endpoint shared by exactly two segments, verified — and KiCad 7 read it
+    without complaint, but a reviewer's KiCad still reported "no edges found on
+    Edge.Cuts layer". A single rectangle removes chaining from the problem
+    entirely: there are no endpoints to match and no epsilon to fall foul of,
+    and it is what KiCad itself writes when you draw a rectangular board.
 
-def _mounting_hole(x, y, index):
-    """A non-plated M3 mounting hole, in the board's own (KiCad 9/10) syntax.
-
-    Hand-built rather than vendored because MountingHole is a mechanical part
-    with no schematic symbol, so it has no entry in the circuit. Every node
-    below matches what KiCad itself writes: (property "Reference" ...) rather
-    than the KiCad 7 (fp_text reference ...), (hide yes) rather than a bare
-    hide, and (uuid "...") rather than (tstamp ...).
+    HONEST STATUS: this is a hypothesis. The KiCad in this build environment
+    cannot open a v9 board, so it has not been confirmed against the tool that
+    reported the problem. See docs/silkscreen_and_packages.md.
     """
-    return L(
-        A("footprint"), Q("MountingHole:MountingHole_3.2mm_M3_Pad"),
-        L(A("layer"), Q("F.Cu")),
-        L(A("uuid"), Q(uid(f"mount:{index}"))),
-        L(A("at"), num(x), num(y)),
-        L(A("attr"), A("through_hole"), A("exclude_from_pos_files"),
-          A("exclude_from_bom")),
-        L(A("property"), Q("Reference"), Q(f"H{index}"),
-          L(A("at"), A("0"), num(-MOUNTING_HOLE_PAD / 2 - 1), A("0")),
-          L(A("layer"), Q("F.SilkS")),
-          L(A("uuid"), Q(uid(f"mount:ref:{index}"))),
-          L(A("effects"), L(A("font"), L(A("size"), A("1"), A("1")),
-                            L(A("thickness"), A("0.15"))))),
-        L(A("property"), Q("Value"), Q("MountingHole"),
-          L(A("at"), A("0"), num(MOUNTING_HOLE_PAD / 2 + 1), A("0")),
-          L(A("layer"), Q("F.Fab")),
-          L(A("hide"), A("yes")),
-          L(A("uuid"), Q(uid(f"mount:val:{index}"))),
-          L(A("effects"), L(A("font"), L(A("size"), A("1"), A("1")),
-                            L(A("thickness"), A("0.15"))))),
-        L(A("fp_circle"),
-          L(A("center"), A("0"), A("0")),
-          L(A("end"), num(MOUNTING_HOLE_CRTYD), A("0")),
-          L(A("stroke"), L(A("width"), A("0.05")), L(A("type"), A("default"))),
-          L(A("fill"), A("no")),
-          L(A("layer"), Q("F.CrtYd")),
-          L(A("uuid"), Q(uid(f"mount:crt:{index}")))),
-        # Non-plated: a mask opening only, no copper. Matches how KiCad writes
-        # an np_thru_hole pad.
-        L(A("pad"), Q(""), A("np_thru_hole"), A("circle"),
-          L(A("at"), A("0"), A("0")),
-          L(A("size"), num(MOUNTING_HOLE_DIA), num(MOUNTING_HOLE_DIA)),
-          L(A("drill"), num(MOUNTING_HOLE_DIA)),
-          L(A("layers"), Q("*.Mask")),
-          L(A("uuid"), Q(uid(f"mount:pad:{index}")))),
-    )
+    return [L(A("gr_rect"),
+              L(A("start"), num(x0), num(y0)),
+              L(A("end"), num(x1), num(y1)),
+              L(A("stroke"), L(A("width"), A("0.1")),
+                L(A("type"), A("default"))),
+              L(A("fill"), A("no")),
+              L(A("layer"), Q("Edge.Cuts")),
+              L(A("uuid"), Q(uid("edge:rect"))))]
+
+
+MOUNTING_HOLE_FP = "MountingHole:MountingHole_3.2mm_M3_Pad"
+
+
+def _mounting_hole(libs, x, y, index):
+    """An M3 mounting hole, loaded from the KiCad library like any other part.
+
+    It used to be hand-built here, node by node, to look like
+    ``MountingHole:MountingHole_3.2mm_M3_Pad``. KiCad noticed: four
+    ``lib_footprint_mismatch`` warnings, "does not match copy in library".
+    A footprint that claims a library identity has to BE that library
+    footprint. It is vendored like every other one, so it cannot drift.
+    """
+    node, _src = load_footprint(libs, MOUNTING_HOLE_FP)
+    _set_uuid(node, uid(f"mount:{index}"))
+    set_reference(node, f"H{index}")
+    _set_reference_placement(node, 0.0, -MOUNTING_HOLE_PAD / 2 - 1, "F.Fab")
+    set_position(node, x, y)
+    return node
 
 
 def _zone(net_code, net_name, poly, index, clearance, min_width):
@@ -698,7 +796,22 @@ def _zone(net_code, net_name, poly, index, clearance, min_width):
         L(A("uuid"), Q(uid(f"zone:{net_name}:{index}"))),
         L(A("name"), Q(f"{net_name}_zone")),
         L(A("hatch"), A("edge"), A("0.5")),
-        L(A("connect_pads"), L(A("clearance"), num(clearance))),
+        # SOLID pad connection, not thermal relief.
+        #
+        # KiCad reported 7 starved_thermal errors: pads where only one spoke
+        # could be drawn against a minimum of two. Thermal relief trades ground
+        # impedance for solderability, and on an unrouted plane the spoke count
+        # depends on geometry this generator does not control. Solid removes
+        # the failure mode rather than tuning around it, and for the AGND/DGND
+        # planes of a precision instrument the lower plane impedance is what
+        # you want anyway.
+        #
+        # THE TRADE-OFF IS REAL: hand-soldering a through-hole pin into a solid
+        # plane needs more heat, and rework is harder. J1, J2, J3, SW1, the
+        # banana jacks, U5, U6 and U7 are through-hole. If assembly finds this
+        # painful, restore thermal relief per-pad on those parts rather than
+        # globally, and re-check the spoke count.
+        L(A("connect_pads"), A("yes"), L(A("clearance"), num(clearance))),
         L(A("min_thickness"), num(min_width)),
         L(A("filled_areas_thickness"), A("no")),
         L(A("fill"), A("yes"),
@@ -706,6 +819,294 @@ def _zone(net_code, net_name, poly, index, clearance, min_width):
           L(A("thermal_bridge_width"), A("0.5"))),
         L(A("polygon"), pts),
     )
+
+
+
+# =====================================================================
+#  Silkscreen: reference designators, placed so they can be read
+# =====================================================================
+
+def _silk_bbox(text, cx, cy):
+    return silk_text_box(text, cx, cy)
+
+
+def _overlaps(a, b):
+    return (a[0] < b[2] - 1e-9 and b[0] < a[2] - 1e-9
+            and a[1] < b[3] - 1e-9 and b[1] < a[3] - 1e-9)
+
+
+def _silk_obstacles(items):
+    """Everything a designator must not sit on, in board coordinates.
+
+    Three kinds, and all three are real DRC classes:
+      * pads            -> silk_over_copper ("clipped by solder mask")
+      * courtyards      -> text under a part body, unreadable once assembled
+      * footprint silk  -> silk_overlap, silk-to-silk
+    """
+    boxes = []
+    for item in items:
+        boxes.append((item.x + item.cx - item.w / 2,
+                      item.y + item.cy - item.h / 2,
+                      item.x + item.cx + item.w / 2,
+                      item.y + item.cy + item.h / 2))
+        for child in item.node:
+            if not isinstance(child, list):
+                continue
+            head = str(child[0])
+            if head == "pad":
+                at = size = None
+                for c in child:
+                    if isinstance(c, list) and str(c[0]) == "at":
+                        at = (float(c[1]), float(c[2]))
+                    if isinstance(c, list) and str(c[0]) == "size":
+                        size = (float(c[1]), float(c[2]))
+                if at and size:
+                    m = SOLDER_MASK_MARGIN
+                    boxes.append((item.x + at[0] - size[0] / 2 - m,
+                                  item.y + at[1] - size[1] / 2 - m,
+                                  item.x + at[0] + size[0] / 2 + m,
+                                  item.y + at[1] + size[1] / 2 + m))
+            elif head.startswith("fp_"):
+                layer = None
+                for c in child:
+                    if isinstance(c, list) and str(c[0]) == "layer":
+                        layer = str(c[1])
+                if layer not in ("F.SilkS", "B.SilkS"):
+                    continue
+                pts = _primitive_points(child)
+                if pts:
+                    boxes.append((item.x + min(p[0] for p in pts),
+                                  item.y + min(p[1] for p in pts),
+                                  item.x + max(p[0] for p in pts),
+                                  item.y + max(p[1] for p in pts)))
+    return boxes
+
+
+def place_references(items):
+    """Put every designator on F.Fab, and promote back to F.SilkS only when it
+    is unambiguously safe.
+
+    THE STRATEGY CHANGED. It used to search for a position that fitted, using a
+    bounding-box model of the text. That model was wrong three times running —
+    KiCad reported 161 silkscreen warnings on a board this file had called
+    clean — so accuracy is no longer the mechanism. Safety is:
+
+    * The default is **F.Fab**, the assembly-drawing layer. Nothing on F.Fab can
+      produce a silkscreen violation, so every designator starts in a state
+      that is correct by construction.
+    * A designator is promoted to **F.SilkS** only if one of four fixed
+      positions — directly N, S, E or W of its courtyard, at a constant
+      offset — clears every pad, every courtyard, every footprint's silkscreen
+      and every already-promoted designator by :data:`SILK_SAFE_CLEARANCE`
+      (1.0 mm). No micro-adjustment, no widening ring, no tight fitting.
+    * If none of the four qualifies, it stays on F.Fab.
+
+    Nothing is hidden and nothing is deleted: every designator remains in the
+    file, visible on one layer or the other, and every part stays identifiable
+    on the fabrication drawing. That is the trade the evidence supports —
+    KiCad's own report shows that **every one of the 161 violations involved a
+    Reference field**, and none was footprint-silk against footprint-silk, so
+    moving designators off F.SilkS removes the entire violation class.
+
+    Returns ``(fab_refs, silk_boxes)``.
+    """
+    obstacles = _silk_obstacles(items)
+    promoted, fab = [], []
+
+    for item in sorted(items, key=lambda p: -(p.w * p.h)):
+        cx, cy = item.x + item.cx, item.y + item.cy
+        box0 = silk_text_box(item.ref, 0.0, 0.0,
+                             clearance=SILK_SAFE_CLEARANCE)
+        tw, th = box0[2], box0[3]
+        offset = SILK_SAFE_CLEARANCE
+
+        chosen = None
+        candidates = () if not PROMOTE_DESIGNATORS_TO_SILK else (
+            (cx, cy - item.h / 2 - th - offset),
+            (cx, cy + item.h / 2 + th + offset),
+            (cx + item.w / 2 + tw + offset, cy),
+            (cx - item.w / 2 - tw - offset, cy))
+        for bx, by in candidates:
+            box = silk_text_box(item.ref, bx, by,
+                                clearance=SILK_SAFE_CLEARANCE)
+            if any(_overlaps(box, o) for o in obstacles):
+                continue
+            if any(_overlaps(box, o) for o in promoted):
+                continue
+            chosen = (bx, by)
+            break
+        if chosen is None:
+            _set_reference_placement(item.node, item.cx, item.cy, "F.Fab")
+            fab.append(item.ref)
+        else:
+            _set_reference_placement(item.node, chosen[0] - item.x,
+                                     chosen[1] - item.y, "F.SilkS")
+            promoted.append(silk_text_box(item.ref, *chosen,
+                                          clearance=SILK_SAFE_CLEARANCE))
+    return fab, promoted
+
+
+def _set_reference_placement(node, dx, dy, layer):
+    """Move a footprint's Reference field to a local offset, on a given layer.
+
+    The field is never hidden: this board is a lab instrument that gets probed,
+    and a designator nobody can read costs more at the bench than a silkscreen
+    warning costs in DRC.
+    """
+    for index, child in enumerate(node):
+        if not (isinstance(child, list) and str(child[0]) == "property"
+                and len(child) > 2 and str(child[1]) == "Reference"):
+            continue
+        keep = [child[0], child[1], child[2]]
+        for c in child[3:]:
+            if isinstance(c, list) and str(c[0]) in ("at", "layer", "hide",
+                                                     "effects"):
+                continue
+            keep.append(c)
+        keep.append(L(A("at"), num(dx), num(dy), A("0")))
+        keep.append(L(A("layer"), Q(layer)))
+        keep.append(L(A("effects"),
+                      L(A("font"),
+                        L(A("size"), num(SILK_TEXT_HEIGHT),
+                          num(SILK_TEXT_HEIGHT)),
+                        L(A("thickness"), num(SILK_TEXT_THICKNESS)))))
+        # Assign by the index we are already holding. This used to be
+        # node.index(child), an equality search - and it silently resolved to
+        # the wrong element (or failed) for 62 of 114 footprints, leaving their
+        # designators at the library default position while place_references
+        # believed it had moved them.
+        node[index] = SexpList(keep)
+        return True
+    return False
+
+
+
+def _gr_text(text, x, y, layer="F.SilkS", height=SILK_TEXT_HEIGHT, key=""):  # noqa: E501
+    return L(A("gr_text"), Q(text),
+             L(A("at"), num(x), num(y), A("0")),
+             L(A("layer"), Q(layer)),
+             L(A("uuid"), Q(uid(f"silk:{key or text}:{x:.3f}:{y:.3f}"))),
+             L(A("effects"),
+               L(A("font"), L(A("size"), num(height), num(height)),
+                 L(A("thickness"), num(SILK_TEXT_THICKNESS)))))
+
+
+def board_silkscreen(x0, y0, x1, y1, boundary, items, circuit, ref_boxes=()):
+    """Board-level silkscreen: identity, the ground split, and the terminals.
+
+    Everything here is placed in the board margin — between the outline and the
+    parts — so none of it can land on copper or on a part's own silk. The
+    margin exists because size_board() budgets the mounting-hole courtyards,
+    and it is the one region guaranteed to be clear.
+
+    Mislabelling a +/-15 V bench supply terminal is a real hazard, so J1's pins
+    are named individually rather than with a single block label.
+    """
+    out = []
+    margin_top = y0 + EDGE_CLEARANCE + SILK_TEXT_HEIGHT
+    margin_bot = y1 - EDGE_CLEARANCE - SILK_TEXT_HEIGHT
+    obstacles = _silk_obstacles(items) + list(ref_boxes)
+
+    def emit(text, x, y, height=SILK_TEXT_HEIGHT, key=""):
+        """Emit board text in the margin, or on F.Fab if the margin is taken.
+
+        The margin - between the outline and the nearest courtyard - is the one
+        region of the board with no copper and no footprint silk in it. A label
+        that clears everything there by BOARD_LABEL_CLEARANCE cannot produce a
+        silkscreen violation. One that cannot goes to F.Fab rather than being
+        squeezed in.
+        """
+        box = silk_text_box(text, x, y, height,
+                            clearance=BOARD_LABEL_CLEARANCE)
+        layer = "F.SilkS"
+        if any(_overlaps(box, o) for o in obstacles):
+            layer = "F.Fab"
+        else:
+            obstacles.append(box)
+        out.append(_gr_text(text, x, y, height=height, key=key, layer=layer))
+
+    # --- identity -------------------------------------------------------
+    emit("Stage 1 I-V Characterization System", x0 + (x1 - x0) / 2,
+         margin_top, height=1.5, key="title")
+    emit("rev A  -  generated by generators/pcb.py  -  UNROUTED",
+         x0 + (x1 - x0) / 2, margin_top + 2.6, key="rev")
+
+    # --- the ground split, marked so a bench user can see it ------------
+    # Ticks in the margins rather than a line across the board: the split lane
+    # holds R31 and U8, and silk over them would be both unreadable and a
+    # silk_overlap violation.
+    for i, (ya, yb) in enumerate((
+            (y0 + EDGE_CLEARANCE, y0 + EDGE_CLEARANCE + 3.0),
+            (y1 - EDGE_CLEARANCE - 3.0, y1 - EDGE_CLEARANCE))):
+        out.append(L(A("gr_line"),
+                     L(A("start"), num(boundary), num(ya)),
+                     L(A("end"), num(boundary), num(yb)),
+                     L(A("stroke"), L(A("width"), num(SILK_TEXT_THICKNESS)),
+                       L(A("type"), A("dash"))),
+                     L(A("layer"), Q("F.SilkS")),
+                     L(A("uuid"), Q(uid(f"silk:split:{i}")))))
+    out.append(_gr_text("AGND <", boundary - 6.0, margin_bot, key="agnd"))
+    out.append(_gr_text("> DGND", boundary + 6.0, margin_bot, key="dgnd"))
+
+    # --- terminal labelling ---------------------------------------------
+    # The designators are obstacles too. Leaving them out is how the terminal
+    # labels came to overlap J1's and J5's reference fields.
+    obstacles = _silk_obstacles(items) + list(ref_boxes)
+    by_ref = {i.ref: i for i in items}
+    dut_missing = []
+
+    def label(ref, pad_name, text):
+        """Put `text` beside a specific pad, in the first clear spot."""
+        item = by_ref.get(ref)
+        if item is None:
+            return
+        for child in item.node:
+            if not (isinstance(child, list) and str(child[0]) == "pad"
+                    and str(child[1]) == pad_name):
+                continue
+            at = None
+            for c in child:
+                if isinstance(c, list) and str(c[0]) == "at":
+                    at = (float(c[1]), float(c[2]))
+            if at is None:
+                return
+            px, py = item.x + at[0], item.y + at[1]
+            for radius in (2.2, 3.0, 4.0, 5.0, 6.5, 8.0):
+                for dx, dy in ((0, -radius), (0, radius),
+                               (-radius * 1.6, 0), (radius * 1.6, 0)):
+                    box = _silk_bbox(text, px + dx, py + dy)
+                    if not any(_overlaps(box, o) for o in obstacles):
+                        emit(text, px + dx, py + dy,
+                             key=f"{ref}.{pad_name}")
+                        return True
+            return False
+        return False
+
+
+    # J1 is the bench supply input. Every pin named: getting +15 V onto the
+    # -15 V terminal destroys the analog front end.
+    j1_pins = (("1", "+15V IN"), ("2", "GND IN"),
+               ("3", "-15V IN"), ("4", "+5V IN"))
+    j1_placed = all(label("J1", pad, text) for pad, text in j1_pins)
+
+    # J1 carries the bench supply. Putting +15 V on the -15 V terminal destroys
+    # the analog front end, so its pinout is ALSO written as a legend in the
+    # board margin, in pin order. The margin is guaranteed clear, so this text
+    # always lands even when the per-pad labels cannot be fitted - the labelling
+    # is never left to chance on this connector.
+    legend = "J1 (bench supply), pin 1 -> 4:  " + \
+             "  |  ".join(f"{n} {t.replace(' IN', '')}"
+                          for n, t in j1_pins)
+    emit(legend, x0 + (x1 - x0) / 2, margin_bot - 2.6, key="j1legend")
+    if not j1_placed:
+        emit("see J1 pinout legend below", x0 + (x1 - x0) / 2,
+             margin_bot - 5.2, key="j1note")
+    # The four DUT terminals - a Kelvin set, and easy to cross-connect.
+    for ref, text in (("J4", "FORCE+"), ("J5", "SENSE+"),
+                      ("J6", "SENSE-"), ("J7", "FORCE-")):
+        if not label(ref, "1", text):
+            dut_missing.append(f"{ref} ({text})")
+    return out
 
 
 def size_board(placed_blocks):
@@ -734,9 +1135,30 @@ def generate_pcb(circuit, out_dir="."):
     libs = KicadLibraries()
 
     # --- nets -----------------------------------------------------------
-    net_names = sorted({n.name for n in circuit.get_nets()
-                        if n.name != "__NOCONNECT"})
-    net_class = classify(net_names)          # raises on an unclassified net
+    # KiCad names board nets by sheet path, not by the bare SKiDL name. Ask
+    # the schematic model for the name it will compute, or every pad disagrees
+    # and Update PCB from Schematic rewrites the connectivity.
+    from generators.schematic import (CircuitModel, SYMBOL_DRIVEN_FP_ATTRS,
+                                      sheet_file, sheet_name, symbol_fields,
+                                      unconnected_pads, unit_info)
+    model = CircuitModel(circuit)
+    flat = sorted({n.name for n in circuit.get_nets()
+                   if n.name != "__NOCONNECT"})
+    kicad_name = {n: model.board_net_name(n) for n in flat}
+    # Every open pin gets the synthetic net KiCad would create for it. Leaving
+    # those pads with no net is not neutral: the updater then ADDS 49 nets and
+    # reconnects 49 pads, which is a connectivity change, which is exactly what
+    # "Update PCB from Schematic must be a no-op" forbids.
+    open_pads = unconnected_pads(circuit)
+    unconnected = sorted({n for pads in open_pads.values()
+                          for n in pads.values()})
+    net_names = sorted(set(kicad_name.values())) + unconnected
+    # Classify the DESIGN's net names — libraries/netclasses.py is written in
+    # those terms — then carry the class over to the KiCad board name. The
+    # synthetic nets are not classified here: a net with one pad carries no
+    # current between two points, and KiCad leaves them in Default.
+    flat_class = classify(flat)              # raises on an unclassified net
+    net_class = {kicad_name[n]: c for n, c in flat_class.items()}
     codes = {"": 0}
     for i, name in enumerate(net_names, start=1):
         codes[name] = i
@@ -748,9 +1170,19 @@ def generate_pcb(circuit, out_dir="."):
                 if type(net).__name__ == "NCNet" or net.name == "__NOCONNECT":
                     continue
                 func = getattr(getattr(pin, "func", None), "name", None) or ""
+                board_name = kicad_name[net.name]
                 pad_net.setdefault(part.ref, {})[str(pin.num)] = (
-                    codes[net.name], net.name, str(pin.name or ""),
+                    codes[board_name], board_name, str(pin.name or ""),
                     PINTYPE.get(func, "unspecified"))
+    for part in circuit.parts:
+        for pin in part.pins:
+            name = open_pads.get(part.ref, {}).get(str(pin.num))
+            if name is None:
+                continue
+            func = getattr(getattr(pin, "func", None), "name", None) or ""
+            pad_net.setdefault(part.ref, {})[str(pin.num)] = (
+                codes[name], name, str(pin.name or ""),
+                PINTYPE.get(func, "unspecified"))
 
     # --- footprints -----------------------------------------------------
     physical = [p for p in circuit.parts if (p.footprint or "").strip()]
@@ -765,8 +1197,27 @@ def generate_pcb(circuit, out_dir="."):
         set_reference(node, part.ref)
         set_value(node, str(part.value))
         assign_nets(node, pad_net.get(part.ref, {}))
-        node.append(L(A("path"), Q(f"/{uid('sheet:' + part.ref)}")))
-        item = Placed(part.ref, node, getattr(part, "skidl_block", "misc"))
+        # THE link between this board and the schematic. It used to be a UUID
+        # invented here, which matched nothing: all 110 footprints were
+        # unreachable from the schematic, so "Update PCB from Schematic" saw
+        # 110 symbols with no footprint, added a fresh library copy of each at
+        # a default position with a default reference field, and orphaned
+        # everything this generator had placed. That is the board the DRC
+        # reports were run on.
+        from generators.schematic import symbol_instance_path
+        block = getattr(part, "skidl_block", "misc")
+        node.append(L(A("path"),
+                      Q(symbol_instance_path(block, part.ref))))
+        # Everything else "Update PCB from Schematic" would otherwise rewrite.
+        # The values are computed in generators/schematic.py, next to the
+        # schematic that defines them; see the derivation on each function.
+        node.append(L(A("sheetname"), Q(sheet_name(block))))
+        node.append(L(A("sheetfile"), Q(sheet_file(block))))
+        for fname, fvalue in symbol_fields(model, part):
+            add_field(node, part.ref, fname, fvalue)
+        add_unit_info(node, unit_info(model.part_sym[part.ref]))
+        strip_attrs(node, SYMBOL_DRIVEN_FP_ATTRS)
+        item = Placed(part.ref, node, block)
         if part.ref in bridge_pins:
             # Parts that bond to both ground systems leave their block and go
             # into the straddle lane on the plane boundary. See _ground_bridges.
@@ -792,6 +1243,11 @@ def generate_pcb(circuit, out_dir="."):
                            "has no defined location; check blocks/power.py")
     placed_blocks["ground_split"] = bridges
 
+    # Designators are positioned before the board is sized, so the text is
+    # inside the outline like everything else.
+    all_items = [i for g in placed_blocks.values() for i in g]
+    silk_on_fab, ref_boxes = place_references(all_items)
+
     x0, y0, x1, y1 = size_board(placed_blocks)
 
     # --- assemble -------------------------------------------------------
@@ -815,12 +1271,14 @@ def generate_pcb(circuit, out_dir="."):
             board.append(item.node)
 
     board.extend(_edge_rect(x0, y0, x1, y1))
+    board.extend(board_silkscreen(x0, y0, x1, y1, boundary, all_items,
+                                  circuit, ref_boxes))
 
     inset = EDGE_CLEARANCE + MOUNTING_HOLE_INSET
     holes = [(x0 + inset, y0 + inset), (x1 - inset, y0 + inset),
              (x0 + inset, y1 - inset), (x1 - inset, y1 - inset)]
     for i, (hx, hy) in enumerate(holes, start=1):
-        board.append(_mounting_hole(hx, hy, i))
+        board.append(_mounting_hole(libs, hx, hy, i))
 
     # --- ground zones ---------------------------------------------------
     # Two pours, one either side of `boundary`, separated by ZONE_GAP. The
@@ -841,8 +1299,15 @@ def generate_pcb(circuit, out_dir="."):
 
     gclear = NETCLASSES["GROUND"]["clearance"]
     gwidth = NETCLASSES["GROUND"]["track_width"]
-    board.append(_zone(codes["AGND"], "AGND", agnd_poly, 1, gclear, gwidth))
-    board.append(_zone(codes["DGND"], "DGND", dgnd_poly, 1, gclear, gwidth))
+    # Zone pad-connection clearance is wider than the GROUND netclass value.
+    # KiCad reported connection_width 0.109 mm where the pour necked between
+    # the LQFP-64's 0.20 mm pad gaps to reach pad 31. Widening the ZONE's own
+    # clearance (not the netclass, and not a global rule) stops the pour
+    # entering fine-pitch pad fields at all, so no sliver can form. Pads it can
+    # no longer reach become ordinary unconnected_items, which are expected.
+    zclear = max(gclear, 0.30)
+    board.append(_zone(codes["AGND"], "AGND", agnd_poly, 1, zclear, gwidth))
+    board.append(_zone(codes["DGND"], "DGND", dgnd_poly, 1, zclear, gwidth))
 
     text = write_sexp(SexpList(board)) + "\n"
     path = os.path.join(out_dir, "stage1_iv.kicad_pcb")
@@ -858,6 +1323,8 @@ def generate_pcb(circuit, out_dir="."):
         "zone_boundary_x": round(boundary, 3),
         "zone_gap_mm": ZONE_GAP,
         "ground_bridges": sorted(p.ref for p in bridges),
+        "designators_on_fab": sorted(silk_on_fab),
+        "designators_on_silk": len(all_items) - len(silk_on_fab),
         "mounting_holes": len(holes),
         "netclass_counts": {k: sum(1 for v in net_class.values() if v == k)
                             for k in sorted(set(net_class.values()))},

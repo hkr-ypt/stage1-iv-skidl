@@ -145,8 +145,12 @@ def check_board(kicad_cli, path):
                   "purpose: relying on")
             print("           KiCad's migration of an older schema is what lost "
                   "the Edge.Cuts outline.")
-            print("           This is NOT a pass. Open the board in KiCad 9 or "
-                  "later to check it.")
+            print("           This is NOT a pass. Open the board in KiCad 10: "
+                  "it carries a footprint")
+            print("           (units ...) block that makes Update PCB from "
+                  "Schematic a no-op and")
+            print("           that KiCad 9's footprint parser rejects. See "
+                  "docs/pcb_generation.md.")
             return None
         if proc.returncode != 0 or not os.path.isfile(
                 os.path.join(tmp, "board.svg")):

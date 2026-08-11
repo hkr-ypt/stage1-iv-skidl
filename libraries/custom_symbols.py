@@ -347,11 +347,23 @@ def C():
                  "generic", "RESOLVED", "Unpolarized capacitor")
 
 
-def C_POL():
-    # Device:C_Polarized draws the "+" glyph on the pin-1 side of the body
-    # (polylines at y=+2.286/+2.794, pin 1 at y=+3.81), so pin 1 is the anode.
-    return _part("Device:C_Polarized", "C",
-                 "Capacitor_THT:CP_Radial_D8.0mm_P3.50mm",
+def C_POL(footprint):
+    """A polarized capacitor. The package is a REQUIRED argument.
+
+    It used to default to ``Capacitor_THT:CP_Radial_D8.0mm_P3.50mm``, and C5-C8
+    - the four physically largest parts on the board - took that default. They
+    got an 8 mm through-hole radial can by inheritance rather than by decision,
+    which is how they came to dominate the silkscreen violations.
+
+    There is no sensible default package for a polarized capacitor: the right
+    one depends on the capacitance, the working voltage and the derating, and
+    those differ per instance. Making it required means the question has to be
+    answered every time. See docs/silkscreen_and_packages.md for the table.
+
+    Device:C_Polarized draws the "+" glyph on the pin-1 side of the body
+    (polylines at y=+2.286/+2.794, pin 1 at y=+3.81), so pin 1 is the anode.
+    """
+    return _part("Device:C_Polarized", "C", footprint,
                  "generic", "RESOLVED", "Polarized capacitor",
                  aliases={"+": 1, "-": 2})
 

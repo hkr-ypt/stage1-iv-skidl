@@ -28,10 +28,10 @@ def create_output_buffer_block(n):
               footprint="Capacitor_SMD:C_0805_2012Metric")
     C16 = C()(ref="C16", tag="C16", value="100nF",
               footprint="Capacitor_SMD:C_0805_2012Metric")
-    C17 = C_POL()(ref="C17", tag="C17", value="10uF/35V",
-                  footprint="Capacitor_Tantalum_SMD:CP_EIA-3528-21_Kemet-B")
-    C18 = C_POL()(ref="C18", tag="C18", value="10uF/35V",
-                  footprint="Capacitor_Tantalum_SMD:CP_EIA-3528-21_Kemet-B")
+    C17 = C_POL("Capacitor_Tantalum_SMD:CP_EIA-3528-21_Kemet-B")(
+        ref="C17", tag="C17", value="10uF/35V")
+    C18 = C_POL("Capacitor_Tantalum_SMD:CP_EIA-3528-21_Kemet-B")(
+        ref="C18", tag="C18", value="10uF/35V")
     R9 = R()(ref="R9", tag="R9", value="10R",
              footprint="Resistor_SMD:R_1206_3216Metric")
     C19 = C()(ref="C19", tag="C19", value="100pF")

@@ -12,6 +12,10 @@ What it enforces
 ----------------
 =========================  ====================================================
 ``board_parity``           the board matches the circuit main.py builds now
+``update_pcb_noop``        KiCad's "Update PCB from Schematic" would change
+                           nothing — the board is not silently rewritten on open
+``update_pcb_calibration`` that model still reproduces the numbers KiCad 10.0.5
+                           actually printed (see validation/update_pcb_noop.py)
 ``dru_parses``             the custom rules file is one KiCad can compile
 ``schema_version``         board and vendored footprints share a file schema
 ``rule_satisfiability``    no clearance rule demands more than a package gives
@@ -64,6 +68,12 @@ from resolve_kicad_libs import parse_sexp  # noqa: E402
 from libraries.netclasses import (  # noqa: E402
     classify, check_against_fab, UnclassifiedNet, NETCLASSES, DEFAULT_CLASS,
     NET_TO_CLASS, GLOBAL_MIN_HOLE_TO_HOLE, INTRA_FOOTPRINT_CLEARANCE,
+)
+# The SAME text-box model the placer uses. Imported, not reimplemented: this
+# file used to carry its own smaller copy, and that is exactly how it certified
+# a board as silkscreen-clean that KiCad reported 161 warnings on.
+from generators.pcb import (  # noqa: E402
+    silk_text_box, SILK_CLEARANCE, SOLDER_MASK_MARGIN,
 )
 
 BOARD_FILE = os.path.join(_REPO_ROOT, "stage1_iv.kicad_pcb")
@@ -377,7 +387,8 @@ def check_ground_split(board):
     4. No track carrying a ground net may cross the boundary.
     """
     problems = []
-    zones = {z["net"]: z for z in board.zones if z["net"] in GROUND_NETS}
+    zones = {_design_net_name(z["net"]): z for z in board.zones
+             if _design_net_name(z["net"]) in GROUND_NETS}
     for net in GROUND_NETS:
         if net not in zones:
             problems.append(f"no copper zone for {net}; the ground planes are "
@@ -399,7 +410,8 @@ def check_ground_split(board):
     gap = d["bbox"][0] - a["bbox"][2]
 
     bridges = [fp for fp in board.footprints
-               if len(fp.nets & set(GROUND_NETS)) == 2]
+               if len({_design_net_name(n) for n in fp.nets}
+                      & set(GROUND_NETS)) == 2]
     if STAR_GROUND_REF not in [fp.ref for fp in bridges]:
         problems.append(
             f"{STAR_GROUND_REF} (the star-ground resistor) does not connect "
@@ -408,10 +420,10 @@ def check_ground_split(board):
     for fp in bridges:
         wrong = []
         for pad in fp.pads:
-            if pad["net"] == "AGND" and pad["x"] > boundary:
+            if _design_net_name(pad["net"]) == "AGND" and pad["x"] > boundary:
                 wrong.append(f"pad {pad['name']} (AGND) at x={pad['x']:.3f} is "
                              f"over the DGND pour")
-            if pad["net"] == "DGND" and pad["x"] < boundary:
+            if _design_net_name(pad["net"]) == "DGND" and pad["x"] < boundary:
                 wrong.append(f"pad {pad['name']} (DGND) at x={pad['x']:.3f} is "
                              f"over the AGND pour")
         if wrong:
@@ -427,7 +439,7 @@ def check_ground_split(board):
         if len(n) > 2:
             codes[int(_f(n[1]))] = str(n[2])
     for t in board.tracks:
-        if codes.get(t["net_code"]) not in GROUND_NETS:
+        if _design_net_name(codes.get(t["net_code"], "")) not in GROUND_NETS:
             continue
         if (t["start"][0] - boundary) * (t["end"][0] - boundary) < 0:
             problems.append(
@@ -437,9 +449,15 @@ def check_ground_split(board):
     return problems, boundary, gap
 
 
+def _design_net_name(board_name):
+    """Strip KiCad's sheet-path prefix back to the design's own net name."""
+    return board_name.rsplit("/", 1)[-1] if board_name.startswith("/") \
+        else board_name
+
+
 def check_netclass_coverage(board):
     try:
-        classify(board.nets)
+        classify([_design_net_name(n) for n in board.nets])
     except UnclassifiedNet as exc:
         return [str(exc)]
     return []
@@ -451,7 +469,7 @@ def _required_clearance(net_a, net_b):
     for name in (net_a, net_b):
         if not name:
             continue
-        cls = NET_TO_CLASS.get(name)
+        cls = NET_TO_CLASS.get(_design_net_name(name))
         vals.append(NETCLASSES[cls]["clearance"] if cls
                     else DEFAULT_CLASS["clearance"])
     return max(vals) if vals else DEFAULT_CLASS["clearance"]
@@ -641,6 +659,16 @@ def check_schema_version(board):
 
     Emitting the schema the design's KiCad actually uses removes the migration
     step entirely. This check makes sure the two never drift apart again.
+
+    One caveat, stated rather than hidden: the board declares 20241229 (KiCad
+    9's version) but carries one token KiCad 9 does not know — the footprint
+    ``(units ...)`` block that makes "Update PCB from Schematic" a no-op, added
+    to the footprint parser in KiCad 10. **Opening this board needs KiCad 10.**
+    KiCad 9 will stop at that token with a parse error rather than a version
+    message. The declared version is left at 20241229 on purpose: it is what
+    the vendored footprints are, and raising it would silently switch off
+    KiCad 10's own 20241229-to-current migrations for content this project
+    cannot re-test here.
     """
     import glob
     import re
@@ -665,6 +693,242 @@ def check_schema_version(board):
     return problems[:5]
 
 
+def _silk_items(board):
+    """(kind, ref, bbox) for every silkscreen object, in board coordinates."""
+    out = []
+    for fp in board.footprints:
+        for child in fp.node:
+            if not isinstance(child, list):
+                continue
+            head = _head(child)
+            if head == "property" and len(child) > 2 and \
+                    str(child[1]) == "Reference":
+                if _layer_of(child) not in ("F.SilkS", "B.SilkS"):
+                    continue
+                dx, dy, _r = _at(child)
+                x, y = fp.x + dx, fp.y + dy
+                size = 1.0
+                eff = _first(child, "effects")
+                font = _first(eff, "font") if eff is not None else None
+                sz = _first(font, "size") if font is not None else None
+                if sz is not None and len(sz) > 1:
+                    size = _f(sz[1])
+                out.append(("text", fp.ref,
+                            silk_text_box(str(child[2]), x, y, size)))
+            elif head.startswith("fp_") and \
+                    _layer_of(child) in ("F.SilkS", "B.SilkS"):
+                pts = _graphic_points(child)
+                if pts:
+                    out.append(("graphic", fp.ref,
+                                (fp.x + min(p[0] for p in pts),
+                                 fp.y + min(p[1] for p in pts),
+                                 fp.x + max(p[0] for p in pts),
+                                 fp.y + max(p[1] for p in pts))))
+    for node in board.root:
+        if not isinstance(node, list):
+            continue
+        if _head(node) == "gr_text" and _layer_of(node) in ("F.SilkS",
+                                                            "B.SilkS"):
+            x, y, _r = _at(node)
+            text = str(node[1])
+            size = 1.0
+            eff = _first(node, "effects")
+            font = _first(eff, "font") if eff is not None else None
+            sz = _first(font, "size") if font is not None else None
+            if sz is not None and len(sz) > 1:
+                size = _f(sz[1])
+            out.append(("board-text", text,
+                        silk_text_box(text, x, y, size)))
+    return out
+
+
+SILK_BASELINE = os.path.join(_REPO_ROOT, "validation", "fixtures",
+                             "kicad_silk_baseline.json")
+
+# Option A, from the brief: a conservative rule, not a model of KiCad. Any
+# silkscreen TEXT within this of copper counts as a violation. It is far wider
+# than KiCad's own rule on purpose - false positives are acceptable, false
+# negatives are what put 161 warnings past this file three times.
+SILK_RULE_CLEARANCE = 0.5
+
+
+def _load_silk_baseline():
+    try:
+        with open(SILK_BASELINE, encoding="utf-8") as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return None
+
+
+def check_silkscreen(board):
+    """Silkscreen pre-filter. NOT an authority — KiCad 10 DRC is.
+
+    Approach A from the brief: a conservative rule rather than a model of
+    KiCad's geometry. Any silkscreen text within :data:`SILK_RULE_CLEARANCE`
+    (0.5 mm) of a pad, or of another silk object, is a violation. That is
+    deliberately stricter than KiCad, because this file's previous geometric
+    model was wrong three times running and each time in the same direction —
+    it reported clean while KiCad reported 161.
+
+    THE HARD GUARD. Reporting "clean" is only permitted when this checker can
+    demonstrate it would have caught the known-bad board. The KiCad 10 report
+    for that board is stored in ``validation/fixtures/kicad_silk_baseline.json``
+    — 92 ``silk_over_copper``, 69 ``silk_overlap``, across 72 references, none
+    of which involved anything but a Reference field. If the current board
+    keeps any designator on F.SilkS, this checker cannot prove it would have
+    caught that, so it refuses to certify and says so.
+
+    The board it certifies is therefore one where the question does not arise:
+    every designator sits on F.Fab, which cannot produce a silkscreen violation
+    at all.
+    """
+    baseline = _load_silk_baseline()
+    items = _silk_items(board)
+    pads = []
+    for fp in board.footprints:
+        for pad in fp.pads:
+            m = SOLDER_MASK_MARGIN + SILK_RULE_CLEARANCE
+            pads.append((pad["x"] - pad["w"] / 2 - m,
+                         pad["y"] - pad["h"] / 2 - m,
+                         pad["x"] + pad["w"] / 2 + m,
+                         pad["y"] + pad["h"] / 2 + m))
+
+    def hit(a, b):
+        return (a[0] < b[2] - EPS and b[0] < a[2] - EPS
+                and a[1] < b[3] - EPS and b[1] < a[3] - EPS)
+
+    problems = []
+    texts = [i for i in items if i[0] in ("text", "board-text")]
+    for _kind, ref, box in texts:
+        if any(hit(box, pad) for pad in pads):
+            problems.append(f"silk text {ref} is within "
+                            f"{SILK_RULE_CLEARANCE} mm of copper")
+        for _k2, ref2, box2 in items:
+            if ref2 != ref and hit(box, box2):
+                problems.append(f"silk text {ref} is within "
+                                f"{SILK_RULE_CLEARANCE} mm of {ref2}'s "
+                                f"silkscreen")
+                break
+
+    # --- the guard ------------------------------------------------------
+    on_silk = [ref for kind, ref, _b in items if kind == "text"]
+    if baseline is None:
+        problems.append(
+            "the KiCad silk baseline fixture is missing, so this checker "
+            "cannot demonstrate it would catch a known-bad board. It must not "
+            "be trusted to report clean.")
+    elif on_silk and not problems:
+        return [], (
+            f"{len(on_silk)} reference designator(s) are on F.SilkS and this "
+            f"checker found nothing wrong — but it is a 0.5 mm rule, not "
+            f"KiCad's geometry, and on the board recorded in "
+            f"{os.path.relpath(SILK_BASELINE, _REPO_ROOT)} KiCad found "
+            f"{baseline['total_silk']} violations across "
+            f"{baseline['distinct_refs_implicated']} references while this "
+            f"file reported 9. A clean result here is not evidence. Either "
+            f"move the designators to F.Fab, or validate against KiCad 10 "
+            f"first.")
+    return problems[:20], None
+
+
+def check_courtyards_defined(board):
+    """Every footprint must define a courtyard.
+
+    KiCad can be told to ignore this. It should not be: a footprint with no
+    courtyard is invisible to the overlap check, so a board can look clean
+    while parts sit on top of each other.
+    """
+    problems = []
+    for fp in board.footprints:
+        has = any(isinstance(c, list) and _head(c).startswith("fp_")
+                  and _layer_of(c) in ("F.CrtYd", "B.CrtYd")
+                  for c in fp.node)
+        if not has:
+            problems.append(f"{fp.ref} ({_head(fp.node)}) defines no courtyard")
+    return problems
+
+
+def check_schematic_linkage(board):
+    """Every footprint must be reachable from the schematic. 100%, or fail.
+
+    KiCad matches a board footprint to a schematic symbol by the footprint's
+    ``(path ...)``. A path that does not resolve means "no symbol", so
+    *Update PCB from Schematic* adds a fresh library copy of the part and
+    orphans the placed one — which is how every DRC report in this project
+    until now described a board the generator never produced.
+
+    The path is ``/<sheet-symbol-uuid>/<symbol-uuid>`` for a symbol on a child
+    sheet, and ``/<symbol-uuid>`` for one on the root sheet. **The root sheet's
+    UUID is not part of it** — including it produced a three-segment path that
+    matched nothing, and the first attempt at this fix failed for that reason.
+    Verified against boards KiCad itself wrote in ``kicad/qa/data/pcbnew``.
+    """
+    import glob
+    import re
+    sch = ""
+    for path in sorted(glob.glob(os.path.join(_REPO_ROOT, "*.kicad_sch"))):
+        with open(path, encoding="utf-8") as fh:
+            sch += fh.read()
+    if not sch:
+        return ["no .kicad_sch files: cannot verify the board links to the "
+                "schematic"]
+    known = set(re.findall(
+        r"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})", sch))
+
+    problems, unmatched = [], []
+    for fp in board.footprints:
+        if fp.ref.startswith("H"):
+            continue                    # mechanical, no schematic symbol
+        node_path = _first(fp.node, "path")
+        if node_path is None or len(node_path) < 2:
+            unmatched.append(f"{fp.ref} (no path)")
+            continue
+        segs = [s for s in str(node_path[1]).strip("/").split("/") if s]
+        if not segs or not all(s in known for s in segs):
+            unmatched.append(f"{fp.ref} ({node_path[1]})")
+
+    total = len([f for f in board.footprints if not f.ref.startswith("H")])
+    if unmatched:
+        rate = 100.0 * (total - len(unmatched)) / max(total, 1)
+        problems.append(
+            f"schematic linkage is {rate:.1f}%, not 100%: "
+            f"{len(unmatched)} footprint(s) do not resolve to a schematic "
+            f"symbol — {unmatched[:6]}. Update PCB from Schematic will ADD a "
+            f"fresh copy of each and orphan the placed one.")
+    return problems
+
+
+def check_update_pcb_noop(board):
+    """Opening the board and pressing "Update PCB from Schematic" must do nothing.
+
+    The board is an artefact of ``main.py``, exactly like the schematic. If
+    KiCad rewrites it on open, then every DRC result taken afterwards
+    describes a board no generator in this repository wrote — which is how
+    four rounds of review were spent on a board whose 110 footprints KiCad had
+    silently replaced.
+
+    The comparison lives in validation/update_pcb_noop.py, which mirrors
+    ``BOARD_NETLIST_UPDATER`` line by line and is calibrated against the
+    reviewer's captured KiCad 10.0.5 output before it is trusted.
+    """
+    from validation.update_pcb_noop import dry_run, summarise
+    actions = dry_run(board.path)
+    if not actions:
+        return []
+    counts = summarise(actions)
+    head = "; ".join(f"{k}={v}" for k, v in sorted(counts.items()))
+    return [f"KiCad would make {len(actions)} change(s) on Update PCB from "
+            f"Schematic ({head}). The board and the schematic disagree, so "
+            f"any DRC run on this board measures something else. First "
+            f"examples: " + " | ".join(str(a) for a in actions[:4])]
+
+
+def check_update_pcb_calibration(_board):
+    """The no-op checker must still reproduce KiCad 10.0.5's own numbers."""
+    from validation.update_pcb_noop import self_test
+    return self_test(verbose=False)
+
+
 def check_board_parity(board):
     """The board must match the circuit that main.py builds right now.
 
@@ -675,9 +939,15 @@ def check_board_parity(board):
     import main as project_main
     _n, _parts, circuit = project_main.build()
 
+    from generators.schematic import unconnected_pads
     want_nets = {n.name for n in circuit.get_nets() if n.name != "__NOCONNECT"}
+    # The board also carries one synthetic net per open pin, because KiCad
+    # creates exactly those and comparing without them would call a correct
+    # board stale.
+    want_nets |= {n for pads in unconnected_pads(circuit).values()
+                  for n in pads.values()}
     want_refs = {p.ref for p in circuit.parts if (p.footprint or "").strip()}
-    have_nets = set(board.nets)
+    have_nets = {_design_net_name(n) for n in board.nets}
     # Mounting holes are board-only mechanical parts with no schematic symbol.
     have_refs = {fp.ref for fp in board.footprints
                  if not fp.ref.startswith("H")}
@@ -984,11 +1254,23 @@ def run_drc_check(board_path=BOARD_FILE, run_kicad=True):
     record("fab_conformance", check_against_fab())
     record("dru_parses", check_dru_parses())
     record("schema_version", check_schema_version(board))
+    record("schematic_linkage", check_schematic_linkage(board))
     record("board_parity", check_board_parity(board))
+    record("update_pcb_noop", check_update_pcb_noop(board))
+    record("update_pcb_calibration", check_update_pcb_calibration(board))
     record("netclass_coverage", check_netclass_coverage(board))
     record("rule_satisfiability", check_rule_satisfiability(board))
     record("hole_spacing", check_hole_spacing(board))
+    record("courtyards_defined", check_courtyards_defined(board))
     record("courtyard_overlap", check_courtyard_overlap(board))
+    silk_problems, silk_unverified = check_silkscreen(board)
+    record("silkscreen", silk_problems)
+    if silk_unverified:
+        # A third state, deliberately. Not PASS - this checker cannot prove it
+        # would catch what KiCad catches. Not FAIL either - there is no known
+        # defect. UNVERIFIED, stated loudly, is the honest answer.
+        results["silkscreen"]["status"] = "UNVERIFIED"
+        results["silkscreen"]["reason"] = silk_unverified
     record("edge_clearance", check_edge_clearance(board, FAB["edge_clearance"]))
 
     split = check_ground_split(board)
@@ -1079,7 +1361,7 @@ def main(argv=None):
           f"tracks {report['tracks']}   zones {', '.join(report['zones'])}")
     print()
     for name, res in report["checks"].items():
-        print(f"  {res['status']:<8}{name}")
+        print(f"  {res['status']:<11}{name}")
         if res.get("reason"):
             print(f"          {res['reason']}")
     drc = report["checks"]["kicad_drc"]
@@ -1091,7 +1373,9 @@ def main(argv=None):
     if drc["status"] == "SKIPPED":
         print("  DRC WAS NOT RUN. This is not a pass. The board's DRC state is")
         print("  UNKNOWN in this environment — see the reason above, and run")
-        print("  DRC in KiCad 8 or later before believing anything about it.")
+        print("  DRC in KiCad 10 before believing anything about it — the")
+        print("  board carries a footprint (units ...) block KiCad 9 cannot")
+        print("  parse; see check_schema_version.")
     else:
         print(f"  DRC ran with {drc.get('ran_with', 'kicad-cli')}")
         print(f"  KiCad reported {drc['routing_violations']} "

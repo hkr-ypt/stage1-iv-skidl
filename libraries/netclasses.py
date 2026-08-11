@@ -261,6 +261,19 @@ def _net_to_class():
 NET_TO_CLASS = _net_to_class()
 
 
+# KiCad's own name for a net with exactly one pad on it, created for every
+# schematic pin that drives nothing (see generators/schematic.py,
+# unconnected_net_name). These are not a design decision to be justified: they
+# carry no current between two points, they can never be routed, and KiCad
+# itself leaves them in Default. Exempting them is not "letting a net inherit a
+# default" — the rule below still applies to every net the design names.
+UNCONNECTED_PREFIX = "unconnected-("
+
+
+def is_unconnected_net(name):
+    return name.startswith(UNCONNECTED_PREFIX) and name.endswith(")")
+
+
 def classify(net_names):
     """Map every net name to its class, or raise naming the offenders.
 
@@ -268,14 +281,15 @@ def classify(net_names):
     hard failure: silently defaulting is how a 30 V rail ends up routed at the
     clearance of a 3.3 V signal.
     """
-    unknown = sorted(n for n in net_names if n not in NET_TO_CLASS)
+    unknown = sorted(n for n in net_names
+                     if n not in NET_TO_CLASS and not is_unconnected_net(n))
     if unknown:
         raise UnclassifiedNet(
             f"{len(unknown)} net(s) have no netclass: {unknown}\n"
             f"Every net must be classified in libraries/netclasses.py with a "
             f"written derivation for its clearance and track width. Decide "
             f"what the net carries; do not let it inherit a default.")
-    return {n: NET_TO_CLASS[n] for n in net_names}
+    return {n: NET_TO_CLASS.get(n, "Default") for n in net_names}
 
 
 def check_against_fab():
