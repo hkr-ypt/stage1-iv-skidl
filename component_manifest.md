@@ -73,9 +73,9 @@ Total components: **118**
 | R1 | 10.0k 0.1% | generic | Device:R | Resistor_SMD:R_0603_1608Metric | 3 DAC/Sweep | OK — pin numbers read from Device.kicad_sym:104590 |
 | R2 | 10.0k 0.1% | generic | Device:R | Resistor_SMD:R_0603_1608Metric | 3 DAC/Sweep | OK — pin numbers read from Device.kicad_sym:104590 |
 | R3 | 2.49k 0.1% | generic | Device:R | Resistor_SMD:R_0603_1608Metric | 3 DAC/Sweep | OK — pin numbers read from Device.kicad_sym:104590 |
-| R4 | 10.0k 0.1% | generic | Device:R | Resistor_SMD:R_0603_1608Metric | 3 DAC/Sweep | OK — pin numbers read from Device.kicad_sym:104590 |
+| R4 | 20.0k 0.1% | generic | Device:R | Resistor_SMD:R_0603_1608Metric | 3 DAC/Sweep | OK — pin numbers read from Device.kicad_sym:104590 |
 | R5 | 2.49k 0.1% | generic | Device:R | Resistor_SMD:R_0603_1608Metric | 3 DAC/Sweep | OK — pin numbers read from Device.kicad_sym:104590 |
-| R6 | 10.0k 0.1% | generic | Device:R | Resistor_SMD:R_0603_1608Metric | 3 DAC/Sweep | OK — pin numbers read from Device.kicad_sym:104590 |
+| R6 | 20.0k 0.1% | generic | Device:R | Resistor_SMD:R_0603_1608Metric | 3 DAC/Sweep | OK — pin numbers read from Device.kicad_sym:104590 |
 | R7 | 1.43M | generic | Device:R | Resistor_SMD:R_1206_3216Metric | 4 Power Buffer | OK — pin numbers read from Device.kicad_sym:104590 |
 | R8 | 10k | generic | Device:R | Resistor_SMD:R_0603_1608Metric | 4 Power Buffer | OK — pin numbers read from Device.kicad_sym:104590 |
 | R9 | 10R | generic | Device:R | Resistor_SMD:R_1206_3216Metric | 4 Power Buffer | OK — pin numbers read from Device.kicad_sym:104590 |
@@ -83,7 +83,7 @@ Total components: **118**
 | R11 | 13.0k | generic | Device:R | Resistor_SMD:R_0603_1608Metric | 5 Current Sense | OK — pin numbers read from Device.kicad_sym:104590 |
 | R12 | 1.0k | generic | Device:R | Resistor_SMD:R_0603_1608Metric | 6 Voltage Sense | OK — pin numbers read from Device.kicad_sym:104590 |
 | R13 | 1.0k | generic | Device:R | Resistor_SMD:R_0603_1608Metric | 6 Voltage Sense | OK — pin numbers read from Device.kicad_sym:104590 |
-| R14 | 49.9k | generic | Device:R | Resistor_SMD:R_0603_1608Metric | 6 Voltage Sense | OK — pin numbers read from Device.kicad_sym:104590 |
+| R14 | DNP (G=1) | generic | Device:R | Resistor_SMD:R_0603_1608Metric | 6 Voltage Sense | OK — pin numbers read from Device.kicad_sym:104590 |
 | R15 | 100R | generic | Device:R | Resistor_SMD:R_0603_1608Metric | 7 ADC | OK — pin numbers read from Device.kicad_sym:104590 |
 | R16 | 100R | generic | Device:R | Resistor_SMD:R_0603_1608Metric | 7 ADC | OK — pin numbers read from Device.kicad_sym:104590 |
 | R17 | 100R | generic | Device:R | Resistor_SMD:R_0603_1608Metric | 7 ADC | OK — pin numbers read from Device.kicad_sym:104590 |

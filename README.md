@@ -2,7 +2,7 @@
 
 A complete, **executable** [SKiDL](https://github.com/devbisme/skidl) source
 design for a Stage 1 I–V characterization instrument: a precision bipolar
-**±5 V** voltage-source with 4-wire **Kelvin** sensing, hardware current
+**±10 V** voltage-source with 4-wire **Kelvin** sensing, hardware current
 limiting (~49 mA), defense-in-depth protection, and a **shared 2.500 V
 reference** for ratiometric measurement.
 
@@ -416,12 +416,28 @@ and `manifest.yaml → schematic_assumptions`.
 
 - **Two separate SPI buses** (§C.1) — SPI1→DAC (write-only), SPI2→ADC.
 - **One shared 2.500 V reference** for DAC + ADC (§C.2) — ratiometric accuracy.
-- **±5 V sweep** via `V_SWEEP = (R4/R3)(V_DAC − VREF/2)`, Gain ≈ 4.02 (§C.5);
-  reach ±10 V later by changing R4/R6 (10k→20k) only.
+- **±10.04 V sweep** via `V_SWEEP = (R4/R3)(V_DAC − VREF/2)`, Gain =
+  20.0k/2.49k ≈ 8.03 on a ±1.250 V DAC bracket (§C.5). R4/R6 = 20.0k
+  *brackets* the ±10 V target — an exact ±10.000 V would need a non-standard
+  19.92 kΩ — so firmware leaves the top 0.40% of DAC codes unused. What
+  reaches the **DUT** is less at high current: R30 (100 Ω) + R10 (10 Ω) drop
+  ~5.4 V at the 49 mA limit, leaving ~±4.6 V there; the full ±10.04 V arrives
+  only at low current.
 - **OPA548 native current limit** R7 = 1.43 MΩ → I_LIMIT ≈ 49 mA (§C.4).
 - **In-the-loop isolation resistor** R9 with feedback tapped on its far side
   (§C.6) — which is why the independent Kelvin sense still exists.
-- **4-wire Kelvin** voltage sense with rail-referenced input clamps (§C.6).
+- **4-wire Kelvin** voltage sense with rail-referenced input clamps (§C.6),
+  U7 at **G = 1** (`G = 1 + 50k/RG`, R14 depopulated so RG is open). Three
+  ranges here, deliberately *not* collapsed into one number:
+  - *physical* Kelvin voltage at J5/J6 — ±10.04 V, falling to ~±4.6 V at 49 mA;
+  - *INA128 capability* — ~±13 V differential at G = 1 on the ±15 V rails,
+    never the binding limit;
+  - *measurable* — the ADS1256 has AIN3 **and** VREFN on AGND with AVDD = +5 V,
+    so its window is `±2·VREF/PGA = ±5.000 V` floored by an `AGND − 0.1 V`
+    absolute input limit, giving **0 … +5.00 V, unipolar**.
+
+  No value of R14 changes that: G cannot go below 1, and the measurement zero
+  is pinned at AGND. See [`blocks/voltage_sense.py`](blocks/voltage_sense.py).
 - **Star ground** — AGND/DGND meet only at R31 (§C.7).
 - **Defense in depth** — ILIM → PTC fuse → series R → TVS (§C.9).
 
