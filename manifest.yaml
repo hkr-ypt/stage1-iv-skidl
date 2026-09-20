@@ -9,7 +9,7 @@
 project:
   name: Stage 1 I-V Characterization System
   description: >
-    Precision bipolar +/-5 V voltage-source I-V characterization instrument with
+    Precision bipolar +/-10 V voltage-source I-V characterization instrument with
     4-wire Kelvin sensing, hardware current limiting, defense-in-depth
     protection, and a shared 2.500 V reference for ratiometric measurement.
   source_spec: Stage1_IV_System_Design.md
@@ -113,7 +113,7 @@ blocks:
     name: Voltage Sensing (4-Wire Kelvin)
     file: blocks/voltage_sense.py
     fn: create_voltage_sense_block
-    key_parts: [U7 INA128P G=2.0, D1-D4 clamps]
+    key_parts: [U7 INA128P G=1.0 with R14 DNP, D1-D4 clamps]
   - sheet: 7
     name: ADC
     file: blocks/adc.py
@@ -451,6 +451,26 @@ assumptions:
   - Bare STM32F411RET6 (not a Nucleo) with own SWD/USB/crystal/reset.
   - Bench supply provides +15V/-15V/+5V raw rails.
   - OPA548 native ILIM used instead of a discrete comparator.
-  - Sweep range +/-5 V (reach +/-10 V later via R4/R6 10k->20k).
+  - >
+    Sweep range +/-10.04 V. V_SWEEP = (R4/R3)*(V_DAC - VREF/2) with
+    R4 = R6 = 20.0k and R3 = R5 = 2.49k, i.e. gain 20.0k/2.49k = 8.0321 on a
+    +/-1.250 V DAC bracket. 20.0k BRACKETS the +/-10 V target; an exact
+    +/-10.000 V would need a non-standard 19.92k, so firmware leaves the top
+    0.40% of DAC codes unused.
+  - >
+    DUT compliance is NOT the sweep range at high current. R30 (100R) plus
+    R10 (10R) drop ~5.4 V at the 49 mA ILIM, leaving ~+/-4.6 V across the DUT
+    there; the full +/-10.04 V reaches the DUT only at low current.
+  - >
+    Measurable Kelvin range 0 .. +5.00 V, and UNIPOLAR (U7 at G = 1, R14
+    DNP). Three distinct limits sit on this path, not one. The DUT can
+    physically sit at +/-10.04 V. The INA128 would pass ~+/-13 V differential
+    at G = 1 on +/-15VA. But the ADS1256 has AIN3 and VREFN both on AGND with
+    AVDD = +5VA, so its window is +/-2*VREF/PGA = +/-5.000 V floored at
+    AGND - 0.1 V. The ADC wiring, not the amplifier, is the limiting stage.
+  - >
+    No R14 value makes the Kelvin measurement bipolar (the INA128 gain floor
+    is G = 1) or reaches +/-10 V (that needs an overall gain of 0.25 and U7's
+    REF off AGND). Both are part/net changes, not value changes.
   - Current limit ~= 49 mA (R7 = 1.43 M).
   - E/S MCU control of OPA548 deferred (needs level shifting) — tied enabled.

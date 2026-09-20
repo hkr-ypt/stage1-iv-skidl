@@ -9,9 +9,29 @@ the dual OPA2277:
     U3B : 4-resistor difference amplifier
 
         V_SWEEP = (R4/R3) * (V_DAC - VREF_HALF)
-                = (10.0k / 2.49k) * (V_DAC - 1.25V)   ->  +/-5.02 V
+                = (20.0k / 2.49k) * (V_DAC - 1.25V)   ->  +/-10.04 V
 
-To reach the +/-10 V goal later, change R4/R6 10.0k -> 20.0k only (spec §C.5).
+V_DAC spans 0..2.500 V, so (V_DAC - 1.25V) spans +/-1.250 V and the gain
+20.0k/2.49k = 8.0321 puts V_SWEEP at +/-10.040 V (spec §C.5).
+
+R4 = R6 = 20.0k BRACKETS the +/-10 V target rather than landing on it: an exact
++/-10.000 V needs 8.000 * 2.49k = 19.92k, which is in no standard series, and
+the nearest value below it (19.8k, E192) reaches only +/-9.94 V and so could
+never get to 10 V at all. 20.0k is E96 at the same 0.1% grade as R3/R5, and
+firmware simply leaves the top 0.40% of the DAC's codes unused.
+
+U5 headroom for that range (OPA548 on +/-15VA, Sheet 4). U5's feedback is taken
+past R9, so its OUT pin must reach V_SWEEP + I_LIM*R9 = 10.040 + 0.04935*10 =
+10.53 V, and its "+IN" sits at V_SWEEP = 10.04 V. SBOS070 guarantees, already
+at I_O = 0.6 A (12x this design's 49 mA limit):
+
+    output swing    (V+)-2.4 = +12.6 V  vs +10.53 V needed  ->  2.07 V spare
+                    (V-)+1.3 = -13.7 V  vs -10.53 V needed  ->  3.17 V spare
+    input com-mode  (V+)-3.0 = +12.0 V  vs +10.04 V on +IN  ->  1.96 V spare
+
+so the rails deliver +/-10.04 V with margin. D5 (SMBJ15CA, 15 V standoff,
+Sheet 8) still stands off above it and does not clip it.
+
 Channel B (VOUTB) is reserved/unpopulated.
 """
 
@@ -30,8 +50,8 @@ def create_dac_block(n):
     R2 = R()(ref="R2", tag="R2", value="10.0k 0.1%")
     R3 = R()(ref="R3", tag="R3", value="2.49k 0.1%")
     R5 = R()(ref="R5", tag="R5", value="2.49k 0.1%")
-    R4 = R()(ref="R4", tag="R4", value="10.0k 0.1%")
-    R6 = R()(ref="R6", tag="R6", value="10.0k 0.1%")
+    R4 = R()(ref="R4", tag="R4", value="20.0k 0.1%")
+    R6 = R()(ref="R6", tag="R6", value="20.0k 0.1%")
     TP1 = TestPoint()(ref="TP1", tag="TP1", value="V_SWEEP")
 
     # ---- DAC power + SPI1 (write-only) ----

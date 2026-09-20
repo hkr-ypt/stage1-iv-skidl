@@ -2265,7 +2265,7 @@
 				)
 			)
 		)
-		(property "Value" "10.0k 0.1%"
+		(property "Value" "20.0k 0.1%"
 			(at 0 1.43 0)
 			(layer "F.Fab")
 			(effects
@@ -2639,7 +2639,7 @@
 				)
 			)
 		)
-		(property "Value" "10.0k 0.1%"
+		(property "Value" "20.0k 0.1%"
 			(at 0 1.43 0)
 			(layer "F.Fab")
 			(effects
@@ -9574,7 +9574,7 @@
 				)
 			)
 		)
-		(property "Value" "49.9k"
+		(property "Value" "DNP (G=1)"
 			(at 0 1.43 0)
 			(layer "F.Fab")
 			(effects

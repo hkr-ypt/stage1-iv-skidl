@@ -9,7 +9,14 @@ Defense-in-depth on the FORCE+ path, read in order (spec §C.9):
 Each stage covers a failure mode the previous one does not: OPA548's active
 ILIM (Sheet 4) is fast/primary; F1 is the slow backstop if ILIM fails; R30 is a
 passive dead-short limiter; D5 (15 V standoff) absorbs transients without
-clipping legitimate +/-5 V (up to ~+/-11 V compliance) excursions.
+clipping legitimate +/-10.04 V sweep excursions (Sheet 3).
+
+R30 also costs DUT compliance, and more so now that the sweep reaches
++/-10.04 V: at the 49 mA ILIM it drops 4.94 V and R10 (Sheet 5) another
+0.49 V, so what stands across the DUT at full current is only ~+/-4.6 V (less
+again by F1's own resistance). At the micro- and milliamp currents where diode
+reverse leakage and the sub-threshold knee are characterised, that drop is
+millivolts and essentially the whole +/-10.04 V reaches the DUT.
 
 DUT CONNECTOR — FOUR SEPARATE JACKS
 -----------------------------------

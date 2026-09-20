@@ -300,7 +300,7 @@
   (symbol (lib_id "stage1_iv:R") (at 213.36 20.32 0) (unit 1) (in_bom yes) (on_board yes) (dnp no)
     (uuid ba25114c-ca93-56eb-a976-d93aa6937f16)
     (property "Reference" "R14" (at 209.55 15.24 0) (effects (font (size 1.27 1.27)) (justify left)))
-    (property "Value" "49.9k" (at 209.55 25.4 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "DNP (G=1)" (at 209.55 25.4 0) (effects (font (size 1.27 1.27)) (justify left)))
     (property "Pins_Verified" "RESOLVED" (at 209.55 27.94 0) (effects (font (size 1.27 1.27)) (justify left)))
     (property "Footprint" "Resistor_SMD:R_0603_1608Metric" (at 213.36 20.32 0) (effects (font (size 1.27 1.27)) hide))
     (property "Datasheet" "" (at 213.36 20.32 0) (effects (font (size 1.27 1.27)) hide))
