@@ -1,0 +1,43 @@
+(version 1)
+
+# GENERATED FILE - do not edit by hand.
+# Regenerate with `python3 tools/gen_project_config.py`; verify with
+# `python3 tools/gen_project_config.py --check`.
+#
+# WHY THIS FILE EXISTS
+# KiCad enforces the larger of two nets' netclass clearances between
+# their pads. For two pads of the same fine-pitch package that is a
+# constraint the layout cannot satisfy: the spacing is a property of
+# the part, not of the board. The references below are exactly the
+# ones affected, each with the gap measured from its footprint file
+# by tools/measure_pad_gaps.py.
+#
+# This narrows a constraint in a scope where it is unsatisfiable. It
+# does NOT exclude a rule or downgrade a severity: clearance is still
+# checked on these pads, at 0.13 mm, and pad-to-track, track-to-track and
+# pad-to-pad between different footprints are untouched.
+
+# J3  Connector_USB:USB_C_Receptacle_GCT_USB4085
+#   pads A5/A6 are 0.150 mm apart; netclass would require 0.25 mm
+(rule "intra_footprint_clearance_J3"
+  (constraint clearance (min 0.13mm))
+  (condition "A.Type == 'Pad' && B.Type == 'Pad' && A.memberOfFootprint('J3') && B.memberOfFootprint('J3')"))
+
+# U2  Package_SO:VSSOP-8_3x3mm_P0.65mm
+#   pads 1/2 are 0.150 mm apart; netclass would require 0.20 mm
+(rule "intra_footprint_clearance_U2"
+  (constraint clearance (min 0.13mm))
+  (condition "A.Type == 'Pad' && B.Type == 'Pad' && A.memberOfFootprint('U2') && B.memberOfFootprint('U2')"))
+
+# U4  Package_SO:VSSOP-8_3x3mm_P0.65mm
+#   pads 1/2 are 0.150 mm apart; netclass would require 0.25 mm
+(rule "intra_footprint_clearance_U4"
+  (constraint clearance (min 0.13mm))
+  (condition "A.Type == 'Pad' && B.Type == 'Pad' && A.memberOfFootprint('U4') && B.memberOfFootprint('U4')"))
+
+# U9  Package_QFP:LQFP-64_10x10mm_P0.5mm
+#   pads 6/7 are 0.200 mm apart; netclass would require 0.25 mm
+(rule "intra_footprint_clearance_U9"
+  (constraint clearance (min 0.13mm))
+  (condition "A.Type == 'Pad' && B.Type == 'Pad' && A.memberOfFootprint('U9') && B.memberOfFootprint('U9')"))
+
