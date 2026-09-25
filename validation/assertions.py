@@ -3,7 +3,8 @@ assertions.py — Custom connectivity assertions for the Stage 1 I–V system.
 =========================================================================
 
 These encode the design intent that ERC cannot: topology, reference sharing,
-Kelvin independence, bus separation, and star grounding. Each check works on
+Kelvin independence, bus separation, star grounding, and the bipolar
+measurement zero (both INA128 REF pins and the ADC's AINCOM on VREF_2V5). Each check works on
 the actual net membership of the built circuit and returns (passed, message).
 
 ``run_assertions(nets, circuit)`` runs them all, prints a report, and raises
@@ -196,6 +197,81 @@ def a_usb_c_pads_fully_connected(n, circuit):
             f"SHIELD={sorted(num for num, _ in shield)} connected")
 
 
+def _pin(circuit, ref, pin_name):
+    part = next((p for p in circuit.parts if p.ref == ref), None)
+    return None if part is None else part[pin_name]
+
+
+def _net_of(pin):
+    nets = [] if pin is None else list(pin.get_nets())
+    return nets[0] if nets else None
+
+
+def a_bipolar_measurement_zero(n, circuit):
+    """Both INA128 outputs, and the ADC's negative input, share one mid-scale.
+
+    The ADS1256 runs from a single +5 V supply, so each input pin must stay
+    inside AGND - 0.1 V .. AVDD + 0.1 V. With U6/U7 REF on AGND every negative
+    current or voltage fell below that floor. REF on VREF_2V5 moves zero to
+    2.500 V, and AINCOM on the SAME net makes the conversion AIN - AINCOM,
+    in which the 2.5 V cancels and the sign survives. All three have to move
+    together: any one left on AGND puts a 2.5 V offset (or the old clipping)
+    back into a channel.
+    """
+    want = [("U6", "REF"), ("U7", "REF"), ("U8", "AINCOM")]
+    off = [f"{r}.{p}" for r, p in want if not _has(n.VREF_2V5, r, p)]
+    on_agnd = [f"{r}.{p}" for r, p in want if _has(n.AGND, r, p)]
+    ok = not off and not on_agnd
+    return ("Measurement zero: U6.REF, U7.REF and ADC AINCOM all on VREF_2V5",
+            ok, f"not on VREF_2V5={off or 'none'}, still on AGND="
+                f"{on_agnd or 'none'}")
+
+
+def a_kelvin_attenuator(n, circuit):
+    """SENSE+/- reach U7 only through two single-ended dividers to AGND.
+
+    Each U7 input net must hold exactly the INA128 pin, one series resistor
+    from its SENSE jack and one shunt resistor to AGND. A resistor straight
+    across the two inputs would pass V_K/R through the DUT's return and the
+    R10 shunt and corrupt the current reading, so its absence is checked too.
+    """
+    problems = []
+    legs = (("+IN", n.SENSE_PLUS, "SENSE+"), ("-IN", n.SENSE_MINUS, "SENSE-"))
+    amp_nets = []
+    for pin_name, sense_net, label in legs:
+        net = _net_of(_pin(circuit, "U7", pin_name))
+        if net is None:
+            problems.append(f"U7.{pin_name} is not connected")
+            continue
+        amp_nets.append(net)
+        others = [p for p in net.get_pins() if p.part.ref != "U7"]
+        series, shunt, stray = [], [], []
+        for p in others:
+            if p.part.ref[0] != "R" or len(p.part.pins) != 2:
+                stray.append(p.part.ref)
+                continue
+            far = next(q for q in p.part.pins if q is not p)
+            if _has(sense_net, p.part.ref, far.name):
+                series.append(p.part.ref)
+            elif _has(n.AGND, p.part.ref, far.name):
+                shunt.append(p.part.ref)
+            else:
+                stray.append(p.part.ref)
+        if len(series) != 1 or len(shunt) != 1 or stray:
+            problems.append(f"U7.{pin_name}: series from {label}={series}, "
+                            f"shunt to AGND={shunt}, other={stray}")
+    if len(amp_nets) == 2:
+        across = ({p.part.ref for p in amp_nets[0].get_pins()}
+                  & {p.part.ref for p in amp_nets[1].get_pins()}) - {"U7"}
+        if across:
+            problems.append(f"part(s) across U7's inputs: {sorted(across)}")
+    ok = not problems
+    return ("Kelvin attenuator: SENSE+/- -> matched dividers to AGND -> U7",
+            ok, "; ".join(problems) if problems else
+            "U7.+IN and U7.-IN each fed by one series R from its SENSE jack "
+            "and one shunt R to AGND, nothing across the inputs")
+
+
 ALL_ASSERTIONS = [
     a_shared_reference,
     a_force_path_chain,
@@ -206,6 +282,8 @@ ALL_ASSERTIONS = [
     a_star_ground,
     a_net_manifest,
     a_usb_c_pads_fully_connected,
+    a_bipolar_measurement_zero,
+    a_kelvin_attenuator,
 ]
 
 

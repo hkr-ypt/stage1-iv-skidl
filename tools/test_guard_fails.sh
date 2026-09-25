@@ -30,6 +30,7 @@ reset_copy() {
 #   gate = structural : validation/footprint_check.py must fail
 #   gate = erc        : validation/erc.py must fail
 #   gate = board      : validation/drc_check.py must fail
+#   gate = range      : validation/measurement_range.py must fail
 # main.py must fail in EVERY case — it is the thing a user actually runs.
 #
 # `board` injections run against the board that main.py already emitted, so the
@@ -48,6 +49,7 @@ expect_fail() {
         structural) checker="validation/footprint_check.py" ;;
         erc)        checker="validation/erc.py" ;;
         board)      checker="validation/drc_check.py" ;;
+        range)      checker="validation/measurement_range.py" ;;
         *) echo "  [BUG] unknown gate $gate"; FAILURES=$((FAILURES + 1)); return ;;
     esac
 
@@ -67,7 +69,7 @@ expect_fail() {
         echo "  [CAUGHT] $name"
         echo "           $checker=$gate_rc, main.py=$main_rc"
         grep -m2 -E "\[ERROR\]|\[ERC WARNING\]|ERC FAILED|PWR_FLAG invariant|\
-board defect|netclass|straddle|overlap" \
+board defect|netclass|straddle|overlap|MEASUREMENT RANGE|channel:" \
             "$WORK/gate.log" | sed 's/^/            /' || true
     else
         echo "  [MISSED] $name  ($checker=$gate_rc, main.py=$main_rc)"
@@ -279,6 +281,26 @@ p = pathlib.Path("validation/update_pcb_noop.py"); s = p.read_text()
 old = "        if fp.sheetname != comp[\"sheetname\"]:"
 assert old in s
 p.write_text(s.replace(old, "        if False:"))
+'
+
+# --- the bipolar measurement --------------------------------------------------
+
+# 20. the ADC's negative input back on AGND: the 2.5 V level shift no longer
+#     cancels, and half of every channel's range is back below the ADC floor
+expect_fail range "ADC AINCOM returned to AGND (measurement zero lost)" '
+import pathlib
+p = pathlib.Path("blocks/adc.py"); s = p.read_text()
+assert "n.VREF_2V5 += U8[\"AINCOM\"]" in s
+p.write_text(s.replace("n.VREF_2V5 += U8[\"AINCOM\"]", "n.AGND += U8[\"AINCOM\"]"))
+'
+
+# 21. the current gain sized to the programmed limit instead of the physical
+#     bound: the old R11 = 13.0k over-ranges the ADC well inside the sweep
+expect_fail range "current-channel gain too high for the reachable current" '
+import pathlib
+p = pathlib.Path("blocks/current_sense.py"); s = p.read_text()
+assert "value=\"35.7k 0.1%\"" in s
+p.write_text(s.replace("value=\"35.7k 0.1%\"", "value=\"13.0k\""))
 '
 
 echo "----------------------------------------------------------------------"

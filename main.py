@@ -41,7 +41,10 @@ from blocks.adc import create_adc_block
 from blocks.protection import create_protection_block
 
 from validation.erc import run_erc
-from validation.assertions import run_assertions
+from validation.assertions import run_assertions, ALL_ASSERTIONS
+from validation.measurement_range import (
+    run_measurement_range, MeasurementRangeError,
+)
 from validation.footprint_check import run_footprint_check, FootprintCheckError
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "tools"))
@@ -99,10 +102,12 @@ SHEET_OF = {
     "4 Power Buffer": ["U5", "R7", "R8", "C14", "C15", "C16", "C17", "C18", "R9",
                        "C19", "TP2"],
     "5 Current Sense": ["R10", "U6", "R11", "C20", "C21", "TP3", "TP4"],
-    "6 Voltage Sense": ["U7", "R12", "R13", "R14", "D1", "D2", "D3", "D4", "C22",
-                        "C23", "TP5", "TP6", "TP7"],
+    # R32/R33 are the bottom arms of the Kelvin attenuator (R12/R13 on top).
+    "6 Voltage Sense": ["U7", "R12", "R13", "R14", "R32", "R33", "D1", "D2",
+                        "D3", "D4", "C22", "C23", "TP5", "TP6", "TP7"],
+    # C44 bypasses VREF_2V5 at U8 VREFP/AINCOM.
     "7 ADC": ["U8", "Y1", "C26", "C27", "C28", "C29", "C30", "R19", "R20", "R15",
-              "R16", "R17", "R18", "C24", "C25", "TP8"],
+              "R16", "R17", "R18", "C24", "C25", "TP8", "C44"],
     # J4..J7 are the four separate single-pin DUT banana jacks
     # (FORCE+, SENSE+, SENSE-, FORCE-) — see blocks/protection.py.
     "8 Protection/DUT": ["F1", "R30", "D5", "J4", "J5", "J6", "J7"],
@@ -359,6 +364,12 @@ def main():
         print(f"\nERC: FAIL\n{exc}", file=sys.stderr)
         return 1
     run_assertions(n, circuit)
+    n_assert = len(ALL_ASSERTIONS)
+    try:
+        ranges = run_measurement_range(circuit)
+    except MeasurementRangeError as exc:
+        print(f"\nMEASUREMENT RANGE: FAIL\n{exc}", file=sys.stderr)
+        return 1
 
     print("\n" + "=" * 70)
     print("SUMMARY")
@@ -392,7 +403,10 @@ def main():
     else:
         print("  Structural check ... SKIPPED — no KiCad libraries; identifiers")
         print("                       and pads were NOT verified")
-    print("  Assertions ......... 9/9 connectivity assertions hold")
+    print(f"  Assertions ......... {n_assert}/{n_assert} connectivity "
+          f"assertions hold")
+    print(f"  Measurement ........ V {ranges['v_text']}, "
+          f"I {ranges['i_text']} (bipolar)")
     print("\n  NOTE: SKiDL ERC and KiCad ERC are different checks with "
           "different coverage.\n        See validation/erc.py — a clean SKiDL "
           "run is not evidence about KiCad ERC.")

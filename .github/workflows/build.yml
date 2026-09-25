@@ -86,6 +86,9 @@ jobs:
       - name: SKiDL ERC gate
         run: python3 validation/erc.py
 
+      - name: Bipolar measurement covers every reachable operating point
+        run: python3 validation/measurement_range.py
+
       - name: Schematic <-> netlist consistency
         run: python3 validation/schematic_check.py
 
