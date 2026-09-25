@@ -10,8 +10,9 @@ project:
   name: Stage 1 I-V Characterization System
   description: >
     Precision bipolar +/-10 V voltage-source I-V characterization instrument with
-    4-wire Kelvin sensing, hardware current limiting, defense-in-depth
-    protection, and a shared 2.500 V reference for ratiometric measurement.
+    4-wire Kelvin sensing, bipolar voltage and current measurement over the
+    whole sweep, hardware current limiting, defense-in-depth protection, and a
+    shared 2.500 V reference for ratiometric measurement.
   source_spec: Stage1_IV_System_Design.md
   tool: SKiDL 2.2.3 (KiCad netlist backend)
   entry_point: main.py
@@ -24,7 +25,7 @@ project:
                        protection.kicad_sch]
     component_manifest: component_manifest.md
   totals:
-    components: 107
+    components: 113        # physical parts; plus 8 schematic-only PWR_FLAGs
     nets: 66
     sheets: 8
 
@@ -108,17 +109,19 @@ blocks:
     name: Current Sensing
     file: blocks/current_sense.py
     fn: create_current_sense_block
-    key_parts: [R10 shunt, U6 INA128P G=4.85]
+    key_parts: [R10 shunt, U6 INA128P G=2.40 (R11 35.7k), REF on VREF_2V5]
   - sheet: 6
     name: Voltage Sensing (4-Wire Kelvin)
     file: blocks/voltage_sense.py
     fn: create_voltage_sense_block
-    key_parts: [U7 INA128P G=1.0 with R14 DNP, D1-D4 clamps]
+    key_parts: [U7 INA128P G=1.0 with R14 DNP, R12/R32 + R13/R33 attenuator
+                k=0.1992, REF on VREF_2V5, D1-D4 clamps]
   - sheet: 7
     name: ADC
     file: blocks/adc.py
     fn: create_adc_block
-    key_parts: [U8 ADS1256, Y1 7.6800MHz, RC filters]
+    key_parts: [U8 ADS1256 (AINCOM on VREF_2V5), Y1 7.6800MHz, RC filters,
+                C44 VREF bypass]
   - sheet: 8
     name: Protection & DUT Connector
     file: blocks/protection.py
@@ -264,6 +267,18 @@ added_beyond_source_bom:
     reason: >
       STM32F4 VCAP1 decoupling required by datasheet; absent from source
       component table. Added for electrical completeness.
+  - ref: R32, R33
+    value: 10.0k 0.1%
+    reason: >
+      Bottom arms of the Kelvin attenuator (R12/R13 = 40.2k are the top arms):
+      k = 0.1992 brings the +/-10.04 V sweep inside the ADC window around
+      2.5 V. See docs/bipolar_measurement.md.
+  - ref: C44
+    value: 100nF
+    reason: >
+      VREF_2V5 bypass at the ADS1256, now both VREFP and the AINCOM negative
+      input. Already fitted on the routed board with this reference, value,
+      footprint and nets; added here so the SKiDL source matches it.
 
 # ---------------------------------------------------------------------
 # Net manifest (checked by validation/assertions.py :: a_net_manifest)
@@ -398,14 +413,29 @@ validation:
       - all required manifest nets exist and are populated
       - "USB-C J3: all 4 GND pads on DGND, all 4 VBUS pads on VBUS,
          both D+ pads tied, both D- pads tied, shield connected"
-    result: 9/9 PASS
+      - U6.REF, U7.REF and ADC AINCOM all on VREF_2V5 (bipolar measurement zero)
+      - "Kelvin attenuator: each U7 input = one series R from its SENSE jack +
+         one shunt R to AGND, nothing across the inputs"
+    result: 11/11 PASS
+  measurement_range:
+    module: validation/measurement_range.py
+    checks: >
+      From the live part values: sweep span; the physical current bound
+      V_SWEEP/(R30 + R10) for any passive DUT (independent of the OPA548
+      limit); both channels' transfer functions; the voltage on each ADS1256
+      input at those extremes with worst-case tolerances, against the
+      absolute input window AGND-0.1 .. AVDD+0.1 V (AVDD = 4.75 V) and the
+      PGA = 2 full scale +/-2*VREF/PGA.
+    result: >
+      PASS - V +/-11.78 V and I +/-97.8 mA guaranteed vs +/-10.04 V and
+      +/-91.3 mA reachable; worst-case headroom 334 mV (V), 97 mV (I).
   footprint_check:
     module: validation/footprint_check.py
     checks: [KiCad_Lib resolves to library+symbol, footprint resolves to
              library+footprint, pin numbers subset of pad names, every pad
              netted or allow-listed no-connect, no PLACEHOLDER-REMAP]
     result: >
-      PASS - 110 parts, 356 pads: 307 netted, 49 declared no-connect,
+      PASS - 113 parts, 362 pads: 313 netted, 49 declared no-connect,
       0 unaccounted. Fault injection (tools/test_guard_fails.sh) confirms all
       five checks fail when a real defect is reintroduced.
   schematic_check:
@@ -414,7 +444,8 @@ validation:
              label-class correctness, sheet-pin/hierarchical-label integrity,
              uuid validity+uniqueness, no floating pins / marked no-connects,
              every net >= 2 endpoints]
-    result: PASS (307 connections verified across 8 sheets)
+    result: PASS (321 connections, including the 8 PWR_FLAG pins, verified
+      across 8 sheets)
   update_pcb_noop:
     module: validation/update_pcb_noop.py
     checks: [footprint<->symbol link resolves, pad nets (including the
@@ -433,6 +464,9 @@ validation:
       the second caught net names stored in KiCad's DISPLAY form rather than
       its stored form (EscapeString CTX_NETNAME turns '/' into '{slash}'), a
       difference no log can show because the dialog unescapes before printing.
+      The four per-footprint categories are held to KiCad's ratio (one action
+      per footprint, 110/110 on the captured board), so the check still means
+      the same thing on the 113-footprint board.
       self_test also rejects any injection that changes nothing, so a
       generator that stopped escaping cannot take the model down with it.
   kicad_roundtrip:
@@ -440,7 +474,7 @@ validation:
     checks: [kicad-cli sch export netlist vs stage1_iv.net, symbol/footprint
              identifier resolution]
     result: >
-      PASS - KiCad 7.0.11 reads the same 307 connections in the same 66 nets;
+      PASS - KiCad 7.0.11 reads the same 313 connections in the same 66 nets;
       "symbol not found in library" 15 -> 0, footprint_link_issues 4 -> 0.
 
 # ---------------------------------------------------------------------
@@ -462,15 +496,22 @@ assumptions:
     R10 (10R) drop ~5.4 V at the 49 mA ILIM, leaving ~+/-4.6 V across the DUT
     there; the full +/-10.04 V reaches the DUT only at low current.
   - >
-    Measurable Kelvin range 0 .. +5.00 V, and UNIPOLAR (U7 at G = 1, R14
-    DNP). Three distinct limits sit on this path, not one. The DUT can
-    physically sit at +/-10.04 V. The INA128 would pass ~+/-13 V differential
-    at G = 1 on +/-15VA. But the ADS1256 has AIN3 and VREFN both on AGND with
-    AVDD = +5VA, so its window is +/-2*VREF/PGA = +/-5.000 V floored at
-    AGND - 0.1 V. The ADC wiring, not the amplifier, is the limiting stage.
+    Measurement is BIPOLAR with its zero at mid-scale. U6 REF, U7 REF and the
+    ADS1256 AINCOM are all on VREF_2V5; the ADC reads AIN0 - AINCOM (current)
+    and AIN2 - AINCOM (voltage), so the 2.5 V shift cancels in the conversion
+    and the codes are signed. PGA = 2 (+/-2.500 V) for both channels, input
+    buffer off. The limit that made the old wiring unipolar is the ADS1256's
+    absolute input window, AGND - 0.1 .. AVDD + 0.1 V (SBAS288K): with the
+    zero on AGND every negative reading fell below it.
   - >
-    No R14 value makes the Kelvin measurement bipolar (the INA128 gain floor
-    is G = 1) or reaches +/-10 V (that needs an overall gain of 0.25 and U7's
-    REF off AGND). Both are part/net changes, not value changes.
-  - Current limit ~= 49 mA (R7 = 1.43 M).
+    Measurable Kelvin range +/-11.8 V guaranteed (+/-12.55 V at nominal full
+    scale): two matched dividers to AGND, k = 10.0k/(40.2k + 10.0k) = 0.1992,
+    ahead of U7 at G = 1 (R14 DNP). V_SENSE_OUT = 2.500 V + 0.1992 * V_K.
+    Covers the whole +/-10.04 V source span.
+  - >
+    Measurable current +/-97.8 mA guaranteed: U6 G = 1 + 50k/35.7k = 2.4006,
+    I_SENSE_OUT = 2.500 V + 24.0 V/A * I. Sized to the physical bound
+    10.04 V/(R30 + R10) = 91.3 mA for any passive DUT, because the OPA548
+    limit tolerance is specified only at a 2.5 A setting (SBOS070).
+  - Current limit ~= 49 mA (R7 = 1.43 M), accuracy at this setting unverified.
   - E/S MCU control of OPA548 deferred (needs level shifting) — tied enabled.
