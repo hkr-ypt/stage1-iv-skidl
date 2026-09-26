@@ -4,7 +4,7 @@ compare_routed_board.py — what separates a hand-routed board from the SKiDL de
 ==================================================================================
 
 ``validation/update_pcb_noop.py`` proves the GENERATED board agrees with the
-schematic. The board that gets built is the human-routed one in ``routed/``,
+schematic. The board that gets built is the human-routed one in ``unipolar-routed/``,
 which this repository never regenerates. This tool reports, part by part, what
 would have to change on that board for it to implement the current SKiDL
 circuit — the engineering-change list — without touching the file.
@@ -23,11 +23,11 @@ Reported, in this order:
 
 Usage::
 
-    python3 tools/compare_routed_board.py                  # routed/diodes.kicad_pcb
+    python3 tools/compare_routed_board.py                  # unipolar-routed/diodes.kicad_pcb
     python3 tools/compare_routed_board.py --board other.kicad_pcb
 
 Exit 0 when the board implements the SKiDL netlist exactly, 1 otherwise. It is
-a report, not a CI gate: ``routed/`` legitimately lags the SKiDL source until a
+a report, not a CI gate: ``unipolar-routed/`` legitimately lags the SKiDL source until a
 designer applies the change (see docs/bipolar_measurement.md).
 """
 
@@ -43,7 +43,7 @@ for p in (ROOT, HERE):
 
 from tools.resolve_kicad_libs import parse_sexp          # noqa: E402
 
-DEFAULT_BOARD = os.path.join(ROOT, "routed", "diodes.kicad_pcb")
+from generators.layout import REFERENCE_BOARD as DEFAULT_BOARD  # noqa: E402
 
 
 def _head(node):

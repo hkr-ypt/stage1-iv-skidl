@@ -5,7 +5,7 @@ routed_board_check.py — the board of record, checked.
 ``stage1_iv.kicad_pcb`` is generated from three sources (the SKiDL circuit,
 ``layout/stage1_iv.layout`` and ``layout/bipolar.eco``; see
 generators/routed_pcb.py). Its placement and nearly all of its copper were
-decided by a person, on the board kept in ``routed/``. This module checks the
+decided by a person, on the board kept in ``unipolar-routed/``. This module checks the
 generated board in three layers, and says which ones it could not run.
 
 1. The board is what the sources say, and agrees with the circuit
@@ -32,7 +32,7 @@ generated board in three layers, and says which ones it could not run.
    than KiCad — the courtyard check compares bounding boxes on both sides at
    once, so an SMD part on the back under a DIP on the front "overlaps" it.
    On the human layout they report findings that are properties of that layout
-   (or of the heuristic). Every such finding on ``routed/diodes.kicad_pcb`` is
+   (or of the heuristic). Every such finding on ``unipolar-routed/diodes.kicad_pcb`` is
    listed as pre-existing; the check fails on any finding the original does
    NOT have — that is, on anything the bipolar ECO introduced.
 
@@ -42,7 +42,7 @@ generated board in three layers, and says which ones it could not run.
 
    * **as-built rules** — the netclass and minimums the board was actually
      routed to, as captured in the layout source ``(rules ...)`` from
-     ``routed/diodes.kicad_pro``, plus the repository's scoped rules for the
+     ``unipolar-routed/diodes.kicad_pro``, plus the repository's scoped rules for the
      pads inside U2, U4 and J3 (``stage1_iv.kicad_dru``), with every KiCad
      check on — including clearance, which the routed project had switched
      off. Must be **clean**: 0 errors, 0 unconnected items, and no warning the
@@ -90,7 +90,7 @@ from validation import drc_check as _dc  # noqa: E402
 from libraries.netclasses import check_against_fab, FAB  # noqa: E402
 
 BOARD_FILE = os.path.join(_REPO_ROOT, "stage1_iv.kicad_pcb")
-REFERENCE = os.path.join(_REPO_ROOT, "routed", "diodes.kicad_pcb")
+from generators.layout import REFERENCE_BOARD as REFERENCE  # noqa: E402
 PROJECT = os.path.join(_REPO_ROOT, "stage1_iv.kicad_pro")
 DRU = os.path.join(_REPO_ROOT, "stage1_iv.kicad_dru")
 CACHE_DIR = os.path.join(_REPO_ROOT, "build", "drc_cache")
@@ -408,7 +408,8 @@ def kicad_checks(board_path, reference=REFERENCE):
                                     for u in board_ab["unconnected_items"][:4]))
     if ref_ab_errors:
         problems.append(f"the captured as-built rules do not reproduce the "
-                        f"original board's own DRC result: routed/ has "
+                        f"original board's own DRC result: "
+                        f"{os.path.relpath(reference, _REPO_ROOT)} has "
                         f"{len(ref_ab_errors)} error(s) under them "
                         f"({_counts(ref_ab)}). Re-capture the layout.")
 

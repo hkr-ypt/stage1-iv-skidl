@@ -7,10 +7,10 @@
 # stage1_iv.kicad_pcb. tools/reproduce_reference.py proves this file
 # reproduces the board it was captured from.
 (stage1_iv_layout (version 1)
-  (source "routed/diodes.kicad_pcb")
+  (source "unipolar-routed/diodes.kicad_pcb")
   (general (thickness 1.6) (legacy_teardrops no))
   (paper "A3")
-  (rules (source "routed/diodes.kicad_pro") (min_clearance 0) (min_track_width 0.2) (min_via_diameter 0.5) (min_via_annular_width 0.1) (min_through_hole_diameter 0.3) (min_hole_clearance 0.25) (min_hole_to_hole 0.25) (min_copper_edge_clearance 0.5) (min_connection 0) (min_silk_clearance 0) (min_text_height 0.8) (min_text_thickness 0.08) (netclass "Default" (clearance 0.2) (track_width 0.2) (via_diameter 0.6) (via_drill 0.3)))
+  (rules (source "unipolar-routed/diodes.kicad_pro") (min_clearance 0) (min_track_width 0.2) (min_via_diameter 0.5) (min_via_annular_width 0.1) (min_through_hole_diameter 0.3) (min_hole_clearance 0.25) (min_hole_to_hole 0.25) (min_copper_edge_clearance 0.5) (min_connection 0) (min_silk_clearance 0) (min_text_height 0.8) (min_text_thickness 0.08) (netclass "Default" (clearance 0.2) (track_width 0.2) (via_diameter 0.6) (via_drill 0.3)))
   (setup (pad_to_mask_clearance 0) (allow_soldermask_bridges_in_footprints no) (tenting (front yes) (back yes)) (covering (front no) (back no)) (plugging (front no) (back no)) (capping no) (filling no) (pcbplotparams (layerselection 0x00000000_00000000_000010fc_ffffffff) (plot_on_all_layers_selection 0x00000000_00000000_00000000_00000000) (disableapertmacros no) (usegerberextensions no) (usegerberattributes yes) (usegerberadvancedattributes yes) (creategerberjobfile yes) (dashed_line_dash_ratio 12) (dashed_line_gap_ratio 3) (svgprecision 4) (plotframeref no) (mode 1) (useauxorigin no) (pdf_front_fp_property_popups yes) (pdf_back_fp_property_popups yes) (pdf_metadata yes) (pdf_single_document no) (dxfpolygonmode yes) (dxfimperialunits yes) (dxfusepcbnewfont yes) (psnegative no) (psa4output no) (plot_black_and_white yes) (sketchpadsonfab no) (plotpadnumbers no) (hidednponfab no) (sketchdnponfab yes) (crossoutdnponfab yes) (subtractmaskfromsilk no) (outputformat 1) (mirror no) (drillshape 1) (scaleselection 1) (outputdirectory "")))
   (graphic (gr_rect (start 69.25 32.75) (end 176.5 95) (stroke (width 0.1) (type solid)) (fill no) (layer "Edge.Cuts")))
   (graphic (gr_text "C10" (at 115.25 47.25 0) (layer "F.SilkS") (effects (font (size 1 1) (thickness 0.15)))))

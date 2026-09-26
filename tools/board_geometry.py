@@ -219,7 +219,7 @@ class Board:
 
 
 if __name__ == "__main__":                                  # pragma: no cover
-    b = Board(sys.argv[1] if len(sys.argv) > 1 else
-              os.path.join(ROOT, "routed", "diodes.kicad_pcb"))
+    from generators.layout import REFERENCE_BOARD
+    b = Board(sys.argv[1] if len(sys.argv) > 1 else REFERENCE_BOARD)
     print(f"{len(b.items)} copper items, {len(b.drills)} drills, "
           f"{len(b.courtyards)} courtyards, outline {b.outline.bounds}")

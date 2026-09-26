@@ -189,7 +189,7 @@ def _net_name(net):
 
     KiCad 9 writes ``(net 5 "AGND")`` against a top-level net table; KiCad 10
     writes ``(net "AGND")`` and has no table. The board this repository
-    generates is the former; the human-routed board in routed/ is the latter.
+    generates is the former; the human-routed board in unipolar-routed/ is the latter.
     """
     if net is None or len(net) < 2:
         return ""

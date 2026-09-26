@@ -7,7 +7,7 @@ added. KiCad stores a placed footprint in a specific, partly-local form, and a
 board that stores it any other way is a different board to KiCad's footprint
 comparator and to anyone diffing the file. The rules below were derived from,
 and are checked against, every one of the 113 footprints on the human-routed
-board in ``routed/diodes.kicad_pcb`` (``tools/reproduce_reference.py``):
+board in ``unipolar-routed/diodes.kicad_pcb`` (``tools/reproduce_reference.py``):
 
 ``(at X Y R)`` on the footprint
     ``R`` in (-180, 180], omitted when 0.

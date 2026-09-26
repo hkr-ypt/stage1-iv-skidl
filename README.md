@@ -16,7 +16,7 @@ board. Running it produces a **KiCad netlist** (`stage1_iv.net`), a
 (`stage1_iv.kicad_pcb`), plus a generated component manifest.
 
 > **The board is generated from source and fully routed.** Its placement and
-> copper are the human-routed board's (`routed/`), captured into
+> copper are the human-routed board's (`unipolar-routed/`), captured into
 > [`layout/stage1_iv.layout`](layout/stage1_iv.layout); the bipolar
 > measurement change is applied to it by
 > [`layout/bipolar.eco`](layout/bipolar.eco), a list of add/remove operations
@@ -29,7 +29,7 @@ board. Running it produces a **KiCad netlist** (`stage1_iv.net`), a
 > clearance errors, every one of them present at the same place on the
 > original human routing; the ECO adds none.
 >
-> **`routed/` is the original, unipolar, human-routed reference** and is never
+> **`unipolar-routed/` is the original, unipolar, human-routed reference** and is never
 > modified. `python3 tools/reproduce_reference.py` proves the layout source
 > regenerates it (identical copper, placement and connectivity; identical
 > KiCad DRC and zone fill).
@@ -120,7 +120,7 @@ stage1-iv-skidl/
 │   └── pcb.py                  # footprint prep; bootstrap auto-placer (--autoplace)
 │
 ├── layout/
-│   ├── stage1_iv.layout        # placement + copper, captured from routed/
+│   ├── stage1_iv.layout        # placement + copper, captured from unipolar-routed/
 │   └── bipolar.eco             # the bipolar change: reasoned add/remove ops
 │
 ├── tools/
@@ -133,9 +133,9 @@ stage1-iv-skidl/
 │   ├── gen_project_config.py   # lib tables + board setup from netclasses
 │   ├── vendor_footprints.py    # pin the used footprints into the repository
 │   ├── measure_pad_gaps.py     # measure intrinsic pad gaps from the footprints
-│   ├── compare_routed_board.py # routed/ board vs the SKiDL design (ECO list)
+│   ├── compare_routed_board.py # unipolar-routed/ board vs the SKiDL design (ECO list)
 │   ├── capture_layout.py       # routed board -> layout source (--check)
-│   ├── reproduce_reference.py  # prove the layout regenerates routed/
+│   ├── reproduce_reference.py  # prove the layout regenerates unipolar-routed/
 │   ├── compare_boards.py       # semantic board-vs-board comparison
 │   ├── board_geometry.py       # real-copper geometry (shapely)
 │   ├── eco_route.py            # design an ECO track against real copper
@@ -159,8 +159,8 @@ stage1-iv-skidl/
 │   ├── audit_identifiers_before.md   # pre-fix baseline
 │   └── audit_identifiers_after.md    # post-fix state
 │
-├── routed/                     # ORIGINAL unipolar human-routed KiCad project:
-│                               # the reference, never modified (routed/README.md)
+├── unipolar-routed/            # ORIGINAL unipolar human-routed KiCad project:
+│                               # the reference, never modified (its README.md)
 ├── kicad_libs.json             # explicit KiCad library locations (optional)
 ├── sym-lib-table               # registers libraries/stage1_iv.kicad_sym
 │
