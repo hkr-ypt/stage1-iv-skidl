@@ -3,10 +3,17 @@ drc_check.py — structural checks on the generated board, and real DRC when
 KiCad can run it.
 ==========================================================================
 
-This is the PCB counterpart of ``validation/footprint_check.py``. It reads
-``stage1_iv.kicad_pcb`` — the emitted file, not the in-memory model that
-produced it — and fails on anything that is a *board defect* rather than a
-routing task.
+Two users. It is the full check of the **auto-placed, unrouted bootstrap
+board** (``python3 main.py --autoplace``, written to ``build/autoplace/``), and
+its individual checks are reused by validation/routed_board_check.py for the
+**board of record** — the routed ``stage1_iv.kicad_pcb`` generated from
+``layout/`` — which applies them relative to the original human board and adds
+KiCad DRC under the rules it was routed to. The board reader understands both
+KiCad 9's and KiCad 10's board schema.
+
+This is the PCB counterpart of ``validation/footprint_check.py``. It reads the
+emitted ``.kicad_pcb`` — the file, not the in-memory model that produced it —
+and fails on anything that is a *board defect* rather than a routing task.
 
 What it enforces
 ----------------
@@ -42,10 +49,11 @@ If the installed KiCad cannot run DRC (KiCad 7's ``kicad-cli pcb`` has only
 **SKIPPED**. It never reports OK. A skipped check is not a passed check, and
 this module's exit status distinguishes them.
 
-Run standalone::
+Run standalone (after ``python3 main.py --autoplace``)::
 
     python3 validation/drc_check.py
     python3 validation/drc_check.py --json
+    python3 validation/drc_check.py --board some/other.kicad_pcb
 """
 
 from __future__ import annotations
@@ -76,7 +84,9 @@ from generators.pcb import (  # noqa: E402
     silk_text_box, SILK_CLEARANCE, SOLDER_MASK_MARGIN,
 )
 
-BOARD_FILE = os.path.join(_REPO_ROOT, "stage1_iv.kicad_pcb")
+# The auto-placed bootstrap board. The board of record (the routed
+# stage1_iv.kicad_pcb) is checked by validation/routed_board_check.py.
+BOARD_FILE = os.path.join(_REPO_ROOT, "build", "autoplace", "stage1_iv.kicad_pcb")
 
 # The one net pair that is allowed to be bridged, and the only part allowed to
 # bridge it. Both are design decisions, not layout conveniences: see
@@ -174,6 +184,23 @@ def _graphic_points(node):
     return pts
 
 
+def _net_name(net):
+    """A node's net name in either board schema.
+
+    KiCad 9 writes ``(net 5 "AGND")`` against a top-level net table; KiCad 10
+    writes ``(net "AGND")`` and has no table. The board this repository
+    generates is the former; the human-routed board in routed/ is the latter.
+    """
+    if net is None or len(net) < 2:
+        return ""
+    if len(net) > 2:
+        return str(net[2])
+    tok = net[1]
+    if getattr(tok, "quoted", False) or not str(tok).isdigit():
+        return str(tok)
+    return ""                       # a bare code; resolved against the table
+
+
 def _drill_of(pad):
     """(dx, dy) of a pad's hole, or None for an SMD pad."""
     d = _first(pad, "drill")
@@ -209,8 +236,7 @@ class Footprint:
         for pad in _kids(node, "pad"):
             px, py, _pr = _at(pad)
             dx, dy = _rotate(px, py, self.rot)
-            net = _first(pad, "net")
-            name = str(net[2]) if net is not None and len(net) > 2 else ""
+            name = _net_name(_first(pad, "net"))
             size = _first(pad, "size")
             w = _f(size[1]) if size is not None and len(size) > 1 else 0.0
             h = _f(size[2]) if size is not None and len(size) > 2 else 0.0
@@ -264,13 +290,19 @@ class Board:
         self.footprints = [Footprint(n) for n in _kids(root, "footprint")]
         self.nets = [str(n[2]) for n in _kids(root, "net")
                      if len(n) > 2 and str(n[2])]
+        codes = {int(_f(n[1])): str(n[2]) for n in _kids(root, "net")
+                 if len(n) > 2}
+        if not self.nets:               # KiCad 10: no net table
+            self.nets = sorted({p["net"] for fp in self.footprints
+                                for p in fp.pads if p["net"]})
         self.zones = []
         for z in _kids(root, "zone"):
             nn = _first(z, "net_name")
             poly = _first(z, "polygon")
             pts = _graphic_points(poly) if poly is not None else []
             self.zones.append({
-                "net": str(nn[1]) if nn is not None and len(nn) > 1 else "",
+                "net": str(nn[1]) if nn is not None and len(nn) > 1
+                else _net_name(_first(z, "net")),
                 "points": pts,
                 "bbox": (min(p[0] for p in pts), min(p[1] for p in pts),
                          max(p[0] for p in pts), max(p[1] for p in pts))
@@ -284,6 +316,8 @@ class Board:
                 "start": (_f(s[1]), _f(s[2])) if s is not None else (0.0, 0.0),
                 "end": (_f(e[1]), _f(e[2])) if e is not None else (0.0, 0.0),
                 "net_code": int(_f(net[1])) if net is not None else 0,
+                "net": _net_name(net) or codes.get(
+                    int(_f(net[1])) if net is not None else 0, ""),
             })
         self.outline = self._outline()
 
@@ -434,16 +468,12 @@ def check_ground_split(board):
                 f"pin over its own pour, or return current crosses the split "
                 f"in copper. See docs/pcb_generation.md.")
 
-    codes = {}
-    for n in _kids(board.root, "net"):
-        if len(n) > 2:
-            codes[int(_f(n[1]))] = str(n[2])
     for t in board.tracks:
-        if _design_net_name(codes.get(t["net_code"], "")) not in GROUND_NETS:
+        if _design_net_name(t["net"]) not in GROUND_NETS:
             continue
         if (t["start"][0] - boundary) * (t["end"][0] - boundary) < 0:
             problems.append(
-                f"a {codes[t['net_code']]} track crosses the ground boundary "
+                f"a {t['net']} track crosses the ground boundary "
                 f"at x={boundary:.3f} between {t['start']} and {t['end']}")
 
     return problems, boundary, gap
@@ -760,7 +790,7 @@ def _load_silk_baseline():
         return None
 
 
-def check_silkscreen(board):
+def check_silkscreen(board, limit=20):
     """Silkscreen pre-filter. NOT an authority — KiCad 10 DRC is.
 
     Approach A from the brief: a conservative rule rather than a model of
@@ -783,7 +813,9 @@ def check_silkscreen(board):
     at all.
     """
     baseline = _load_silk_baseline()
-    items = _silk_items(board)
+    # Sorted, so the neighbour a finding names does not depend on the order
+    # the board file happens to list its footprints in.
+    items = sorted(_silk_items(board), key=lambda i: (i[0], i[1], i[2]))
     pads = []
     for fp in board.footprints:
         for pad in fp.pads:
@@ -828,7 +860,7 @@ def check_silkscreen(board):
             f"file reported 9. A clean result here is not evidence. Either "
             f"move the designators to F.Fab, or validate against KiCad 10 "
             f"first.")
-    return problems[:20], None
+    return problems[:limit], None
 
 
 def check_courtyards_defined(board):
@@ -1239,7 +1271,7 @@ def run_drc_check(board_path=BOARD_FILE, run_kicad=True):
     if not os.path.isfile(board_path):
         raise DrcCheckError(
             f"{os.path.relpath(board_path, _REPO_ROOT)} does not exist. Run "
-            f"`python3 main.py` to generate it.")
+            f"`python3 main.py --autoplace` to generate it.")
 
     board = Board(board_path)
     from libraries.netclasses import FAB

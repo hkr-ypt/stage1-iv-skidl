@@ -54,6 +54,10 @@ def create_adc_block(n):
     C29 = C_POL("Capacitor_Tantalum_SMD:CP_EIA-3528-21_Kemet-B")(
         ref="C29", tag="C29", value="10uF/16V")
     C30 = C()(ref="C30", tag="C30", value="100nF")
+    # Second +3V3D decoupler on the ADC side. Added on the routed board by its
+    # designer (not in the original source); carried here so the board of
+    # record, generated from this file, keeps it.
+    C31 = C()(ref="C31", tag="C31", value="100nF")
     R19 = R()(ref="R19", tag="R19", value="10k")
     R20 = R()(ref="R20", tag="R20", value="10k")
     R15 = R()(ref="R15", tag="R15", value="100R")
@@ -71,8 +75,8 @@ def create_adc_block(n):
     n.AGND += U8["AGND"], C28[2], C29["-"]
 
     # ---- digital supply + pull-ups ----
-    n.P3V3D += U8["DVDD"], C30[1], R19[1], R20[1]
-    n.DGND += U8["DGND"], C30[2]
+    n.P3V3D += U8["DVDD"], C30[1], C31[1], R19[1], R20[1]
+    n.DGND += U8["DGND"], C30[2], C31[2]
 
     # ---- reference (shared with DAC) ----
     n.VREF_2V5 += U8["VREFP"], TP8[1], C44[1]
@@ -125,6 +129,6 @@ def create_adc_block(n):
              "D0/CLKOUT", "D1", "D2", "D3")    # general-purpose digital I/O
 
     return {"U8": U8, "Y1": Y1, "C26": C26, "C27": C27, "C28": C28, "C29": C29,
-            "C30": C30, "R19": R19, "R20": R20, "R15": R15, "R16": R16,
+            "C30": C30, "C31": C31, "R19": R19, "R20": R20, "R15": R15, "R16": R16,
             "R17": R17, "R18": R18, "C24": C24, "C25": C25, "TP8": TP8,
             "C44": C44}

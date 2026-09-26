@@ -34,3 +34,12 @@ ply>=3.11
 # tag 9.0.9.1.
 #
 # tools/kicad_roundtrip.py additionally needs `kicad-cli` on PATH (optional).
+#
+# Optional, only for DESIGNING a new layout change (never run at build time):
+# tools/board_geometry.py and tools/eco_route.py model the routed board's real
+# copper to find clearance-correct ECO tracks.
+#   pip install shapely numpy
+#
+# validation/routed_board_check.py and tools/reproduce_reference.py run KiCad's
+# own DRC and need KiCad 10's kicad-cli (and its pcbnew module for the zone-fill
+# comparison); without it they report the KiCad layer NOT RUN.

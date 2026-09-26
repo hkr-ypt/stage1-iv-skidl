@@ -279,6 +279,13 @@ added_beyond_source_bom:
       VREF_2V5 bypass at the ADS1256, now both VREFP and the AINCOM negative
       input. Already fitted on the routed board with this reference, value,
       footprint and nets; added here so the SKiDL source matches it.
+  - ref: C31, C45
+    value: 100nF
+    reason: >
+      +3V3D/DGND decouplers the layout designer added to the routed board (C31
+      at U8's DVDD, C45 at U9). Carried into blocks/adc.py and blocks/mcu.py
+      with the board's references, values and nets, so the board regenerated
+      from layout/ keeps them.
 
 # ---------------------------------------------------------------------
 # Net manifest (checked by validation/assertions.py :: a_net_manifest)
@@ -469,6 +476,32 @@ validation:
       the same thing on the 113-footprint board.
       self_test also rejects any injection that changes nothing, so a
       generator that stopped escaping cannot take the model down with it.
+  routed_board_check:
+    module: validation/routed_board_check.py
+    board: stage1_iv.kicad_pcb (circuit + layout/stage1_iv.layout +
+      layout/bipolar.eco; the human routing with the bipolar ECO)
+    checks: [byte-identical to what the sources generate, parity with the
+             circuit, Update PCB no-op + its calibration, schema, netclass
+             coverage, fab conformance, rules file, rule satisfiability;
+             courtyard/edge/ground-split/hole/silkscreen heuristics with no
+             finding the original routed/ board lacks; KiCad 10 DRC under the
+             as-built rules (every check on) and under the repository policy
+             netclasses, with no violation the original lacks]
+    result: >
+      PASS - KiCad 10.0.6, zones refilled, all track errors, schematic parity:
+      0 unconnected, 0 parity; as-built rules 0 errors, 2 warnings (J3 silk at
+      the board edge, as on the original); repository policy 114 clearance
+      errors, all at the same place on the original (116 there), 0 new. NOT
+      clean under the policy netclasses. See docs/physical_design.md.
+  reproduce_reference:
+    module: tools/reproduce_reference.py
+    checks: [layout capture current, semantic board comparison, KiCad 10 DRC
+             (routed project and every-check-on), refilled zone copper, KiCad
+             re-save comparison]
+    result: >
+      PASS - the layout source regenerates routed/diodes.kicad_pcb with
+      identical placement, copper and connectivity (12 known library strings
+      on C31/C44/C45 aside), identical DRC, zone copper symmetric difference 0.
   kicad_roundtrip:
     module: tools/kicad_roundtrip.py
     checks: [kicad-cli sch export netlist vs stage1_iv.net, symbol/footprint

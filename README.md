@@ -8,24 +8,31 @@ source that can reach ±10.04 V and ±91.3 mA), hardware current limiting
 (~49 mA), defense-in-depth protection, and a **shared 2.500 V reference** for
 ratiometric measurement.
 
-This project is the electrical source-of-truth. Running it produces a **KiCad
-netlist** (`stage1_iv.net`), a **hierarchical KiCad schematic**
-(`stage1_iv.kicad_sch` + one child `.kicad_sch` per block, generated from the
-same in-memory circuit — see [`SCHEMATIC.md`](SCHEMATIC.md)), a **placed but
-unrouted board** (`stage1_iv.kicad_pcb`, with board setup, netclasses and the
-two ground pours — see [`docs/pcb_generation.md`](docs/pcb_generation.md)),
-plus a generated component manifest.
+This project is the source of truth for the electrical design **and** the
+board. Running it produces a **KiCad netlist** (`stage1_iv.net`), a
+**hierarchical KiCad schematic** (`stage1_iv.kicad_sch` + one child
+`.kicad_sch` per block, generated from the same in-memory circuit — see
+[`SCHEMATIC.md`](SCHEMATIC.md)), the **placed and fully routed bipolar board**
+(`stage1_iv.kicad_pcb`), plus a generated component manifest.
 
-> **The board is not routed and DRC has not been run.** `generators/pcb.py`
-> places parts and writes design rules; drawing tracks is a human task, and
-> nothing in this repository claims a DRC pass. 253 connections remain. DRC itself
-> runs in CI via KiCad's Python bindings.
+> **The board is generated from source and fully routed.** Its placement and
+> copper are the human-routed board's (`routed/`), captured into
+> [`layout/stage1_iv.layout`](layout/stage1_iv.layout); the bipolar
+> measurement change is applied to it by
+> [`layout/bipolar.eco`](layout/bipolar.eco), a list of add/remove operations
+> each with its reason. See [`docs/physical_design.md`](docs/physical_design.md).
 >
-> **The board that gets built is the human-routed one in `routed/`**, which no
-> generator touches. What it needs to implement the current SKiDL design is
-> listed, with board coordinates, in
-> [`docs/bipolar_measurement.md`](docs/bipolar_measurement.md) §5, and
-> `python3 tools/compare_routed_board.py` reports the remaining difference.
+> **KiCad 10 DRC** (zones refilled, schematic parity on): 0 unconnected, 0
+> parity problems; **0 errors** under the rules the board was routed to (its
+> 0.20 mm netclass plus the scoped intra-footprint rules, every check on). It
+> is **not clean under the repository's stricter netclass policy**: 114
+> clearance errors, every one of them present at the same place on the
+> original human routing; the ECO adds none.
+>
+> **`routed/` is the original, unipolar, human-routed reference** and is never
+> modified. `python3 tools/reproduce_reference.py` proves the layout source
+> regenerates it (identical copper, placement and connectivity; identical
+> KiCad DRC and zone fill).
 
 ---
 
@@ -107,7 +114,14 @@ stage1-iv-skidl/
 │
 ├── generators/
 │   ├── schematic.py            # hierarchical .kicad_sch emitter (live circuit)
-│   └── pcb.py                  # .kicad_pcb emitter: placement, outline, zones
+│   ├── routed_pcb.py           # THE board: circuit + layout/ + ECOs -> .kicad_pcb
+│   ├── layout.py               # layout source + ECO model (parse, apply, write)
+│   ├── footprint_xform.py      # place a library footprint as KiCad stores it
+│   └── pcb.py                  # footprint prep; bootstrap auto-placer (--autoplace)
+│
+├── layout/
+│   ├── stage1_iv.layout        # placement + copper, captured from routed/
+│   └── bipolar.eco             # the bipolar change: reasoned add/remove ops
 │
 ├── tools/
 │   ├── resolve_kicad_libs.py   # THE resolver: reads installed KiCad libraries
@@ -120,26 +134,33 @@ stage1-iv-skidl/
 │   ├── vendor_footprints.py    # pin the used footprints into the repository
 │   ├── measure_pad_gaps.py     # measure intrinsic pad gaps from the footprints
 │   ├── compare_routed_board.py # routed/ board vs the SKiDL design (ECO list)
+│   ├── capture_layout.py       # routed board -> layout source (--check)
+│   ├── reproduce_reference.py  # prove the layout regenerates routed/
+│   ├── compare_boards.py       # semantic board-vs-board comparison
+│   ├── board_geometry.py       # real-copper geometry (shapely)
+│   ├── eco_route.py            # design an ECO track against real copper
 │   └── test_guard_fails.sh     # fault-injection: prove the guard fails
 │
 ├── validation/
 │   ├── erc.py                  # SKiDL ERC + structural checks
 │   ├── assertions.py           # custom connectivity/topology assertions
 │   ├── footprint_check.py      # identifiers/pads guard (aborts the build)
-│   ├── drc_check.py            # board checks + real DRC where available
+│   ├── routed_board_check.py   # board of record: source, parity, KiCad DRC
+│   ├── drc_check.py            # board checks (shared; auto-placed board)
 │   ├── measurement_range.py    # every reachable V/I point fits the ADC, signed
 │   └── schematic_check.py      # schematic <-> netlist consistency validator
 │
 ├── docs/
 │   ├── bipolar_measurement.md        # bipolar V/I design + routed-board ECO
+│   ├── physical_design.md            # layout source, ECO, reproduction, DRC
 │   ├── identifier_resolution.md      # what was wrong, what it became, sources
 │   ├── FAB_CONSTRAINTS.md            # assumed fabricator capability (F1..F12)
-│   ├── pcb_generation.md             # board setup, netclasses, ground split
+│   ├── pcb_generation.md             # netclasses, rules, the auto-placer
 │   ├── audit_identifiers_before.md   # pre-fix baseline
 │   └── audit_identifiers_after.md    # post-fix state
 │
-├── routed/                     # the human-placed, human-routed KiCad project
-│                               # (never regenerated; see docs/bipolar_measurement.md)
+├── routed/                     # ORIGINAL unipolar human-routed KiCad project:
+│                               # the reference, never modified (routed/README.md)
 ├── kicad_libs.json             # explicit KiCad library locations (optional)
 ├── sym-lib-table               # registers libraries/stage1_iv.kicad_sym
 │
@@ -261,12 +282,14 @@ PASS, measurement-range check PASS, 0 unresolved identifiers, 0 unaccounted pads
 - `stage1_iv.net` — KiCad netlist
 - `stage1_iv.kicad_sch` + 8 child `.kicad_sch` — hierarchical KiCad schematic
   (self-contained; see below and [`SCHEMATIC.md`](SCHEMATIC.md))
-- `stage1_iv.kicad_pcb` — placed, **unrouted** board (KiCad 9/10 schema,
-  **opens in KiCad 10**): outline, mounting holes,
-  netclass-aware setup and the AGND/DGND pours. Opening it and pressing
-  *Update PCB from Schematic* changes **nothing** — that is a checked property,
-  not a hope (see [`docs/pcb_generation.md`](docs/pcb_generation.md) and
-  `validation/update_pcb_noop.py`)
+- `stage1_iv.kicad_pcb` — the bipolar board, placed and **fully routed**
+  (KiCad 9/10 schema, **opens in KiCad 10**; zones are stored unfilled — press
+  B, or plot with `--check-zones`). Generated from the circuit,
+  `layout/stage1_iv.layout` and `layout/bipolar.eco`; checked by
+  `validation/routed_board_check.py` (see
+  [`docs/physical_design.md`](docs/physical_design.md)). Opening it and
+  pressing *Update PCB from Schematic* changes **nothing** — that is a checked
+  property, not a hope (`validation/update_pcb_noop.py`)
 - `component_manifest.md` — generated component table
 
 > SKiDL prints benign `KICADn_SYMBOL_DIR` / `fp-lib-table` warnings on import

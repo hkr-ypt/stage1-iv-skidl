@@ -11,18 +11,25 @@ Run:
     python3 main.py                  # validate + emit netlist + schematic + PCB
     python3 main.py --netlist-only   # just emit the netlist
     python3 main.py --schematic-only # just emit the hierarchical schematic
-    python3 main.py --pcb-only       # just emit the board
+    python3 main.py --pcb-only       # just emit (and check) the board
+    python3 main.py --autoplace      # bootstrap: an auto-placed, unrouted
+                                     # board in build/autoplace/ (not the
+                                     # board of record)
 
 Outputs (written next to this file):
     stage1_iv.net            KiCad netlist (import into a KiCad project)
     stage1_iv.kicad_sch      Top-level KiCad schematic (hierarchical)
     <block>.kicad_sch        One child schematic sheet per block (8 files)
-    stage1_iv.kicad_pcb      Placed, unrouted board with board setup and zones
+    stage1_iv.kicad_pcb      The board of record: placed and fully routed
     component_manifest.md    Component manifest table
 
-The board is **not routed**. `generators/pcb.py` places parts, pours the two
-ground planes and writes the design rules; drawing the tracks is a human task.
-Nothing in this build reports a DRC pass.
+The board is generated from source: the SKiDL circuit (parts, values, nets),
+``layout/stage1_iv.layout`` (the placement and copper of the human-routed board
+in ``routed/``) and ``layout/bipolar.eco`` (the bipolar change, as reasoned
+add/remove operations) — see generators/routed_pcb.py and
+docs/physical_design.md. It is checked by validation/routed_board_check.py;
+KiCad's DRC runs where KiCad 10 is installed and is reported NOT RUN where it
+is not. Nothing here reports a DRC pass it did not run.
 """
 
 import sys
@@ -95,6 +102,8 @@ SHEET_OF = {
     "2 MCU": ["U9", "Y2", "C32", "C33", "C34", "C35", "C36", "C37", "C38", "C39",
               "C40", "C43", "FB2", "R21", "C41", "SW1", "R22", "R23", "LED1",
               "J2", "J3", "U10", "R24", "R25", "R26", "R27", "R28", "R29", "C42",
+              # C45: +3V3D decoupler added on the routed board, carried here.
+              "C45",
               # FLG7 = VBUS (from the USB host), FLG8 = VDDA (after FB2).
               "#FLG7", "#FLG8"],
     "3 DAC/Sweep": ["U4", "C13", "U3", "C11", "C12", "R1", "R2", "R3", "R4",
@@ -105,9 +114,10 @@ SHEET_OF = {
     # R32/R33 are the bottom arms of the Kelvin attenuator (R12/R13 on top).
     "6 Voltage Sense": ["U7", "R12", "R13", "R14", "R32", "R33", "D1", "D2",
                         "D3", "D4", "C22", "C23", "TP5", "TP6", "TP7"],
-    # C44 bypasses VREF_2V5 at U8 VREFP/AINCOM.
-    "7 ADC": ["U8", "Y1", "C26", "C27", "C28", "C29", "C30", "R19", "R20", "R15",
-              "R16", "R17", "R18", "C24", "C25", "TP8", "C44"],
+    # C44 bypasses VREF_2V5 at U8 VREFP/AINCOM; C31 is a +3V3D decoupler
+    # added on the routed board, carried here.
+    "7 ADC": ["U8", "Y1", "C26", "C27", "C28", "C29", "C30", "C31", "R19",
+              "R20", "R15", "R16", "R17", "R18", "C24", "C25", "TP8", "C44"],
     # J4..J7 are the four separate single-pin DUT banana jacks
     # (FORCE+, SENSE+, SENSE-, FORCE-) — see blocks/protection.py.
     "8 Protection/DUT": ["F1", "R30", "D5", "J4", "J5", "J6", "J7"],
@@ -189,25 +199,50 @@ def write_schematic(circuit):
 
 
 def write_pcb(circuit):
-    """Emit the board and run the structural board checks on the emitted file.
+    """Emit the board of record and check it.
 
-    Returns the drc_check report, or raises. The board needs real footprint
-    files, so this only runs when the KiCad libraries are installed; callers
-    report SKIPPED otherwise rather than pretending.
+    Returns (generator report, routed_board_check report), or raises. The board
+    needs real footprint files, so this only runs when the KiCad libraries are
+    installed; callers report SKIPPED otherwise rather than pretending.
+    """
+    from generators.routed_pcb import generate_routed_pcb
+    from validation.routed_board_check import run_routed_board_check
+
+    path, report = generate_routed_pcb(circuit, out_dir=HERE)
+    print(f"\nKiCad board written to {path}")
+    print(f"  {report['parts']} footprints, {report['nets']} nets, "
+          f"{report['segments']} tracks, {report['vias']} vias, "
+          f"{report['zones']} zones")
+    print(f"  from {report['layout']} + "
+          + ", ".join(f"{e} ({n} operations)" for e, n in report["ecos"]))
+    return report, run_routed_board_check(path)
+
+
+def write_autoplaced_pcb(circuit):
+    """The bootstrap auto-placer: a placed, UNROUTED board in build/autoplace/.
+
+    Not the board of record. It is how a new design gets a checkable starting
+    point for a person to lay out; this design's layout is in layout/.
     """
     from generators.pcb import generate_pcb
     from validation.drc_check import run_drc_check
 
-    path, report = generate_pcb(circuit, out_dir=HERE)
-    print(f"\nKiCad board written to {path}")
+    out_dir = os.path.join(HERE, "build", "autoplace")
+    os.makedirs(out_dir, exist_ok=True)
+    for name in ("stage1_iv.kicad_pro", "stage1_iv.kicad_dru"):
+        src = os.path.join(HERE, name)
+        if os.path.isfile(src):
+            with open(src, encoding="utf-8") as fh, \
+                    open(os.path.join(out_dir, name), "w",
+                         encoding="utf-8") as out:
+                out.write(fh.read())
+    path, report = generate_pcb(circuit, out_dir=out_dir)
+    print(f"\nAuto-placed board written to {path}")
     print(f"  {report['board_mm'][0]} x {report['board_mm'][1]} mm, "
           f"{report['parts']} footprints, {report['nets']} nets, "
           f"{report['mounting_holes']} mounting holes")
-    print(f"  AGND/DGND split at x={report['zone_boundary_x']} mm "
-          f"({report['zone_gap_mm']} mm gap), straddled by "
-          f"{', '.join(report['ground_bridges'])}")
-    print("  UNROUTED — no track was drawn and none was autorouted.")
-    return report, run_drc_check(os.path.join(HERE, "stage1_iv.kicad_pcb"))
+    print("  UNROUTED — a bootstrap placement, not the board of record.")
+    return report, run_drc_check(path)
 
 
 def capability_banner(circuit=None, erc_summary=None, checks=None,
@@ -262,10 +297,12 @@ def capability_banner(circuit=None, erc_summary=None, checks=None,
         A("  Board checks .......... SKIPPED (no board generated this run)")
         A("  KiCad DRC ............. NOT RUN")
     else:
-        passed = sum(1 for c in drc_report["checks"].values()
-                     if c["status"] == "PASS")
-        A(f"  Board checks .......... {passed} PASS "
-          f"(courtyards, edge clearance, ground split, netclasses)")
+        checks_ = {k: v for k, v in drc_report["checks"].items()
+                   if k != "kicad_drc"}
+        passed = sum(1 for c in checks_.values() if c["status"] == "PASS")
+        A(f"  Board checks .......... {passed}/{len(checks_)} PASS "
+          f"(source, parity, netclasses; placement heuristics")
+        A("                          relative to the original routed/ board)")
         noop = drc_report["checks"].get("update_pcb_noop", {})
         A(f"  Update PCB from Sch ... "
           + ("would change NOTHING — the board and the schematic agree"
@@ -278,8 +315,22 @@ def capability_banner(circuit=None, erc_summary=None, checks=None,
               "Run it in KiCad 10 — the board carries a\n"
               "                          footprint (units ...) block KiCad 9 cannot parse.")
         else:
-            A(f"  KiCad DRC ............. {len(drc['problems'])} defects, "
-              f"{drc['routing_violations']} unrouted connections")
+            ab, pol = drc["as_built"], drc["policy"]
+
+            def split(counts):
+                err = sum(n for k, n in counts.items() if k.endswith("/error"))
+                return err, sum(counts.values()) - err
+            ab_e, ab_w = split(ab["violations"])
+            pol_e, pol_w = split(pol["violations"])
+            A(f"  KiCad DRC ............. {drc['ran_with']}: "
+              f"{ab['unconnected']} unconnected, "
+              f"{pol['parity']} parity problems")
+            A(f"    as-built rules ...... {ab_e} errors, {ab_w} warnings "
+              f"(the original has the same warnings)")
+            A(f"    netclass policy ..... {pol_e} errors, {pol_w} warnings — "
+              f"all {pol['pre_existing']} on the original")
+            A(f"                          routed/ board too, "
+              f"{len(pol['new'])} new; NOT clean under the policy classes")
     return "\n".join(lines), env
 
 
@@ -287,6 +338,7 @@ def main():
     netlist_only = "--netlist-only" in sys.argv
     schematic_only = "--schematic-only" in sys.argv
     pcb_only = "--pcb-only" in sys.argv
+    autoplace = "--autoplace" in sys.argv
 
     n, parts, circuit = build()
 
@@ -324,7 +376,26 @@ def main():
                   "are installed. Run tools/install_kicad_libs.sh.",
                   file=sys.stderr)
             return 1
-        write_pcb(circuit)
+        from validation.routed_board_check import RoutedBoardError
+        from generators.layout import LayoutError
+        try:
+            write_pcb(circuit)
+        except (RoutedBoardError, LayoutError) as exc:
+            print(f"\nBOARD CHECK: FAIL\n{exc}", file=sys.stderr)
+            return 1
+        return 0
+
+    if autoplace:
+        if not env["available"]:
+            print("\nThe auto-placer needs the KiCad footprint libraries; none "
+                  "are installed.", file=sys.stderr)
+            return 1
+        from validation.drc_check import DrcCheckError
+        try:
+            write_autoplaced_pcb(circuit)
+        except DrcCheckError as exc:
+            print(f"\nAUTO-PLACED BOARD CHECK: FAIL\n{exc}", file=sys.stderr)
+            return 1
         return 0
 
     if schematic_only:
@@ -345,10 +416,11 @@ def main():
     # board from guessed geometry.
     pcb_report = drc_report = None
     if env["available"]:
-        from validation.drc_check import DrcCheckError
+        from validation.routed_board_check import RoutedBoardError
+        from generators.layout import LayoutError
         try:
             pcb_report, drc_report = write_pcb(circuit)
-        except DrcCheckError as exc:
+        except (RoutedBoardError, LayoutError) as exc:
             print(f"\nBOARD CHECK: FAIL\n{exc}", file=sys.stderr)
             return 1
     else:
@@ -383,9 +455,13 @@ def main():
     if pcb_report is None:
         print("  Board .............. SKIPPED — no KiCad footprint libraries")
     else:
-        print(f"  Board .............. {pcb_report['board_mm'][0]} x "
-              f"{pcb_report['board_mm'][1]} mm, {pcb_report['parts']} "
-              f"footprints placed, UNROUTED")
+        drc = drc_report["checks"]["kicad_drc"]
+        routed = ("fully routed, 0 unconnected (KiCad DRC)"
+                  if drc["status"] != "SKIPPED"
+                  else "routing per layout/; KiCad DRC NOT RUN")
+        print(f"  Board .............. {pcb_report['parts']} footprints, "
+              f"{pcb_report['segments']} tracks, {pcb_report['vias']} vias, "
+              f"{routed}")
     # Derived from the ERC result, never asserted. run_erc() already raises on
     # any error or un-allow-listed warning, so reaching here means both are
     # zero; printing the actual numbers keeps that visible and auditable.

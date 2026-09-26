@@ -29,13 +29,16 @@ reset_copy() {
 # expect_fail <gate> <name> <python-patch-script>
 #   gate = structural : validation/footprint_check.py must fail
 #   gate = erc        : validation/erc.py must fail
-#   gate = board      : validation/drc_check.py must fail
+#   gate = board      : validation/routed_board_check.py must fail
 #   gate = range      : validation/measurement_range.py must fail
 # main.py must fail in EVERY case — it is the thing a user actually runs.
 #
 # `board` injections run against the board that main.py already emitted, so the
 # patch runs first, then main.py regenerates and re-checks. A board defect that
-# only main.py catches, or only drc_check.py catches, counts as MISSED.
+# only main.py catches, or only routed_board_check.py catches, counts as MISSED.
+# The board is the board of record: circuit + layout/stage1_iv.layout +
+# layout/*.eco (generators/routed_pcb.py). Injections 22-23 need KiCad 10's
+# DRC, as the CI runner has; without it they are reported MISSED, not passed.
 expect_fail() {
     local gate="$1" name="$2" patch="$3"
     reset_copy
@@ -48,7 +51,7 @@ expect_fail() {
     case "$gate" in
         structural) checker="validation/footprint_check.py" ;;
         erc)        checker="validation/erc.py" ;;
-        board)      checker="validation/drc_check.py" ;;
+        board)      checker="validation/routed_board_check.py" ;;
         range)      checker="validation/measurement_range.py" ;;
         *) echo "  [BUG] unknown gate $gate"; FAILURES=$((FAILURES + 1)); return ;;
     esac
@@ -69,7 +72,7 @@ expect_fail() {
         echo "  [CAUGHT] $name"
         echo "           $checker=$gate_rc, main.py=$main_rc"
         grep -m2 -E "\[ERROR\]|\[ERC WARNING\]|ERC FAILED|PWR_FLAG invariant|\
-board defect|netclass|straddle|overlap|MEASUREMENT RANGE|channel:" \
+board defect|finding|netclass|straddle|overlap|MEASUREMENT RANGE|channel:" \
             "$WORK/gate.log" | sed 's/^/            /' || true
     else
         echo "  [MISSED] $name  ($checker=$gate_rc, main.py=$main_rc)"
@@ -170,30 +173,24 @@ p.write_text(s.replace("\"BOOT0\", \"LED_STATUS\", \"VBUS_SENSE\"",
 '
 
 # 10. the star resistor moved off the plane boundary: R31 no longer straddles
-#     the split, so AGND and DGND stop meeting where the schematic says they do
+#     the split, so AGND and DGND stop meeting where the schematic says they do.
+#     A layout-source edit: this is where placement now lives.
 expect_fail board "R31 no longer straddles the AGND/DGND split" '
 import pathlib
-p = pathlib.Path("generators/pcb.py"); s = p.read_text()
-assert "if len(sides) == 2:" in s
-p.write_text(s.replace(
-    "        if len(sides) == 2:",
-    "        if len(sides) == 2 and part.ref != \"R31\":"))
+p = pathlib.Path("layout/stage1_iv.layout"); s = p.read_text()
+old = "(footprint \"R31\" F 127.34 59.8 0)"
+assert old in s
+p.write_text(s.replace(old, "(footprint \"R31\" F 123 59.8 0)"))
 '
 
 # 11. a placement that overlaps courtyards — the non-routing DRC violation class
-#     that a real fabrication run would reject
-#     Matched by NAME, not by value: pinning the literal 1.2 here meant that
-#     raising the gutter to 2.0 for silkscreen legibility silently disarmed
-#     this injection, and CI reported "1 injected fault was NOT caught" for a
-#     defect that was never injected. An injection that cannot be applied is a
-#     broken test, so it fails loudly - but it must not be brittle either.
-expect_fail board "overlapping courtyards (negative part gutter)" '
-import pathlib, re
-p = pathlib.Path("generators/pcb.py"); s = p.read_text()
-s, n = re.subn(r"^PART_GUTTER = [-0-9.]+", "PART_GUTTER = -1.0", s,
-               count=1, flags=re.M)
-assert n == 1
-p.write_text(s)
+#     that a real fabrication run would reject. The ECO puts R32 on top of R12.
+expect_fail board "overlapping courtyards (ECO part placed on another)" '
+import pathlib
+p = pathlib.Path("layout/bipolar.eco"); s = p.read_text()
+old = "(add (footprint \"R32\" F 98.4 80.7 180)"
+assert old in s
+p.write_text(s.replace(old, "(add (footprint \"R32\" F 97.6 81.9 180)"))
 '
 
 # 12. a netclass relaxed below what the fabricator can build: the board must not
@@ -301,6 +298,30 @@ import pathlib
 p = pathlib.Path("blocks/current_sense.py"); s = p.read_text()
 assert "value=\"35.7k 0.1%\"" in s
 p.write_text(s.replace("value=\"35.7k 0.1%\"", "value=\"13.0k\""))
+'
+
+# --- the routed board flow ---------------------------------------------------
+
+# 22. an ECO track dropped: the bipolar board is no longer fully routed. Only
+#     KiCad's connectivity sees this; the gate must not call it a pass.
+expect_fail board "ECO connection left unrouted (R33 pad 1 to U7 pin 2)" '
+import pathlib, re
+p = pathlib.Path("layout/bipolar.eco"); s = p.read_text()
+s, n = re.subn(r"\(add \(segment \"/voltage_sense/SENSE_M_AMP\"[^\n]*\n[^\n]*\n",
+               "", s)
+assert n == 2
+p.write_text(s)
+'
+
+# 23. an ECO that no longer matches the board it was written against: a removed
+#     track that is not there. It must stop the build, and the committed board
+#     must stop passing as "generated from source".
+expect_fail board "ECO no longer applies to its base layout" '
+import pathlib
+p = pathlib.Path("layout/bipolar.eco"); s = p.read_text()
+old = "(remove (segment \"AGND\" \"F.Cu\" 0.2 125.09 49.493456 125.09 48.09)"
+assert old in s
+p.write_text(s.replace(old, "(remove (segment \"AGND\" \"F.Cu\" 0.2 125.09 49.493456 125.09 48.1)"))
 '
 
 echo "----------------------------------------------------------------------"
