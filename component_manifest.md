@@ -1,6 +1,6 @@
 # Component Manifest — Stage 1 I–V Characterization System
 
-Total components: **118**
+Total components: **121**
 
 | Ref | Value | MPN | KiCad Library | Footprint | Sheet | Status |
 |-----|-------|-----|---------------|-----------|-------|--------|
@@ -54,6 +54,7 @@ Total components: **118**
 | C41 | 100nF | generic | Device:C | Capacitor_SMD:C_0603_1608Metric | 2 MCU | OK — pin numbers read from Device.kicad_sym:1761 |
 | C42 | 100nF | generic | Device:C | Capacitor_SMD:C_0603_1608Metric | 2 MCU | OK — pin numbers read from Device.kicad_sym:1761 |
 | C43 | 2.2uF | generic | Device:C | Capacitor_SMD:C_0603_1608Metric | 2 MCU | OK — pin numbers read from Device.kicad_sym:1761 |
+| C44 | 100nF | generic | Device:C | Capacitor_SMD:C_0603_1608Metric | 7 ADC | OK — pin numbers read from Device.kicad_sym:1761 |
 | D1 | 1N4148 | 1N4148 | Device:D | Diode_SMD:D_SOD-123 | 6 Voltage Sense | OK — pin numbers read from Device.kicad_sym:11674 |
 | D2 | 1N4148 | 1N4148 | Device:D | Diode_SMD:D_SOD-123 | 6 Voltage Sense | OK — pin numbers read from Device.kicad_sym:11674 |
 | D3 | 1N4148 | 1N4148 | Device:D | Diode_SMD:D_SOD-123 | 6 Voltage Sense | OK — pin numbers read from Device.kicad_sym:11674 |
@@ -80,9 +81,9 @@ Total components: **118**
 | R8 | 10k | generic | Device:R | Resistor_SMD:R_0603_1608Metric | 4 Power Buffer | OK — pin numbers read from Device.kicad_sym:104590 |
 | R9 | 10R | generic | Device:R | Resistor_SMD:R_1206_3216Metric | 4 Power Buffer | OK — pin numbers read from Device.kicad_sym:104590 |
 | R10 | 10.0R 1W | generic | Device:R | Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P10.16mm_Horizontal | 5 Current Sense | OK — pin numbers read from Device.kicad_sym:104590 |
-| R11 | 13.0k | generic | Device:R | Resistor_SMD:R_0603_1608Metric | 5 Current Sense | OK — pin numbers read from Device.kicad_sym:104590 |
-| R12 | 1.0k | generic | Device:R | Resistor_SMD:R_0603_1608Metric | 6 Voltage Sense | OK — pin numbers read from Device.kicad_sym:104590 |
-| R13 | 1.0k | generic | Device:R | Resistor_SMD:R_0603_1608Metric | 6 Voltage Sense | OK — pin numbers read from Device.kicad_sym:104590 |
+| R11 | 35.7k 0.1% | generic | Device:R | Resistor_SMD:R_0603_1608Metric | 5 Current Sense | OK — pin numbers read from Device.kicad_sym:104590 |
+| R12 | 40.2k 0.1% | generic | Device:R | Resistor_SMD:R_0603_1608Metric | 6 Voltage Sense | OK — pin numbers read from Device.kicad_sym:104590 |
+| R13 | 40.2k 0.1% | generic | Device:R | Resistor_SMD:R_0603_1608Metric | 6 Voltage Sense | OK — pin numbers read from Device.kicad_sym:104590 |
 | R14 | DNP (G=1) | generic | Device:R | Resistor_SMD:R_0603_1608Metric | 6 Voltage Sense | OK — pin numbers read from Device.kicad_sym:104590 |
 | R15 | 100R | generic | Device:R | Resistor_SMD:R_0603_1608Metric | 7 ADC | OK — pin numbers read from Device.kicad_sym:104590 |
 | R16 | 100R | generic | Device:R | Resistor_SMD:R_0603_1608Metric | 7 ADC | OK — pin numbers read from Device.kicad_sym:104590 |
@@ -101,6 +102,8 @@ Total components: **118**
 | R29 | 100k | generic | Device:R | Resistor_SMD:R_0603_1608Metric | 2 MCU | OK — pin numbers read from Device.kicad_sym:104590 |
 | R30 | 100R 1/4W | generic | Device:R | Resistor_SMD:R_1206_3216Metric | 8 Protection/DUT | OK — pin numbers read from Device.kicad_sym:104590 |
 | R31 | 0R | generic | Device:R | Resistor_SMD:R_0805_2012Metric | 1 Power | OK — pin numbers read from Device.kicad_sym:104590 |
+| R32 | 10.0k 0.1% | generic | Device:R | Resistor_SMD:R_0603_1608Metric | 6 Voltage Sense | OK — pin numbers read from Device.kicad_sym:104590 |
+| R33 | 10.0k 0.1% | generic | Device:R | Resistor_SMD:R_0603_1608Metric | 6 Voltage Sense | OK — pin numbers read from Device.kicad_sym:104590 |
 | SW1 | RESET | generic | Switch:SW_Push | Button_Switch_THT:SW_PUSH_6mm | 2 MCU | OK — pin numbers read from Switch.kicad_sym:11011 |
 | TP1 | V_SWEEP | n/a | Connector:TestPoint | TestPoint:TestPoint_Pad_D1.5mm | 3 DAC/Sweep | OK — pin numbers read from Connector.kicad_sym:339728 |
 | TP2 | VO_SENSE | n/a | Connector:TestPoint | TestPoint:TestPoint_Pad_D1.5mm | 4 Power Buffer | OK — pin numbers read from Connector.kicad_sym:339728 |

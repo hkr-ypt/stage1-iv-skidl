@@ -2,9 +2,11 @@
 
 A complete, **executable** [SKiDL](https://github.com/devbisme/skidl) source
 design for a Stage 1 I–V characterization instrument: a precision bipolar
-**±10 V** voltage-source with 4-wire **Kelvin** sensing, hardware current
-limiting (~49 mA), defense-in-depth protection, and a **shared 2.500 V
-reference** for ratiometric measurement.
+**±10 V** voltage-source with 4-wire **Kelvin** sensing, **bipolar voltage and
+current measurement over the whole sweep** (±11.8 V, ±97.8 mA guaranteed, for a
+source that can reach ±10.04 V and ±91.3 mA), hardware current limiting
+(~49 mA), defense-in-depth protection, and a **shared 2.500 V reference** for
+ratiometric measurement.
 
 This project is the electrical source-of-truth. Running it produces a **KiCad
 netlist** (`stage1_iv.net`), a **hierarchical KiCad schematic**
@@ -16,8 +18,14 @@ plus a generated component manifest.
 
 > **The board is not routed and DRC has not been run.** `generators/pcb.py`
 > places parts and writes design rules; drawing tracks is a human task, and
-> nothing in this repository claims a DRC pass. 247 connections remain. DRC itself
+> nothing in this repository claims a DRC pass. 253 connections remain. DRC itself
 > runs in CI via KiCad's Python bindings.
+>
+> **The board that gets built is the human-routed one in `routed/`**, which no
+> generator touches. What it needs to implement the current SKiDL design is
+> listed, with board coordinates, in
+> [`docs/bipolar_measurement.md`](docs/bipolar_measurement.md) §5, and
+> `python3 tools/compare_routed_board.py` reports the remaining difference.
 
 ---
 
@@ -111,6 +119,7 @@ stage1-iv-skidl/
 │   ├── gen_project_config.py   # lib tables + board setup from netclasses
 │   ├── vendor_footprints.py    # pin the used footprints into the repository
 │   ├── measure_pad_gaps.py     # measure intrinsic pad gaps from the footprints
+│   ├── compare_routed_board.py # routed/ board vs the SKiDL design (ECO list)
 │   └── test_guard_fails.sh     # fault-injection: prove the guard fails
 │
 ├── validation/
@@ -118,15 +127,19 @@ stage1-iv-skidl/
 │   ├── assertions.py           # custom connectivity/topology assertions
 │   ├── footprint_check.py      # identifiers/pads guard (aborts the build)
 │   ├── drc_check.py            # board checks + real DRC where available
+│   ├── measurement_range.py    # every reachable V/I point fits the ADC, signed
 │   └── schematic_check.py      # schematic <-> netlist consistency validator
 │
 ├── docs/
+│   ├── bipolar_measurement.md        # bipolar V/I design + routed-board ECO
 │   ├── identifier_resolution.md      # what was wrong, what it became, sources
 │   ├── FAB_CONSTRAINTS.md            # assumed fabricator capability (F1..F12)
 │   ├── pcb_generation.md             # board setup, netclasses, ground split
 │   ├── audit_identifiers_before.md   # pre-fix baseline
 │   └── audit_identifiers_after.md    # post-fix state
 │
+├── routed/                     # the human-placed, human-routed KiCad project
+│                               # (never regenerated; see docs/bipolar_measurement.md)
 ├── kicad_libs.json             # explicit KiCad library locations (optional)
 ├── sym-lib-table               # registers libraries/stage1_iv.kicad_sym
 │
@@ -236,8 +249,8 @@ the netlist is intentionally flat. See
 [`docs/library_strategy.md`](docs/library_strategy.md) §4 for the decision and
 its consequences for an existing board.
 
-Expected result: **0 SKiDL ERC errors, 0 SKiDL ERC warnings, 9/9 assertions
-PASS, 0 unresolved identifiers, 0 unaccounted pads**, and:
+Expected result: **0 SKiDL ERC errors, 0 SKiDL ERC warnings, 11/11 assertions
+PASS, measurement-range check PASS, 0 unresolved identifiers, 0 unaccounted pads**, and:
 
 > **SKiDL ERC is not KiCad ERC.** They are different checks with different
 > coverage — see [Validation](#validation) below for exactly what each one does
@@ -335,11 +348,11 @@ so the build **aborts** on any failure. Five hard checks:
    `UNCONNECTED_PAD_ALLOWLIST` with a written reason
 5. no part carries `Pins_Verified == "PLACEHOLDER-REMAP"`
 
-Current result: 110 parts, 356 pads, **307 netted, 49 declared no-connect,
+Current result: 113 parts, 362 pads, **313 netted, 49 declared no-connect,
 0 unaccounted**. `tools/test_guard_fails.sh` reintroduces five real defects one
 at a time and confirms every one is caught.
 
-**Custom assertions (`validation/assertions.py`)** — all **9 PASS**:
+**Custom assertions (`validation/assertions.py`)** — all **11 PASS**:
 
 - DAC reference (`U4.VREF`) and ADC reference (`U8.VREFP`) share `VREF_2V5`
 - FORCE+ path = `OPA548(U5) → R9 → F1(fuse) → R30 → D5(TVS) → J4`
@@ -351,6 +364,19 @@ at a time and confirms every one is caught.
 - **USB-C (J3): all four GND pads on DGND, all four VBUS pads on VBUS, both
   D+ pads tied and both D- pads tied** (the receptacle is symmetric — wiring
   one of each pair gives a port that works in one cable orientation only)
+- **the measurement zero**: `U6.REF`, `U7.REF` and the ADC's `AINCOM` are all
+  on `VREF_2V5` (none left on AGND)
+- **the Kelvin attenuator**: each U7 input is fed by one series resistor from
+  its SENSE jack and one shunt resistor to AGND, with nothing across the inputs
+
+**Measurement range (`validation/measurement_range.py`)** — from the part
+values in the live circuit: the sweep span, the largest current any passive DUT
+can draw (`V_SWEEP/(R30 + R10)`, independent of the OPA548 limit), both
+channels' transfer functions, and the voltage on each ADS1256 input at those
+extremes with worst-case tolerances. Fails the build if any normal operating
+point leaves the ADC's absolute input window (`AGND − 0.1 … AVDD + 0.1 V`) or
+its PGA = 2 full scale. Current result: worst-case headroom 334 mV (V) and
+97 mV (I).
 
 **Identifier audit (`tools/audit_identifiers.py`)** — per part, whether the
 symbol and footprint resolve, symbol pins vs footprint pads, unaccounted pads,
@@ -385,9 +411,9 @@ the *same live SKiDL circuit* that produced the netlist (module
   runs are byte-identical.
 - **Verified** — `python3 validation/schematic_check.py` reconstructs
   connectivity from the emitted files and asserts the `(reference, pin, net)`
-  set equals the netlist's (307 connections, 110 parts, 66 nets), and
+  set equals the netlist's (313 connections, 113 parts, 66 nets), and
   `python3 tools/kicad_roundtrip.py` re-checks the same thing through **KiCad's
-  own parser** (`kicad-cli sch export netlist`): KiCad reads the identical 307
+  own parser** (`kicad-cli sch export netlist`): KiCad reads the identical 313
   connections partitioned into the identical 66 nets.
 
 Details, conventions, and all documented assumptions: [`SCHEMATIC.md`](SCHEMATIC.md)
@@ -426,18 +452,27 @@ and `manifest.yaml → schematic_assumptions`.
 - **OPA548 native current limit** R7 = 1.43 MΩ → I_LIMIT ≈ 49 mA (§C.4).
 - **In-the-loop isolation resistor** R9 with feedback tapped on its far side
   (§C.6) — which is why the independent Kelvin sense still exists.
+- **Bipolar measurement, zero at mid-scale.** Both INA128 `REF` pins and the
+  ADS1256 `AINCOM` sit on `VREF_2V5`, and the ADC reads `AIN0 − AINCOM` (I)
+  and `AIN2 − AINCOM` (V): the 2.5 V shift cancels in the conversion and the
+  codes are signed. One PGA (2, full scale ±2.500 V) serves both channels.
+  The ADC's inputs must stay inside `AGND − 0.1 … AVDD + 0.1 V`; with the zero
+  on AGND, as before, every negative reading fell below that floor.
 - **4-wire Kelvin** voltage sense with rail-referenced input clamps (§C.6),
-  U7 at **G = 1** (`G = 1 + 50k/RG`, R14 depopulated so RG is open). Three
-  ranges here, deliberately *not* collapsed into one number:
+  then two matched dividers to AGND (R12/R32 and R13/R33, k = 10.0k/50.2k =
+  0.1992) into U7 at **G = 1** (R14 depopulated). Ranges kept distinct:
   - *physical* Kelvin voltage at J5/J6 — ±10.04 V, falling to ~±4.6 V at 49 mA;
-  - *INA128 capability* — ~±13 V differential at G = 1 on the ±15 V rails,
-    never the binding limit;
-  - *measurable* — the ADS1256 has AIN3 **and** VREFN on AGND with AVDD = +5 V,
-    so its window is `±2·VREF/PGA = ±5.000 V` floored by an `AGND − 0.1 V`
-    absolute input limit, giving **0 … +5.00 V, unipolar**.
-
-  No value of R14 changes that: G cannot go below 1, and the measurement zero
-  is pinned at AGND. See [`blocks/voltage_sense.py`](blocks/voltage_sense.py).
+  - *at U7* — ±2.0 V differential, far inside the INA128's range;
+  - *measurable* — `V_SENSE_OUT = 2.500 V + 0.1992·V_K`: **±11.8 V
+    guaranteed** (±12.55 V at nominal full scale), so no sweep point can
+    over-range it.
+- **Current sense** — R10 = 10 Ω shunt, U6 at G = 2.4006 (R11 = 35.7 k),
+  `I_SENSE_OUT = 2.500 V + 24.0 V/A·I`: **±97.8 mA guaranteed**. The gain is
+  sized to the largest current *any passive DUT can draw*,
+  `10.04 V/(R30 + R10) = 91.3 mA`, not to the ~49 mA OPA548 limit, whose
+  tolerance at that setting is not specified — so the current-limit plateau of
+  a forward sweep stays on-scale. See
+  [`docs/bipolar_measurement.md`](docs/bipolar_measurement.md).
 - **Star ground** — AGND/DGND meet only at R31 (§C.7).
 - **Defense in depth** — ILIM → PTC fuse → series R → TVS (§C.9).
 

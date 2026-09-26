@@ -427,6 +427,11 @@ def _unescape_net_names(root):
     fix(root)
 
 
+# Categories KiCad reports once per footprint (every footprint lacked the
+# metadata in the captured board). Their calibrated quantity is "one action per
+# footprint", checked against the footprint count of the board under test.
+_PER_FOOTPRINT = {"sheetname", "sheetfile", "fields", "units"}
+
 # name -> (which recorded KiCad capture holds the expected count,
 #          category it must be reported as,
 #          how to put that defect back into the current board)
@@ -476,6 +481,7 @@ def self_test(board_path=BOARD_FILE, verbose=True):
     with open(board_path, encoding="utf-8") as fh:
         text = fh.read()
 
+    n_linked = None          # symbol-linked footprints, counted on demand
     for name, (capture, category, mutate) in sorted(_INJECTIONS.items()):
         tree = parse_sexp(text)
         root = next(c for c in tree if _head(c) == "kicad_pcb")
@@ -502,17 +508,36 @@ def self_test(board_path=BOARD_FILE, verbose=True):
         finally:
             os.unlink(tmp_path)
         source = baseline if capture == "categories" else baseline[capture]
-        want = source["categories"].get(category)
+        reported = source["categories"].get(category)
+        want, note = reported, ""
+        if capture == "categories" and category in _PER_FOOTPRINT:
+            # KiCad printed exactly one line per footprint for these, on a
+            # board of footprints_on_board footprints. What is calibrated is
+            # that ratio, so it is held to exactly one per footprint on the
+            # board being checked — which has more parts than the captured
+            # one since the bipolar-measurement change (R32, R33, C44).
+            captured_fps = baseline["footprints_on_board"]
+            if reported != captured_fps:
+                problems.append(
+                    f"baseline {category!r} = {reported} is not one per "
+                    f"footprint ({captured_fps}); the per-footprint scaling "
+                    f"below does not apply to it")
+                continue
+            if n_linked is None:
+                n_linked = len(netlist_components())
+            want = n_linked
+            note = f", i.e. one per footprint: {reported}/{captured_fps}"
         got = counts.get(category, 0)
         if verbose:
             print(f"  inject {name:<17} -> {category}={got} "
-                  f"(KiCad 10.0.5 reported {want})")
+                  f"(KiCad 10.0.5 reported {reported}{note})")
         if got != want:
             problems.append(
                 f"reintroducing {name} yields {got} {category!r} action(s), "
-                f"but KiCad 10.0.5 reported {want} on the board that carried "
-                f"that defect. This checker does not see what KiCad sees; fix "
-                f"the rule, do not trust the result.")
+                f"but KiCad 10.0.5 reported {reported}{note} on the board "
+                f"that carried that defect, so {want} are expected here. "
+                f"This checker does not see what KiCad sees; fix the rule, "
+                f"do not trust the result.")
     return problems
 
 

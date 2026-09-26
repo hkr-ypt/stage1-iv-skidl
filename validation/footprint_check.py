@@ -66,7 +66,7 @@ UNCONNECTED_PAD_ALLOWLIST = {
     "U8": (
         {"10", "11", "12", "13", "25", "26", "27", "28"},
         "ADS1256: AIN4..AIN7 are spare analog inputs (Stage 1 digitises two "
-        "differential pairs, AIN0/1 and AIN2/3) and D0/CLKOUT, D1, D2, D3 are "
+        "channels, AIN0 and AIN2 against AINCOM) and D0/CLKOUT, D1, D2, D3 are "
         "the general-purpose digital I/O, unused here.",
     ),
     "U9": (

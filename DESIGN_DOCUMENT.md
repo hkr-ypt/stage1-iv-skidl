@@ -19,6 +19,12 @@ design decisions, and where a reviewer's attention is most useful.
   data sheet.
 - **Review item Rn** refers to the numbered list in §14.
 - This document does not modify or replace any design file.
+- **Revision: bipolar measurement.** The measurement chain was changed from
+  unipolar (zero on AGND, 0…+5 V and positive current only) to bipolar (zero
+  at the 2.500 V reference, ±11.8 V and ±97.8 mA). Sections 2–7, 10, 11, 13,
+  14 and the appendices describe the revised circuit. The reasoning, the
+  options that were rejected and the routed-board change list are in
+  [`docs/bipolar_measurement.md`](docs/bipolar_measurement.md).
 
 > **Important context about the PCB.** The repository contains a *generated*
 > `stage1_iv.kicad_pcb` that is **placed but unrouted**, and its placement is a
@@ -29,7 +35,9 @@ design decisions, and where a reviewer's attention is most useful.
 > repository board only where its *setup* (netclasses, design rules, ground-pour
 > strategy) is likely to have carried into the routed board. PCB-level
 > observations are therefore mostly written as **things to check on the routed
-> board** (§11).
+> board** (§11). The routed KiCad project is now in the repository under
+> `routed/`; it predates the bipolar-measurement change and needs the small
+> engineering change listed in `docs/bipolar_measurement.md` §5.
 
 ---
 
@@ -79,9 +87,10 @@ rationale written in the SKiDL source, `README.md` or `manifest.yaml`.
 |---|---|---|
 | Bipolar sweep to ≈ ±10 V | `README.md`, `blocks/dac_sweep.py` | 16-bit DAC + difference amplifier with gain 8.03 → ±10.04 V |
 | Measure DUT voltage without lead or shunt drops | `blocks/voltage_sense.py` | 4-wire Kelvin: separate SENSE± jacks into an INA128 |
+| Signed V and I over the whole sweep (hysteresis on a fixed DUT) | `blocks/current_sense.py`, `blocks/voltage_sense.py`, `blocks/adc.py` | INA128 REF pins and ADC AINCOM on VREF_2V5; Kelvin attenuator k = 0.1992; current gain sized to the physical current bound. Checked by `validation/measurement_range.py` |
 | Hardware current limit ≈ 50 mA | `blocks/output_buffer.py` | OPA548 programmable current limit, R7 = 1.43 MΩ → ≈ 49.35 mA |
 | Protection in depth for DUT and instrument | `blocks/protection.py` | OPA548 ILIM → PTC fuse F1 → 100 Ω R30 → TVS D5; rail clamps on the sense inputs |
-| Ratiometric accuracy | `blocks/power.py`, `blocks/adc.py` | One REF5025 (2.500 V) feeds the DAC reference, the sweep mid-point divider and the ADC reference |
+| Ratiometric accuracy | `blocks/power.py`, `blocks/adc.py` | One REF5025 (2.500 V) feeds the DAC reference, the sweep mid-point divider, the ADC reference, and the measurement zero (INA128 REF pins, ADC AINCOM) |
 | Keep analog and digital apart | `blocks/power.py`, `docs/pcb_generation.md` | Separate AGND/DGND nets and pours, joined only at R31 (0 Ω). Separate SPI buses for DAC and ADC |
 
 The repository states **no numerical accuracy, resolution, noise, speed or
@@ -102,15 +111,15 @@ document are therefore analysis only. They are not requirements.
 | Current limit | R7 = 1.43 MΩ → **≈ 49.35 mA** (from the formula implied in the repository, [DS-check]) | R7, C14 |
 | Series elements outside the loop | F1 (PTC, 100 mA hold) + R30 100 Ω + R10 10 Ω | F1, R30, R10 |
 | DUT compliance | ±10.04 V at I → 0, about ±4.6 V at 49 mA (less by F1's resistance) | §5.4 |
-| Current sense | R10 = 10.0 Ω low-side shunt in FORCE−, INA128 G = 1 + 50k/13.0k = 4.846 → **48.46 V/A** | R10, U6, R11 |
-| Voltage sense | Kelvin SENSE± → 1 kΩ + rail clamps → INA128 **G = 1** (R14 **DNP**) | U7, R12–R14, D1–D4 |
-| ADC | ADS1256 24-bit, 7.68 MHz crystal, AIN0/1 = current, AIN2/3 = voltage, VREF 2.500 V, AVDD 5 V, DVDD 3.3 V | U8, Y1 |
-| **Measurable window** (as wired) | **V: 0 … +5.0 V only. I: 0 … +ILIM only (positive current only)** | §6 |
+| Current sense | R10 = 10.0 Ω low-side shunt in FORCE−, INA128 G = 1 + 50k/35.7k = 2.4006 → **24.0 V/A**, REF on VREF_2V5: `I_SENSE_OUT = 2.500 V + 24.0 V/A·I` | R10, U6, R11 |
+| Voltage sense | Kelvin SENSE± → rail clamps → 40.2 kΩ/10.0 kΩ dividers to AGND (k = 0.1992) → INA128 **G = 1** (R14 **DNP**), REF on VREF_2V5: `V_SENSE_OUT = 2.500 V + 0.1992·V_K` | U7, R12–R14, R32, R33, D1–D4 |
+| ADC | ADS1256 24-bit, 7.68 MHz crystal, **AIN0 − AINCOM = current, AIN2 − AINCOM = voltage, AINCOM on VREF_2V5**, VREF 2.500 V, PGA 2 (±2.500 V), AVDD 5 V, DVDD 3.3 V | U8, Y1, C44 |
+| **Measurable window** | **V: ±11.8 V guaranteed (±12.55 V nominal FS). I: ±97.8 mA guaranteed (±104 mA nominal FS). Both signed; both cover everything the source can apply (±10.04 V, ±91.3 mA)** | §6 |
 | Supplies | External bench supply: +15 V, −15 V, +5 V, GND through J1. On board: 3.3 V LDO, ferrite-isolated +5VA, 2.5 V reference | §8 |
 | Host interface | USB 2.0 full-speed through a USB-C receptacle (data only; VBUS is sensed but does not power the board). SWD header | J3, J2 |
 | DUT connection | Four 4 mm banana jacks: J4 FORCE+, J5 SENSE+, J6 SENSE−, J7 FORCE− | §5.4 |
 | Grounds | AGND and DGND joined only at R31 (0 Ω, 0805). U8 is the only IC with pins on both | §8.3 |
-| Part count | 110 physical parts (plus 8 schematic-only PWR_FLAGs, plus 4 board-only mounting holes), 66 nets | `component_manifest.md` |
+| Part count | 113 physical parts (plus 8 schematic-only PWR_FLAGs, plus 4 board-only mounting holes on the generated board), 66 nets | `component_manifest.md` |
 | Firmware | **Not in this repository.** Only the MCU pin assignment is defined | §9 |
 
 ---
@@ -141,10 +150,11 @@ document are therefore analysis only. They are not requirements.
    AGND ◄─ R10 10 Ω shunt ◄─ FORCE− ◄─ J7 FORCE− ─────────┘
                                   (J5 SENSE+ and J6 SENSE− connect to the DUT terminals)
 
- MEASUREMENT PATH
-   FORCE− / AGND (across R10) ──► U6 INA128, G = 4.846 ──I_SENSE_OUT (TP4)──► R15/R16/C24 ──► U8 AIN0/AIN1
-   J5 SENSE+ / J6 SENSE− ─► D1–D4 rail clamps ─► R12/R13 1 kΩ ─► U7 INA128, G = 1 (R14 DNP)
-                                                     ──V_SENSE_OUT (TP7)──► R17/R18/C25 ──► U8 AIN2/AIN3
+ MEASUREMENT PATH  (zero at VREF_2V5 = 2.500 V; both channels read against AINCOM)
+   FORCE− / AGND (across R10) ──► U6 INA128, G = 2.40, REF = VREF_2V5 ──I_SENSE_OUT (TP4)──► R15/C24 ──► U8 AIN0
+   J5 SENSE+ / J6 SENSE− ─► D1–D4 rail clamps ─► R12/R13 40.2 kΩ, R32/R33 10.0 kΩ to AGND (k = 0.1992)
+                         ─► U7 INA128, G = 1 (R14 DNP), REF = VREF_2V5 ──V_SENSE_OUT (TP7)──► R17/C25 ──► U8 AIN2
+   VREF_2V5 ──► U8 AINCOM (pin 5, beside VREFP pin 4; C44 bypass)     AIN1/AIN3: R16/R18 to AGND, spare self-checks
    U8 ADS1256 (VREFP = VREF_2V5, Y1 7.68 MHz) ──SPI2 (PB12–15) + DRDY (PA8) + RESET (PA9)──► U9
 
  HOST
@@ -181,7 +191,7 @@ important nets with every node on them.
 
 | Domain | Return | Members |
 |---|---|---|
-| Analog precision | **AGND** | U2 REF5025, U3, U4 DAC, U6/U7 INA128 (REF and decoupling), ADS1256 analog side (AGND, VREFN, AINCOM, AIN1/AIN3 returns), crystal load caps C26/C27, R10 shunt return, D5 TVS, ±15 V bulk and decoupling caps, C7 (+5VA bulk) |
+| Analog precision | **AGND** | U2 REF5025, U3, U4 DAC, U6/U7 INA128 decoupling (their REF pins are on VREF_2V5), U6 −IN (shunt low side), the R32/R33 attenuator returns, ADS1256 analog side (AGND, VREFN, AIN1/AIN3 returns; AINCOM is on VREF_2V5), crystal load caps C26/C27, R10 shunt return, D5 TVS, ±15 V bulk and decoupling caps, C7 (+5VA bulk), C44 |
 | Analog power | ±15VA (bench), +5VA (after FB1) | U3, U5, U6, U7 on ±15VA. U2, U4, U8 AVDD on +5VA |
 | Digital | **DGND** | U9, U1 LDO, C1–C4/C8, U10, J3 (GND and shield), J2, SW1, LED1, U8 DGND pin, J1 pin 4 (supply return) |
 | Bridge | R31 (0 Ω) | The only AGND↔DGND connection. `validation/assertions.py` checks this |
@@ -202,13 +212,17 @@ what the hardware allows and requires. It is not taken from existing code.
    which are outside the regulation loop. The voltage actually across the DUT
    is therefore lower than V_SWEEP by `I·(R_F1 + R30)`, and by R10's drop on
    the return side.
-3. **The DUT voltage is sensed at the DUT.** The Kelvin leads J5/J6 go to U7
-   (G = 1), whose output is V_SENSE_OUT. Because these leads carry almost no
-   current, the Kelvin reading excludes the lead, F1, R30 and R10 drops.
-4. **The current is sensed.** U6 amplifies the R10 drop: I_SENSE_OUT = 48.46 V/A × I.
-5. **Both channels are digitized** by U8 over SPI2. They are converted in turn
-   through the ADS1256 input multiplexer (AIN0/AIN1, then AIN2/AIN3). DRDY
-   (PA8) signals when a conversion is ready.
+3. **The DUT voltage is sensed at the DUT.** The Kelvin leads J5/J6 go
+   through the k = 0.1992 attenuator to U7 (G = 1), whose output is
+   V_SENSE_OUT = 2.500 V + 0.1992·V_K. The sense leads carry at most ≈200 µA
+   (the attenuator), so the Kelvin reading still excludes the lead, F1, R30
+   and R10 drops to within µV.
+4. **The current is sensed.** U6 amplifies the R10 drop onto the reference:
+   I_SENSE_OUT = 2.500 V + 24.0 V/A × I.
+5. **Both channels are digitized** by U8 over SPI2, in turn through the input
+   multiplexer: AIN2 − AINCOM (voltage), then AIN0 − AINCOM (current), both at
+   PGA 2. AINCOM is on VREF_2V5, so the codes are signed. DRDY (PA8) signals
+   when a conversion is ready.
 6. **Repeat** for the next code. The applied voltage is not the programmed
    voltage, because of the series resistance outside the loop. So firmware
    that needs a specific **DUT** voltage has to iterate on the measured Kelvin
@@ -220,7 +234,8 @@ what the hardware allows and requires. It is not taken from existing code.
 Things the hardware does **not** provide (by design or deferral): a
 software-controlled output disable (the OPA548 E/S pin is tied permanently
 enabled, and MCU control is "deferred" per `manifest.yaml`), an output
-relay/disconnect, range switching, and a bipolar measurement path (§6).
+relay/disconnect, and range switching (the ADC's PGA provides digital
+ranging for small signals, §6).
 
 ---
 
@@ -390,32 +405,37 @@ rating, continuously, for as long as the short lasts → **R3**.
 - R10 is a 10.0 Ω, 1 W axial resistor (DIN0207, 10.16 mm pitch). It sits in
   the **low side**, between FORCE− (J7) and AGND.
 - U6 (INA128P, DIP-8): +IN = FORCE− (the shunt high side, also TP3
-  "ISENSE_HI"). −IN = AGND. REF = AGND. R11 = 13.0 kΩ across RG1/RG2.
-  Supplies are ±15VA with 100 nF each.
-- The output I_SENSE_OUT (TP4) goes to ADS1256 AIN0 through R15 100 Ω. AIN1
-  returns to AGND through R16 100 Ω. C24 1 nF is across AIN0–AIN1.
+  "ISENSE_HI"). −IN = AGND. **REF = VREF_2V5.** R11 = 35.7 kΩ 0.1 % across
+  RG1/RG2. Supplies are ±15VA with 100 nF each.
+- The output I_SENSE_OUT (TP4) goes to ADS1256 AIN0 through R15 100 Ω and is
+  converted against AINCOM (VREF_2V5). C24 1 nF runs from AIN0 to AIN1, which
+  R16 100 Ω ties to AGND; AIN1 is no longer part of the measurement.
 
 **Scaling:**
 
 ```
-G_I = 1 + 50 kΩ / 13.0 kΩ = 4.846
-I_SENSE_OUT = G_I · R10 · I = 48.46 V/A · I        → 2.392 V at 49.35 mA
+G_I = 1 + 50 kΩ / 35.7 kΩ = 2.4006
+I_SENSE_OUT = VREF_2V5 + G_I · R10 · I = 2.500 V + 24.006 V/A · I
+ADC reads AIN0 − AINCOM = 24.006 V/A · I     → ±1.185 V at ±49.35 mA, ±2.192 V at ±91.3 mA
 ```
 
-- At ADS1256 PGA = 1 (full scale ±5 V) the positive range covers about 103 mA.
-  At PGA = 2 (±2.5 V) it covers about 51.6 mA, which is just above ILIM.
-  The source comment "Full scale at 50 mA … ~3 % below the 2.5 V VREF"
-  suggests PGA = 2 was intended for this channel. **Inference.**
-- **Polarity.** Positive V_SWEEP gives positive current and a positive
-  I_SENSE_OUT. **Negative current gives a negative I_SENSE_OUT (down to about
-  −2.4 V), which the ADC cannot represent (§6).** The repository documents the
-  unipolar limit only for the *voltage* channel. It does not document it for
-  the current channel → **R2**.
+- **Why G = 2.40.** The gain is sized to the largest current any passive DUT
+  can draw, `V_SWEEP / (R30 + R10) = 10.04 V / 110 Ω = 91.3 mA`, which holds
+  whatever the OPA548 limit does. SBOS070 gives the limit tolerance only at a
+  2.5 A setting (±100 mA typ, ±250 mA max), so the ~49 mA setting is not a
+  bound the measurement may rely on. Measurable: ±97.8 mA guaranteed (ADC pin
+  window at AVDD = 4.75 V), ±104.1 mA at PGA 2 full scale. The previous
+  G = 4.846 would clip at ±48.5 mA once the zero sits at 2.5 V.
+- **Polarity.** Both signs are measured: negative current gives
+  I_SENSE_OUT below 2.500 V (down to 0.31 V at −91.3 mA) and a negative ADC
+  code. The REF pin draws 12…51 µA from VREF_2V5.
 - **Low-current floor (analysis).** With a single 10 Ω range, 1 µA gives only
-  10 µV across the shunt. INA128 input offset and drift (tens of µV class for
-  the P grade **[DS-check]**) correspond to µA-level current offsets. These can
-  be removed by calibration, but drift and noise then set the floor. There is
-  no range switching. `protection.py` says the instrument characterizes "diode
+  10 µV across the shunt. INA128P offset at G = 2.4 is 52 µV typ / 258 µV max
+  RTI, i.e. 5 µA / 26 µA, and its drift 0.10 µA/°C typ / 0.88 µA/°C max
+  **[DS SBOS051G]**. These are removed by a zero calibration, after which
+  drift and noise set the floor. There is no range switching, but the ADC's
+  PGA can now be raised (up to 64, full scale ±1.6 mA) for small currents,
+  because both inputs sit near 2.5 V at any gain. `protection.py` says the instrument characterizes "diode
   reverse leakage and the sub-threshold knee" at "micro- and milliamp
   currents". Whether the current channel really resolves the currents involved
   should be checked → **R9**.
@@ -435,43 +455,56 @@ I_SENSE_OUT = G_I · R10 · I = 48.46 V/A · I        → 2.392 V at 49.35 mA
 
 **Topology (design fact):**
 
-- SENSE+ (J5, TP5) → R12 1.0 kΩ → U7 +IN. SENSE− (J6, TP6) → R13 1.0 kΩ → U7 −IN.
+- SENSE+ (J5, TP5) → R12 40.2 kΩ → U7 +IN, with R32 10.0 kΩ from U7 +IN to
+  AGND. SENSE− (J6, TP6) → R13 40.2 kΩ → U7 −IN, with R33 10.0 kΩ to AGND.
+  Two matched single-ended dividers, k = 10.0k/50.2k = 0.1992 (all four 0.1 %).
 - **Clamps on the jack side of R12/R13:**
   - D1 (1N4148) from SENSE+ to +15VA and D2 from −15VA to SENSE+.
   - D3 and D4 do the same on SENSE−.
   - The clamps go to the amplifier rails, **not** to AGND. That way legitimate
     signals within the INA128 common-mode range are never clipped
     (`voltage_sense.py`).
-- U7 (INA128P): REF = AGND. **R14 across RG1/RG2 is DNP**, so RG is open and
-  **G = 1**. The output V_SENSE_OUT (TP7) goes through R17 100 Ω to ADS1256
-  AIN2. AIN3 returns to AGND through R18 100 Ω. C25 1 nF is across AIN2–AIN3.
+- U7 (INA128P): **REF = VREF_2V5.** **R14 across RG1/RG2 is DNP**, so RG is
+  open and **G = 1**. The output `V_SENSE_OUT = 2.500 V + 0.1992·V_K` (TP7)
+  goes through R17 100 Ω to ADS1256 AIN2 and is converted against AINCOM
+  (VREF_2V5). C25 1 nF runs from AIN2 to AIN3, which R18 ties to AGND.
 
-**Why G = 1 (from the repository).**
+**Why an attenuator, and G = 1.**
 
-- G = 1 is the INA128's minimum gain.
-- The earlier value, R14 = 49.9 kΩ (G ≈ 2.0), limited the measurable Kelvin
-  range to 0…+2.5 V. Removing R14 doubled that to 0…+5.0 V.
-- No R14 value can make the measurement bipolar or extend it to ±10 V. That
-  would need U7 REF moved to a buffered mid-scale plus an overall gain of
-  about 0.25, which are part and net changes (`voltage_sense.py`, commit
-  `66bdab9`).
+- The ADC window around the 2.5 V zero is about ±2.35 V (AVDD = 4.75 V), and
+  G = 1 is the INA128's minimum, so ±10 V needs an overall gain near 0.2
+  ahead of or around the INA. Dividing at the input keeps U7's CMRR, keeps
+  VREF_2V5 free of signal current, and presents a low-impedance source to the
+  ADC. For a fixed overall gain G·k, the lowest G gives the lowest
+  input-referred offset (V_OS = 50 µV + 500 µV/G max), so G stays 1.
+- The dividers are single-ended to AGND, not one resistor across the inputs:
+  a differential divider would pass V_K/R through the DUT's return and the
+  R10 shunt and appear as a parallel conductance in every I–V curve.
 - The R14 pads stay on the board as a gain option (§10.2).
 
-**Range limits on this path** (distinguished in the repository):
+**Range limits on this path:**
 
 | Limit | Value |
 |---|---|
 | Physical Kelvin voltage | ±10.04 V as I → 0, about ±4.6 V at ILIM |
-| INA128 capability at G = 1, ±15 V rails | about ±13 V (per the repository, **[DS-check]**) |
-| ADS1256 as wired | **0 … +5.0 V** (§6) |
+| At U7's inputs | k·V: ±2.0 V differential, common mode < 2.2 V — far inside (V−)+2 … (V+)−2 V **[DS]** |
+| U7 output | 0.50 … 4.50 V |
+| ADS1256, PGA 2, buffer off | ±2.500 V full scale ↔ ±12.55 V; pin window ↔ **±11.8 V guaranteed** (§6) |
 
-**Loading of the DUT.** The Kelvin inputs draw INA128 input bias current (nA
-class) plus the reverse leakage of D1–D4. At SENSE+ = +10 V, D2 is
-reverse-biased by 25 V. 1N4148 leakage is in the tens-of-nA class at room
-temperature and rises steeply with temperature **[DS-check]**. Leakage on the
-SENSE− side bypasses the shunt. This matters only for nA-level measurements.
-Those are already below the current channel's practical floor (§5.5).
-**Inference.**
+**Loading of the DUT.** Each Kelvin input now has 50.2 kΩ to AGND. SENSE+
+draws up to 200 µA at 10 V; it is supplied through FORCE+ and returns directly
+to AGND, not through R10, so the current reading is unaffected and the Kelvin
+error is 200 µA × the sense-lead resistance (≈20 µV for 0.1 Ω). SENSE−
+diverts `I·R10/50.2 kΩ` around the shunt: a 0.02 % gain term. D1–D4 leakage
+(nA class, rising with temperature **[DS-check]**) is unchanged; on SENSE− it
+bypasses the shunt and matters only at nA currents, already below the current
+channel's floor (§5.5). With the SENSE leads unplugged, R32/R33 pull U7's
+inputs to AGND and the channel reads 0 V instead of saturating.
+
+**Divider matching.** Mismatch between the two dividers converts common mode
+into error only through V(SENSE−) ≈ I·R10: ≤ 3 mV at the 92 mA bound for
+0.1 % parts, proportional to I. Use one thin-film series (≤ 25 ppm/°C) for
+R12/R13/R32/R33 so k tracks with temperature.
 
 ### 5.7 ADC (Sheet 7)
 
@@ -480,10 +513,11 @@ Those are already below the current channel's practical floor (§5.5).
 | ADS1256 (U8, SSOP-28) | Connection |
 |---|---|
 | AVDD (1) | +5VA, C28 100 nF + C29 10 µF tantalum to AGND |
-| AGND (2), VREFN (3), AINCOM (5) | AGND |
-| VREFP (4) | VREF_2V5 (TP8). **No local bypass capacitor at VREFP** (see R12) |
-| AIN0/AIN1 (6/7) | Current channel: R15/R16 100 Ω, C24 1 nF differential |
-| AIN2/AIN3 (8/9) | Voltage channel: R17/R18 100 Ω, C25 1 nF differential |
+| AGND (2), VREFN (3) | AGND |
+| VREFP (4), **AINCOM (5)** | VREF_2V5 (TP8), C44 100 nF bypass to AGND. AINCOM is the negative input of both measurements |
+| AIN0 (6) | Current channel: I_SENSE_OUT via R15 100 Ω; C24 1 nF to AIN1 |
+| AIN2 (8) | Voltage channel: V_SENSE_OUT via R17 100 Ω; C25 1 nF to AIN3 |
+| AIN1 (7), AIN3 (9) | R16/R18 100 Ω to AGND. Not part of either measurement; self-checks (AIN1 − AIN3 = ADC zero, AIN1 − AINCOM = −VREF) |
 | AIN4–AIN7 (10–13) | Not connected |
 | SYNC/PDWN (14) | Tied to +3V3D (always running) |
 | /RESET (15) | RESET_ADC → PA9, 10 kΩ pull-up R20 |
@@ -492,16 +526,20 @@ Those are already below the current channel's practical floor (§5.5).
 | /CS (20), /DRDY (21), DOUT (22), DIN (23), SCLK (24) | PB12, PA8 (10 kΩ pull-up R19), PB14, PB15, PB13 |
 | D0/CLKOUT, D1–D3 (25–28) | Not connected |
 
-- **Input filters.** Each channel is a differential RC:
-  `f_c = 1/(2π · (100 + 100) Ω · 1 nF) ≈ 796 kHz`. There are no common-mode
-  capacitors. **Inference:** this is a light anti-alias and charge-kickback
-  filter. The digital filter provides the real band-limiting.
-- **Pseudo-differential measurement.** Both channels are measured against an
-  AGND-returned leg (AIN1, AIN3). Any AGND potential difference between the
-  INA128 REF pins and the ADC-side ends of R16/R18 appears directly as a
-  measurement error. That is a layout matter → **R16**.
-- **Reference.** VREFP = VREF_2V5 and VREFN = AGND, so the full scale is
-  ±2·VREF/PGA = ±5.0 V at PGA = 1.
+- **Input filters.** Each signal input has an RC to AGND through the idle
+  AIN1/AIN3 leg: `f_c = 1/(2π · (100 + 100) Ω · 1 nF) ≈ 796 kHz`.
+  **Inference:** a light anti-alias and charge-kickback filter; the digital
+  filter provides the real band-limiting. AINCOM is decoupled by C44.
+- **True differential measurement.** Both channels are converted against
+  AINCOM, the same VREF_2V5 net the INA128 REF pins sit on, so the 2.5 V
+  shift cancels in the conversion and AGND potential differences between the
+  INA128s and the ADC no longer enter the result. AGND still matters at the
+  amplifier *inputs* (U6 −IN on the shunt, the R32/R33 returns) → **R16**.
+- **Reference and range.** VREFP = VREF_2V5 and VREFN = AGND, so full scale is
+  ±2·VREF/PGA = ±2.500 V at PGA = 2, matching the ±2.35…2.6 V absolute-input
+  window around 2.5 V (buffer off). Buffer on narrows the window to
+  0 … AVDD − 2 V, leaving only +0.5 V above the zero, so it suits only small
+  signals.
 - **Pin numbers.** The ADS1256 has no upstream KiCad symbol. The project
   symbol was written from TI SBAS288K ("Terminal Functions", page 5), and the
   excerpt is kept in `libraries/provenance/`. It is flagged `RESOLVED`.
@@ -520,53 +558,54 @@ Those are already below the current channel's practical floor (§5.5).
 
 This is the most important system-level property for a reviewer to understand.
 
-**The sweep hardware is bipolar (±10.04 V, ±49 mA). The measurement chain, as
-wired, is unipolar.**
+**The sweep hardware is bipolar (±10.04 V, up to ±91.3 mA into any passive
+DUT), and so is the measurement chain: every operating point the source can
+reach is measured, with its sign.**
 
-The ADS1256 runs from a single +5 V analog supply. AIN1, AIN3 and VREFN are
-all on AGND, and both INA128s have REF on AGND. The ADC's absolute input range
-is about AGND − 0.1 V … AVDD + 0.1 V when the input buffer is off. It is
-narrower when the buffer is on: about AGND … AVDD − 2 V **[DS-check]**.
+The ADS1256 runs from a single +5 V analog supply, so each input pin must stay
+inside AGND − 0.1 V … AVDD + 0.1 V with the input buffer off, or AGND …
+AVDD − 2 V with it on, at any PGA **[DS SBAS288K]**. Its *differential* range,
+±2·VREF/PGA, is bipolar. The design therefore puts the measurement zero at the
+2.500 V reference: both INA128 REF pins and the ADC's AINCOM are on VREF_2V5,
+and each channel is converted as AINx − AINCOM.
 
-| Quantity | Physically applied | Presented to ADC | Measurable as wired (buffer off) |
+| Quantity | Physically applied | Presented to ADC (AINx; AINx − AINCOM) | Measurable (PGA 2, buffer off) |
 |---|---|---|---|
-| DUT voltage V_K | −10.04 … +10.04 V | V_SENSE_OUT = V_K (G = 1) | **0 … +5.0 V** (PGA = 1) |
-| DUT current I | −49 … +49 mA | I_SENSE_OUT = 48.46 V/A · I = −2.39 … +2.39 V | **0 … +49 mA** (PGA = 1 or 2) |
-| With ADC input buffer on | — | — | V: 0 … about +3.0 V. I: 0 … about 62 mA |
+| DUT voltage V_K | −10.04 … +10.04 V | 0.50 … 4.50 V; 0.1992·V_K = ±2.000 V | **±11.8 V guaranteed** at AVDD = 4.75 V; ±12.55 V at nominal full scale |
+| DUT current I | −91.3 … +91.3 mA (any passive DUT, any ILIM) | 0.31 … 4.69 V; 24.0 V/A·I = ±2.19 V | **±97.8 mA guaranteed**; ±104.1 mA at nominal full scale |
+| Worst-case tolerances stacked | V_SWEEP +0.5 %, R30/R10 ±1 %, INA128 gain ±0.5 %, VREF ±0.1 %, INA128 offset | AIN span V 0.48…4.52 V, I 0.25…4.75 V | headroom to the pin limit: V 334 mV, I 97 mV |
+
+ADC codes (PGA 2, full scale 2²³ = 8 388 608): V_K = −10.04 / 0 / +10.04 V →
+−6 710 886 / 0 / +6 710 886; I = −91.3 / 0 / +91.3 mA → −7 354 163 / 0 /
++7 354 163.
 
 Consequences:
 
-1. **Only quadrant I is measurable:** V ≥ 0 and I ≥ 0, with V ≤ 5 V.
-   - The ±10 V sweep can apply conditions that cannot be measured: any
-     negative voltage or current, and any positive voltage above about 5 V.
-   - The repository documents the voltage-channel limit clearly (`README.md`,
-     `voltage_sense.py`, `manifest.yaml`). It does not mention the
-     current-channel sign limit.
-   - **Inference:** a diode's reverse characteristic can still be measured,
-     up to 5 V, by reversing the DUT in the jacks.
-2. **Out-of-range inputs are not benign.** When the sweep drives V_K below 0 V
-   or above about 5.1 V, or drives the current negative, the INA128 outputs
-   push the ADC inputs beyond the supply rails. The current is then limited
-   only by R15 or R17 (100 Ω) and by the INA128 output current limit. So in
-   normal use of the negative half of the sweep, the ADC input protection
-   structures conduct continuously.
-   - **[DS-check]:** compare that current with the ADS1256 absolute-maximum
-     input current.
-   - **Inference:** injected current can also disturb the conversion of the
-     other channel on the shared multiplexer.
-   - → **R2**.
-3. Firmware must pick the PGA and buffer setting per channel. PGA = 1 is
-   needed for the voltage channel. PGA = 2 makes better use of the range for
-   the current channel. The PGA setting is global, so it must be changed
-   between conversions.
+1. **All four quadrants are measurable**, over the whole span the source can
+   apply. A diode's reverse and forward branches, and a full
+   −V → +V → −V hysteresis trajectory, are recorded with the DUT in one
+   orientation. `validation/measurement_range.py` recomputes this from the
+   part values on every build and fails it if any reachable point would
+   over-range.
+2. **No ADC input leaves its absolute window in normal operation**, in either
+   polarity. (The previous wiring drove AIN0/AIN2 toward −2.4 V and −10 V
+   through 100 Ω during every negative sweep, so the ADC's input protection
+   conducted continuously, limited only by 100 Ω and the INA128 output
+   current limit.) Fault cases —
+   external voltage on the jacks, a failed U5 — can still overdrive the inputs
+   through 100 Ω → **R15**.
+3. **One PGA for both channels.** PGA 2 fits both; no PGA switch or
+   recalibration is needed between the V and I conversions of a sweep point.
+   Higher PGA (up to 64) is legal for small signals, since both inputs sit
+   near 2.5 V whatever the gain.
+4. **Cost of the ±10 V span.** The attenuator makes the INA128 offset and
+   drift five times larger referred to the DUT (0.55 mV typ / 2.76 mV max,
+   11 µV/°C typ), and the lower current gain raises current drift ≈1.7× (typ).
+   A zero calibration at the start of each session removes the offsets; only
+   drift within the session remains.
 
-For the voltage channel the repository states the fix: move U7's REF pin to
-a buffered mid-scale (such as 2.5 V) and add attenuation of about 0.25 to
-reach ±10 V. That fix is **not implemented**. **Inference:** the current
-channel would need the same kind of change at U6 REF (a mid-scale reference)
-to read negative current.
-
----
+The derivation, the rejected alternatives and the hysteresis argument are in
+[`docs/bipolar_measurement.md`](docs/bipolar_measurement.md).
 
 ## 7. Shared voltage reference and the ratiometric scheme
 
@@ -578,19 +617,28 @@ to read negative current.
 - Loads on VREF_2V5:
   - the U4 DAC reference input (code-dependent),
   - the R1 + R2 divider (20 kΩ, about 125 µA),
-  - the U8 VREFP switched-capacitor input.
+  - the U8 VREFP switched-capacitor input,
+  - the U6 and U7 REF pins, 4…56 µA each (`(VREF − A2out)/80 kΩ`), far below
+    the REF5025's ±10 mA; the INA128 needs REF driven from a low impedance
+    (8 Ω in series costs ≈80 dB CMR at G = 1 **[DS]**), which a reference
+    output is,
+  - the U8 AINCOM input (the negative input of both conversions), bypassed
+    locally by C44 100 nF.
 - **What sharing the reference buys (analysis).**
   - V_SWEEP is fully ratiometric: its zero sits at VREF/2 and its span is
     proportional to VREF.
   - Both ADC readings are proportional to 1/VREF, so V and I carry the
-    **same** scale error. Any **ratio** of them, such as resistance or
+    **same** scale error. The measurement zero is VREF_2V5 itself on both
+    sides of the conversion (INA128 REF and AINCOM), so VREF's absolute
+    value and its noise cancel from the offset. Any **ratio** of them, such as resistance or
     dynamic resistance, is independent of VREF's absolute error. The
     absolute V and I values still depend on VREF's accuracy and drift
     **[DS-check grade A specs]**.
-- **Coupling risk (Inference).** The ADC's sampled reference input and the
-  DAC's code-dependent reference current share one node, whose only local bulk
-  is C9 at U2. Physical placement of the reference decoupling is therefore
-  important on the routed board → **R12, R18**.
+- **Coupling risk (Inference).** The ADC's sampled reference input, its
+  AINCOM input, the two INA128 REF pins and the DAC's code-dependent reference
+  current share one node. C9 (1 µF) sits at U2 and C44 (100 nF) at U8. The
+  REF-pin traces carry only µA, so their DC drop is µV and calibrates out, but
+  they should be routed away from digital and FORCE copper → **R12, R18**.
 
 ---
 
@@ -725,7 +773,7 @@ Notes and review points:
 | DUT short, ILIM failed or set wrong | Current is limited only by R9 + F1 + R30 + R10 ≈ 120 Ω+, about 100 mA at 12.6 V swing. R30 would see about 1 W, and F1 is near its **hold** current, so it may not trip | Whether R30 fails before F1 trips, i.e. whether the layer ordering actually works (R3) |
 | External voltage applied to FORCE+ (charged capacitor, powered DUT) | D5 clamps and F1 limits sustained current | D5 energy rating against realistic sources. U5 output back-driven through R30/F1 |
 | External voltage applied to FORCE− | **No dedicated protection.** R10 (1 W) goes straight to AGND, and U6 +IN is directly on FORCE−. `protection.py` says FORCE− protection "lives on" Sheet 5, but Sheet 5 has none | The INA128 input overvoltage rating **[DS-check]** and R10 (R15) |
-| Overvoltage on SENSE± | D1–D4 clamp the jack-side node to ±15VA. R12/R13 (1 kΩ) then limit current into U7 | The clamps sit **before** the series resistors, so fault current goes straight into the ±15 V rails through the 1N4148s. The bench supply may not sink that current (R15) |
+| Overvoltage on SENSE± | D1–D4 clamp the jack-side node to ±15VA. R12/R13 (40.2 kΩ) and R32/R33 then divide it: U7 sees at most ≈3.1 V | The clamps sit **before** the series resistors, so fault current goes straight into the ±15 V rails through the 1N4148s. The bench supply may not sink that current (R15) |
 | Board unpowered, DUT connected | The sense clamps are referenced to 0 V rails. The U5 output state is undefined | — |
 | Power-up / MCU reset | V_SWEEP can reach −10.04 V until firmware writes mid-scale (§8.2) | R8 |
 
@@ -733,8 +781,9 @@ Notes and review points:
 
 | Ref | Fitted state | Effect | Notes |
 |---|---|---|---|
-| **R14** (0603 across U7 RG) | **DNP**. Value text is "DNP (G=1)" | U7 G = 1, giving a Kelvin measurable range of 0…+5.0 V | DNP is expressed **only in the Value field**. The KiCad symbol has `(dnp no)` and `(in_bom yes)`, and the footprint is not marked DNP. A BOM or pick-and-place export will list R14 as a part unless someone intervenes → **R17**. If fitted, G = 1 + 50k/R14 and the measurable range shrinks to 0…5.0/G V. The pads connect to the high-impedance RG nodes, so contamination across the empty pads adds a leakage term to RG. For example, 100 MΩ of leakage gives a +0.05 % gain error |
-| R11 13.0 kΩ | Fitted | U6 G = 4.846 | Changing it rescales the current channel. There is no range switching |
+| **R14** (0603 across U7 RG) | **DNP**. Value text is "DNP (G=1)" | U7 G = 1; with the k = 0.1992 attenuator the Kelvin range is ±11.8 V | DNP is expressed **only in the Value field**. The KiCad symbol has `(dnp no)` and `(in_bom yes)`, and the footprint is not marked DNP. A BOM or pick-and-place export will list R14 as a part unless someone intervenes → **R17**. If fitted, G = 1 + 50k/R14 and the measurable range shrinks to ±11.8/G V (useful only if the sweep is restricted to match). The pads connect to the high-impedance RG nodes, so contamination across the empty pads adds a leakage term to RG. For example, 100 MΩ of leakage gives a +0.05 % gain error |
+| R11 35.7 kΩ 0.1 % | Fitted | U6 G = 2.4006, 24.0 V/A | Sized so ±91.3 mA (the physical current bound) stays on-scale; `validation/measurement_range.py` fails the build if it is raised past what the ADC window allows. There is no range switching |
+| R12/R13 40.2 kΩ, R32/R33 10.0 kΩ, all 0.1 % | Fitted | Kelvin attenuator k = 0.1992 | The two legs must stay equal (checked by the build); k's tolerance is the voltage channel's gain tolerance |
 | R4/R6 20.0 kΩ | Fitted | ±10.04 V sweep | 10.0 kΩ gives ±5.02 V, the previous configuration |
 | R7 1.43 MΩ | Fitted | ILIM ≈ 49 mA | Sets the protection threshold |
 | DAC channel B (U4 VOUTB) | Not connected | Reserved | — |
@@ -751,9 +800,9 @@ There are no jumpers or solder-bridge options in the design.
 
 | Aspect | Repository `stage1_iv.kicad_pcb` (generated) | Routed board (human) |
 |---|---|---|
-| Routing | **None** (0 tracks, 247 unrouted connections) | Routed |
+| Routing | **None** (0 tracks, 253 unrouted connections) | Routed; predates the bipolar-measurement change (`docs/bipolar_measurement.md` §5) |
 | Placement | Automatic shelf-packing by sheet. Not optimized | Significantly re-placed |
-| Outline | 132.2 × 114.3 mm rectangle, 4 × M3 holes inset 5.5 mm | Check the routed board |
+| Outline | 132.2 × 117.8 mm rectangle, 4 × M3 holes inset 5.5 mm | 107.3 × 62.3 mm (`routed/diodes.kicad_pcb` Edge.Cuts) |
 | Layers | 2-layer, 1 oz, 1.6 mm FR-4 (assumed fab, `docs/FAB_CONSTRAINTS.md`) | Check |
 | Ground pours | AGND zone (left) and DGND zone (right), **both layers**, 2 mm gap at x ≈ 52.2–54.2 mm. R31 and U8 straddle the gap | Check whether the routed board kept this strategy |
 | Netclasses / rules | In `stage1_iv.kicad_pro` and `stage1_iv.kicad_dru` (generated from `libraries/netclasses.py`) | Probably inherited if the same project file was used |
@@ -807,12 +856,14 @@ reviewer should look at.
    R12/R13 and U7, away from FORCE traces and digital lines. FORCE+ and SENSE+
    must not connect anywhere on the board, and neither must FORCE− and SENSE−.
 5. **Reference distribution.** VREF_2V5 should run as short, quiet traces from
-   U2 to U4, R1 and U8 VREFP. Check where C9 sits relative to U8, since there
-   is no bypass at VREFP. Keep VREF_HALF, V_DAC and the U3B summing nodes
+   U2 to U4, R1, U8 VREFP/AINCOM (C44 at U8) and the U6/U7 REF pins. The REF
+   traces are best tapped near U2/C9 or U8, paired with I_SENSE_OUT and
+   V_SENSE_OUT respectively. Keep VREF_HALF, V_DAC and the U3B summing nodes
    compact.
 6. **High-impedance nodes.** U7's RG pins and the empty R14 pads, the U6 RG
-   pins, and the U7 input nodes: check clearance, guarding and freedom from
-   flux contamination.
+   pins, and the U7 input nodes (8 kΩ Thevenin behind the attenuator): check
+   clearance and freedom from flux contamination. R32/R33 should return to
+   AGND at one point, beside U7, so AGND noise is common-mode to U7.
 7. **U5 thermal and mechanics.**
    - Copper area and heatsink provision for the TO-220-7.
    - Clearance for the tab at −15 V **[DS-check]**.
@@ -821,8 +872,8 @@ reviewer should look at.
 8. **Decoupling proximity.** Check that these sit at their pins with short
    ground returns to the correct pour: C15/C16 at U5, C20–C23 at U6/U7,
    C11/C12 at U3, C13 at U4, C28/C30 at U8, and C34–C38/C43 at U9.
-9. **ADC front end.** R15–R18 and C24/C25 should sit next to U8 pins 6–9, with
-   symmetric routing per channel. Check the crystal Y1 and C26/C27 placement
+9. **ADC front end.** R15–R18 and C24/C25 should sit next to U8 pins 6–9, and
+   C44 at pins 4/5 (VREFP/AINCOM). Check the crystal Y1 and C26/C27 placement
    against the ground split (R14).
 10. **Connectors.**
     - J1 (bench supply) on the DGND side with a clear path to R31.
@@ -875,18 +926,20 @@ tools/gen_project_config.py ──► stage1_iv.kicad_pro (netclasses), stage1_i
   the mounting hole) are vendored in `libraries/footprints/`.
 - The schematic uses the KiCad 7 format (version 20230121). Newer KiCad
   versions migrate it on load.
-- **Human edits.** The routed PCB was changed by hand (placement and routing);
-  the schematic was not. If the SKiDL is ever regenerated, `main.py` overwrites
-  `stage1_iv.kicad_pcb`. The routed board must not be overwritten by a
-  regenerated one.
-- **Re-run check (performed for this document).**
-  - `python3 main.py` was run without KiCad libraries installed. It
-    regenerated the netlist and schematics with **identical connectivity and
-    component values** to the committed files.
-  - The only differences were library-provenance and datasheet-URL metadata
-    fields, which change when the build falls back to the project library.
-  - SKiDL ERC reported 0 errors and 0 warnings. 9/9 connectivity assertions
-    passed. `validation/schematic_check.py` passed.
+- **Human edits.** The routed PCB (`routed/diodes.kicad_pcb`, KiCad 10.0)
+  was changed by hand (placement and routing), and its schematic gained C31,
+  C44 and C45. C44 is now in the SKiDL source; C31 and C45 are not. `main.py`
+  regenerates only the root `stage1_iv.kicad_pcb` and never touches
+  `routed/`. `tools/compare_routed_board.py` lists what separates the routed
+  board from the SKiDL design (today: the bipolar-measurement change, plus
+  C31/C45).
+- **Re-run check (bipolar-measurement revision).**
+  - `python3 main.py` with the pinned KiCad 9.0.9.1 libraries: structural
+    check PASS (113 parts, 362 pads, 313 netted), SKiDL ERC 0 errors / 0
+    warnings, 11/11 connectivity assertions, measurement-range check PASS,
+    Update PCB from Schematic a no-op on the generated board.
+  - `tools/kicad_roundtrip.py` (kicad-cli 7.0.11) reads 313 connections in
+    66 nets across 113 components, matching the netlist.
 
 ---
 
@@ -896,13 +949,15 @@ tools/gen_project_config.py ──► stage1_iv.kicad_pro (netclasses), stage1_i
 
 | Evidence | Status in the repository |
 |---|---|
-| SKiDL ERC, 9 custom connectivity assertions, schematic ↔ netlist equivalence | Reported pass, and reproduced for this document (§12) |
+| SKiDL ERC, 11 custom connectivity assertions, measurement-range check, schematic ↔ netlist equivalence | Pass, reproduced for this revision (§12) |
 | Symbol and footprint identifiers resolve. Pin numbers are real pads. No stray pads | Reported pass when KiCad libraries are present (CI). Not reproduced here, because no KiCad libraries were available |
 | KiCad netlist export from the schematic matches | Reported pass (KiCad 7.0.11 `kicad-cli`) |
 | KiCad **ERC dialog** | **Not run** (`manifest.yaml` → `unresolved_items`). Only re-implementations of some rules were run |
 | KiCad **DRC** on the routed board | Not in the repository. The generated board was DRC-checked only in part, with an older KiCad and in an unrouted state |
 | U5 OPA548 pinout and lead stagger | **Unverified against the data sheet** (`VERIFY-DATASHEET`) |
-| Circuit simulation (SPICE), analog error budget, thermal analysis | **None in the repository** |
+| Circuit simulation (SPICE), thermal analysis | **None in the repository** |
+| Measurement-range arithmetic (worst-case ADC pin voltages, full scale) | `validation/measurement_range.py`, on every build |
+| Routed board vs the SKiDL design | `tools/compare_routed_board.py`: the bipolar change is **not yet applied** to `routed/` (3 values, 2 new resistors, 3 pad nets); C31/C45 exist only on the routed board |
 | Bench testing, prototype measurements, calibration data | **None in the repository** |
 | Firmware | **None in the repository** |
 
@@ -919,9 +974,8 @@ statement in this document comes from calculation.
 | `blocks/mcu.py` (shield comment) | "The board is bus-powered" | Powered only from J1. VBUS is only sensed |
 | `blocks/output_buffer.py` | "R9's drop is NOT corrected downstream" | R9 is inside the loop. The drops *after* VO_SENSE are the ones not corrected |
 | `README.md` / `dac_sweep.py` | "Top 0.40 % of DAC codes unused" | About 0.2 % at each end exceeds ±10.000 V |
-| `blocks/current_sense.py` | Full scale "~3 % below the 2.5 V VREF" | ADC full scale is ±2·VREF/PGA. This only holds at PGA = 2 |
-| `README.md`, `manifest.yaml`, `docs/pcb_generation.md` | "107 components" (manifest), "307 connections", "28 footprints" | 110 parts (+8 flags). Schematic check reports 315 pin memberships including the flags. 31 vendored footprint files |
-| `docs/pcb_generation.md` | Board 129 × 108 mm, split at x = 38.02 mm | Generated board 132.2 × 114.3 mm, pours split at x ≈ 52.2 / 54.2 mm |
+| `docs/pcb_generation.md` | "247 connections", "28 footprints" | The generated board now has 253 unrouted connections and 113 footprints. 31 vendored footprint files |
+| `docs/pcb_generation.md` | Board 129 × 108 mm, split at x = 38.02 mm | Generated board 132.2 × 117.8 mm, pours split at x ≈ 52.2 / 54.2 mm |
 | `docs/silkscreen_and_packages.md` | Says both "all designators on F.Fab" and "all on F.SilkS" | Generated board: `PROMOTE_DESIGNATORS_TO_SILK = True`, a mix of both |
 | `docs/FAB_CONSTRAINTS.md` | "Everything else ≤ 5 V" | SENSE±, V_SWEEP, V_SENSE_OUT and VO_* reach about ±10–13 V |
 | Source comments | Cite `Stage1_IV_System_Design.md` §C.x | That file is not in the repository |
@@ -945,16 +999,14 @@ a list of confirmed defects. Items are ordered roughly by consequence.
   - Fact: the pin numbers (1 +IN, 2 −IN, 3 ILIM, 4 V−, 5 V+, 6 OUT, 7 E/S) and
     the StaggerOdd footprint come from a third-party library.
   - Check: both against TI SBOS070 and the purchased package variant.
-- **R2 — Bipolar sweep versus unipolar measurement (§6).**
-  - Fact: the negative voltage, negative current and > +5 V conditions cannot
-    be measured.
-  - Check:
-    - whether this matches the intended use;
-    - whether overdriving the ADS1256 inputs through 100 Ω, during normal
-      negative sweeps, is within the absolute-maximum ratings;
-    - whether it disturbs the other channel.
-  - Also: the current-channel sign limitation is not documented in the
-    repository.
+- **R2 — Bipolar measurement (§6). Addressed in the schematic; not yet on the
+  routed board.**
+  - Fact: the measurement is now bipolar over the whole source span, and no
+    normal operating point drives an ADC input outside its window.
+  - Check: that the routed board receives the change
+    (`docs/bipolar_measurement.md` §5, `tools/compare_routed_board.py`), and
+    on the bench that a −V → +V → −V sweep of a resistor reads a straight
+    line through the origin with no step at 0 V.
 - **R3 — R30 rating and protection ordering.**
   - Fact: R30 dissipates about 0.24 W at ILIM on a 1/4 W 1206.
   - Check: the continuous short-circuit case, and the failed-ILIM case, where
@@ -973,18 +1025,22 @@ a list of confirmed defects. Items are ordered roughly by consequence.
 - **R6 — U5 thermal.** Worst-case total dissipation (≈ 0.46 W output stage plus
   quiescent) in a free-standing TO-220 with no heatsink. The tab potential.
 - **R7 — DAC8552 logic thresholds** at V_DD = 5 V with 3.3 V drive.
-- **R9 — Current-channel low-end capability.** A 10 Ω shunt at G = 4.85 gives
-  10 µV per µA. Compare the INA128 offset, drift and noise, and the ADC noise
-  at the chosen data rate, with the currents the application needs, such as
-  diode leakage.
-- **R10 — Accuracy of the scaling parts.** The tolerance and TCR of R10 and R11
-  are not specified. Also the INA128 gain error and the REF5025 grade.
+- **R9 — Current-channel low-end capability.** A 10 Ω shunt gives 10 µV per
+  µA whatever the gain; at G = 2.40 the INA128P offset is 5 µA typ / 26 µA max
+  and its drift 0.10 µA/°C typ, before calibration. The ADC's PGA (up to 64)
+  adds resolution but not accuracy. Compare with the currents the application
+  needs, such as diode leakage.
+- **R10 — Accuracy of the scaling parts.** The tolerance and TCR of R10 are
+  not specified (R11, R12/R13 and R32/R33 are now 0.1 %; their TCR tracking
+  sets the drift of k). Also the INA128 gain error and the REF5025 grade.
 - **R11 — Supply assumptions.**
   - No on-board regulation of ±15 V.
   - No reverse-polarity protection, fusing or sequencing.
   - The ground connection through USB to the host and earth.
-- **R12 — Reference decoupling.** There is no bypass at ADS1256 VREFP, no NR
-  capacitor on the REF5025, and a shared DAC/ADC reference node.
+- **R12 — Reference decoupling.** C44 (100 nF) now bypasses VREFP/AINCOM at
+  the ADS1256 (it was already on the routed board). Still no NR capacitor on
+  the REF5025, and one reference node shared by the DAC, the ADC reference,
+  the ADC's negative input and both INA128 REF pins.
 - **R13 — MCU details.**
   - PC13 sourcing LED current.
   - The C43 VCAP1 value.
@@ -1007,8 +1063,9 @@ a list of confirmed defects. Items are ordered roughly by consequence.
 ### C. Layout (routed board)
 
 - **R16 — Analog ground current and the shunt taps.** DUT return current in
-  the AGND copper, relative to the INA128 REF, the ADC AIN1/AIN3/VREFN and the
-  U6 −IN tap (§11.3 items 2–3).
+  the AGND copper no longer reaches the output side of the measurement (INA128
+  REF and ADC AINCOM are on VREF_2V5), but it still matters at the inputs: the
+  U6 −IN tap on R10, and the common return point of R32/R33 (§11.3 items 2–3).
 - **R18 — Kelvin pair and reference routing** (§11.3 items 4–5).
 - **R19 — Ground split.** Integrity, parts on the correct pour, and R31 as the
   sole bridge (§11.3 item 1).
@@ -1022,14 +1079,18 @@ a list of confirmed defects. Items are ordered roughly by consequence.
 ### D. Firmware assumptions implied by the hardware (no firmware in the repository)
 
 - Initialize the DAC to mid-scale (code 32768) as early as possible.
-- Clamp DAC codes to about 131…65405 for ±10.00 V, or to the range the
-  measurement can represent.
-- Per channel: choose the ADS1256 PGA and buffer setting, and keep SCLK within
-  the ADS1256 limit.
+- Clamp DAC codes to about 131…65405 for ±10.00 V. The measurement covers the
+  full code range, so no further clamp is needed for it.
+- ADS1256: MUX AIN2/AINCOM (voltage) and AIN0/AINCOM (current), PGA 2 for
+  both, input buffer off; higher PGA only for small signals. Convert with
+  V_K = code·2.5 V/(2²³·0.199203) and I = code·2.5 V/(2²³·24.0056 V/A).
+  Keep SCLK within the ADS1256 limit.
 - Disable hardware VBUS sensing on the USB OTG peripheral (PA9 is used as
   RESET_ADC).
-- Calibrate offset and gain for both channels. Iterate the set-point on the
-  measured Kelvin voltage when a target DUT voltage is needed.
+- Calibrate offset and gain for both channels, including a zero point at the
+  start of every session (INA128 offset referred to the DUT is up to 2.8 mV and
+  26 µA before calibration). Iterate the set-point on the measured Kelvin
+  voltage when a target DUT voltage is needed.
 
 ---
 
@@ -1073,7 +1134,7 @@ Taken from `stage1_iv.net` (ref.pin).
 
 | Net | Nodes |
 |---|---|
-| VREF_2V5 | U2.6 (VOUT), C9.1, R1.1, U4.2 (VREF), U8.4 (VREFP), TP8 |
+| VREF_2V5 | U2.6 (VOUT), C9.1, R1.1, U4.2 (VREF), U8.4 (VREFP), **U8.5 (AINCOM)**, **U6.5 (REF)**, **U7.5 (REF)**, C44.1, TP8 |
 | VREF_HALF_RAW / VREF_HALF | R1.2, R2.1, U3.3 / U3.1, U3.2, R5.1 |
 | V_DAC | U4.4 (VOUTA), R3.1 |
 | DIFF_P / DIFF_N | R3.2, R4.1, U3.5 / R5.2, R6.1, U3.6 |
@@ -1086,12 +1147,12 @@ Taken from `stage1_iv.net` (ref.pin).
 | FORCE− | J7.1, R10.1, U6.3 (+IN), TP3 |
 | SENSE+ | J5.1, R12.1, D1.2 (A), D2.1 (K), TP5 |
 | SENSE− | J6.1, R13.1, D3.2 (A), D4.1 (K), TP6 |
-| SENSE_P_AMP / SENSE_M_AMP | R12.2, U7.3 / R13.2, U7.2 |
+| SENSE_P_AMP / SENSE_M_AMP | R12.2, R32.1, U7.3 / R13.2, R33.1, U7.2 |
 | U6_RG1/2, U7_RG1/2 | U6.1/U6.8 across R11. U7.1/U7.8 across R14 (DNP) |
-| I_SENSE_OUT | U6.6, R15.1, TP4 |
-| V_SENSE_OUT | U7.6, R17.1, TP7 |
+| I_SENSE_OUT | U6.6, R15.1, TP4 — 2.500 V + 24.0 V/A·I |
+| V_SENSE_OUT | U7.6, R17.1, TP7 — 2.500 V + 0.1992·V_K |
 | ADC_AIN0…3 | R15.2/U8.6/C24.1, R16.2/U8.7/C24.2, R17.2/U8.8/C25.1, R18.2/U8.9/C25.2 |
-| AGND (selected) | R10.2, U6.2 (−IN), U6.5 (REF), U7.5 (REF), R16.1, R18.1, U8.2/.3/.5, U2.4, U4.8, R2.2, R4.2, D5.2, C26.2, C27.2, **R31.1** |
+| AGND (selected) | R10.2, U6.2 (−IN), R32.2, R33.2, R16.1, R18.1, U8.2/.3, C44.2, U2.4, U4.8, R2.2, R4.2, D5.2, C26.2, C27.2, **R31.1** |
 | DGND (selected) | J1.4, U1.1, U8.17, U9 VSS/VSSA, U10.2, J3 GND/S1, J2.3, **R31.2** |
 | +15VA / −15VA | J1.1 / J1.2, plus the U3/U5/U6/U7 supplies, the D1/D3 cathodes / the D2/D4 anodes, R8 / R7, C14 |
 | +5V_RAW / +5VA | J1.3, U1.3, FB1.1, C1, C3 / FB1.2, U2.2, U4.1, U8.1, C7, C10, C13, C28, C29 |
@@ -1111,13 +1172,18 @@ Taken from `stage1_iv.net` (ref.pin).
 | R30 power at ILIM | 0.04935² × 100 | 0.244 W (1/4 W part) |
 | R9, R10 power at ILIM | 0.04935² × 10 | 24 mW each |
 | U5 output-stage power, shorted DUT | (15 − 0.04935 × ~115) × 0.04935 | ≈ 0.46 W (+ quiescent) |
-| INA128 gain, current channel | 1 + 50k/13.0k | 4.846 |
-| Current transimpedance | 4.846 × 10 Ω | 48.46 V/A (48.46 mV/mA) |
-| I_SENSE_OUT at ILIM | 48.46 × 0.04935 | 2.392 V |
-| Current full scale, PGA = 1 / 2 | (5.0 or 2.5 V) / 48.46 V/A | 103 mA / 51.6 mA |
+| Physical current bound, any passive DUT | 10.04 V / (R30 + R10) | 91.3 mA (92.5 mA worst tolerance) |
+| INA128 gain, current channel | 1 + 50k/35.7k | 2.4006 |
+| Current transimpedance | 2.4006 × 10 Ω | 24.006 V/A (24.0 mV/mA) |
+| I_SENSE_OUT at ±ILIM / ±91.3 mA | 2.500 ± 24.006 × I | 2.500 ± 1.185 V / 2.500 ± 2.192 V |
+| Current full scale, PGA 2 / pin-limited | 2.500 V / 24.006; 2.35 V / 24.006 | ±104.1 mA / ±97.9 mA |
+| Kelvin attenuator | 10.0k / (40.2k + 10.0k) | k = 0.19920 |
 | INA128 gain, voltage channel | 1 + 50k/∞ (R14 DNP) | 1.000 |
-| Voltage window, PGA = 1, buffer off | 0 … min(2·VREF, AVDD + 0.1 V) | 0 … +5.0 V |
-| ADC input RC corner (differential) | 1 / (2π × 200 Ω × 1 nF) | ≈ 796 kHz |
+| V_SENSE_OUT at ±10.04 V | 2.500 ± 0.19920 × 10.04 | 2.500 ± 2.000 V |
+| Voltage full scale, PGA 2 / pin-limited | 2.500 V / 0.1992; 2.35 V / 0.1992 | ±12.55 V / ±11.80 V |
+| ADC pin window, buffer off | AGND − 0.1 … AVDD + 0.1 (AVDD ≥ 4.75 V) | −0.10 … 4.85 V |
+| ADC input RC corner | 1 / (2π × 200 Ω × 1 nF) | ≈ 796 kHz |
+| INA REF current | (2.5 V − A2out) / 80 kΩ | 4 … 56 µA per INA128 |
 | VREF divider current | 2.5 V / 20 kΩ | 125 µA |
 | VBUS sense | 5 V × 100k / 200k | 2.5 V at PA0 |
 | LED current (V_F ≈ 2 V assumed) | (3.3 − 2.0) / 330 Ω | ≈ 4 mA from PC13 |
