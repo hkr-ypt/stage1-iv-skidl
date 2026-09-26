@@ -1,0 +1,115 @@
+# bipolar.eco — the bipolar-measurement ECO, applied to layout/stage1_iv.layout.
+#
+# Electrical change (SKiDL, blocks/*.py): U6 REF, U7 REF and U8 AINCOM move
+# from AGND to VREF_2V5; R32/R33 (10.0k) are added as the Kelvin attenuator's
+# bottom arms; R11/R12/R13 change value only. See docs/bipolar_measurement.md.
+#
+# This file is the PHYSICAL half: every operation names exactly what it adds
+# or removes and why. Nothing else on the human-routed board is touched: no
+# part moves, no existing track or via is rerouted, the outline, holes and
+# pour definitions are unchanged. The one edit to an existing item that is not
+# copper is R12's silkscreen designator, which R32 now sits on.
+#
+# Routing rules for what is added here: every new track is 0.25 mm (the
+# netclass width of SENSE and LOCAL_ANALOG, libraries/netclasses.py) and keeps
+# the repository's netclass clearances to all other copper (0.25 mm to sense
+# nets, 0.30 mm to the +/-15 V rails) — stricter than the 0.20 mm the board
+# was routed to. The paths were found with tools/eco_route.py against the real
+# copper, then snapped by hand to pad centres, 45-degree runs and existing
+# track end points; KiCad's DRC is the judge (validation/routed_board_check.py).
+(stage1_iv_eco (version 1) (name "bipolar") (base "stage1_iv.layout")
+
+  # --- U8 pin 5 (AINCOM): AGND -> VREF_2V5 ---------------------------------
+  # Pin 5's only copper is this three-segment F.Cu stub into the AGND junction
+  # at (125.09, 48.09). Pins 2 and 3 reach that junction on their own route
+  # (124.925,47.925)->(125.09,48.09)->(126.34,48.09)->via, which is kept.
+  (remove (segment "AGND" "F.Cu" 0.2 123.84 49.875 124.708456 49.875)
+          (reason "U8 pin 5 (AINCOM) leaves AGND for VREF_2V5"))
+  (remove (segment "AGND" "F.Cu" 0.2 124.708456 49.875 125.09 49.493456)
+          (reason "U8 pin 5 (AINCOM) leaves AGND for VREF_2V5"))
+  (remove (segment "AGND" "F.Cu" 0.2 125.09 49.493456 125.09 48.09)
+          (reason "U8 pin 5 (AINCOM) leaves AGND for VREF_2V5"))
+  # Pin 4 (VREFP) is already VREF_2V5, fed from C44 and the U2 trunk; pin 5
+  # joins it pad-centre to pad-centre, so the ADC's measurement zero (AINCOM)
+  # and its reference (VREFP) are the same point of copper.
+  (add (segment "VREF_2V5" "F.Cu" 0.25 123.84 49.225 123.84 49.875)
+       (reason "U8 pin 5 (AINCOM) to pin 4 (VREFP): AINCOM on VREF_2V5"))
+
+  # --- U6 pin 5 (REF): AGND -> VREF_2V5 --------------------------------------
+  # U6's REF pin had no track: the AGND pour connected it, and now clears
+  # around it. The nearest VREF_2V5 copper is the via at (118.75, 49.25) where
+  # the U2 -> U8 trunk meets the TP8 branch. F.Cu leaves the pad eastward
+  # above U6's B.Cu output (I_SENSE_OUT), a via drops to B.Cu clear of it, and
+  # B.Cu runs to that via, ending on it.
+  (add (segment "VREF_2V5" "F.Cu" 0.25 105.565 51.06 105.875 50.75)
+       (reason "U6 pin 5 (REF) to VREF_2V5"))
+  (add (segment "VREF_2V5" "F.Cu" 0.25 105.875 50.75 108.95 50.75)
+       (reason "U6 pin 5 (REF) to VREF_2V5"))
+  (add (via "VREF_2V5" 108.95 50.75 0.6 0.3 "F.Cu" "B.Cu")
+       (reason "U6 pin 5 (REF) to VREF_2V5: past U6's B.Cu output track"))
+  (add (segment "VREF_2V5" "B.Cu" 0.25 108.95 50.75 117.25 50.75)
+       (reason "U6 pin 5 (REF) to VREF_2V5"))
+  (add (segment "VREF_2V5" "B.Cu" 0.25 117.25 50.75 118.75 49.25)
+       (reason "U6 pin 5 (REF) to VREF_2V5, ending on the trunk via"))
+
+  # --- U7 pin 5 (REF): AGND -> VREF_2V5 --------------------------------------
+  # Also pour-connected only. U7's output (V_SENSE_OUT) leaves pin 6 on B.Cu
+  # as a diagonal to (121.75, 69.04), a wall between pin 5 and every VREF_2V5
+  # track; the one B.Cu gap is between pins 6 and 7, reached between U7's
+  # pad columns. The route passes there (the tightest point of this ECO:
+  # 0.048 mm over the netclass clearance to both pin 7 and V_SENSE_OUT), then
+  # runs NE clear of V_SENSE_OUT and ends on the corner (117.75, 70.25) of
+  # the existing B.Cu VREF_2V5 track to the DAC's reference (U4 pin 2).
+  (add (segment "VREF_2V5" "B.Cu" 0.25 108.79 84.54 107.55 83.3)
+       (reason "U7 pin 5 (REF) to VREF_2V5"))
+  (add (segment "VREF_2V5" "B.Cu" 0.25 107.55 83.3 107.55 81.3)
+       (reason "U7 pin 5 (REF) to VREF_2V5"))
+  (add (segment "VREF_2V5" "B.Cu" 0.25 107.55 81.3 108.1 80.75)
+       (reason "U7 pin 5 (REF) to VREF_2V5"))
+  (add (segment "VREF_2V5" "B.Cu" 0.25 108.1 80.75 109.3 80.75)
+       (reason "U7 pin 5 (REF) to VREF_2V5: between U7 pins 6 and 7"))
+  (add (segment "VREF_2V5" "B.Cu" 0.25 109.3 80.75 110.1 79.95)
+       (reason "U7 pin 5 (REF) to VREF_2V5: between U7 pin 7 and V_SENSE_OUT"))
+  (add (segment "VREF_2V5" "B.Cu" 0.25 110.1 79.95 110.1 77.9)
+       (reason "U7 pin 5 (REF) to VREF_2V5"))
+  (add (segment "VREF_2V5" "B.Cu" 0.25 110.1 77.9 117.75 70.25)
+       (reason "U7 pin 5 (REF) to VREF_2V5, ending on the DAC-reference track"))
+
+  # --- R32 / R33: the attenuator's bottom arms, beside U7's inputs ----------
+  # F.Cu, left of U7 pins 2-3, in the only courtyard-free space there: between
+  # R12's courtyard (y >= 81.52) and U7's (x >= 100.11). Rotated 180 so pad 1
+  # (the signal) faces U7 and pad 2 (AGND) is on the left: both arms return to
+  # the same spot of the AGND pour, so AGND noise is common-mode to U7.
+  (add (footprint "R33" F 98.4 79.2 180)
+       (reason "R33 10.0k, SENSE_M_AMP (U7 pin 2) to AGND"))
+  (add (footprint "R32" F 98.4 80.7 180)
+       (reason "R32 10.0k, SENSE_P_AMP (U7 pin 3) to AGND"))
+  # Pad 2 of each joins the AGND pour (thermal relief, as every other AGND
+  # pad here). Pad 1 of R33 runs straight to U7 pin 2; pad 1 of R32 drops
+  # onto the existing R12 -> U7 pin 3 track, at a point on it.
+  (add (segment "/voltage_sense/SENSE_M_AMP" "F.Cu" 0.25 99.225 79.2 100.91 79.2)
+       (reason "R33 pad 1 to U7 pin 2 (SENSE_M_AMP)"))
+  (add (segment "/voltage_sense/SENSE_M_AMP" "F.Cu" 0.25 100.91 79.2 101.17 79.46)
+       (reason "R33 pad 1 to U7 pin 2 (SENSE_M_AMP)"))
+  (add (segment "/voltage_sense/SENSE_P_AMP" "F.Cu" 0.25 99.225 80.7 99.225 82.25)
+       (reason "R32 pad 1 to the R12 -> U7 pin 3 track (SENSE_P_AMP)"))
+
+  # --- silkscreen ----------------------------------------------------------
+  # There is no room for R32/R33 designators on silk clear of their pads, of
+  # each other and of R12/R30's: their references go on F.Fab at the part
+  # centre, as the layout already does for its crowded parts (C23, right
+  # below, is the same). R12's own reference was printed where R32 now sits
+  # (above R12), so it moves beside R12, on its left.
+  (add (text "R33" property "Reference" (at 0 0 0) (layer "F.Fab")
+             (effects (font (size 1 1) (thickness 0.15))))
+       (reason "R33's reference on F.Fab: no clear spot on silk"))
+  (add (text "R32" property "Reference" (at 0 0 0) (layer "F.Fab")
+             (effects (font (size 1 1) (thickness 0.15))))
+       (reason "R32's reference on F.Fab: no clear spot on silk"))
+  (remove (text "R12" property "Reference" (at 0.035 -1.5 0) (layer "F.SilkS")
+                (effects (font (size 1 1) (thickness 0.15))))
+          (reason "R32 now occupies the spot R12's reference was printed on"))
+  (add (text "R12" property "Reference" (at -1.615 0 0) (layer "F.SilkS")
+             (effects (font (size 1 1) (thickness 0.15)) (justify right)))
+       (reason "R12's reference, beside R12, clear of R32"))
+)

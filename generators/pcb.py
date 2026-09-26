@@ -1125,15 +1125,18 @@ def size_board(placed_blocks):
             max(xs) + margin, max(ys) + margin)
 
 
-def generate_pcb(circuit, out_dir="."):
-    """Emit stage1_iv.kicad_pcb. Returns (path, report dict)."""
-    problems = check_against_fab()
-    if problems:
-        raise RuntimeError("netclasses violate docs/FAB_CONSTRAINTS.md:\n  - "
-                           + "\n  - ".join(problems))
+def prepare_footprints(circuit, libs):
+    """Every physical part as a board-ready footprint node, not yet placed.
 
-    libs = KicadLibraries()
+    Shared by both emitters: the auto-placer below and the layout-driven
+    generators/routed_pcb.py. Each node is the vendored library footprint with
+    the reference, value, pad nets, schematic link (path, sheetname, sheetfile),
+    fields and unit metadata that make "Update PCB from Schematic" a no-op.
 
+    Returns a dict: ``nodes`` (ref -> node, circuit order), ``net_names``,
+    ``codes`` (board net name -> net code), ``net_class``, ``blocks``
+    (ref -> skidl block).
+    """
     # --- nets -----------------------------------------------------------
     # KiCad names board nets by sheet path, not by the bare SKiDL name. Ask
     # the schematic model for the name it will compute, or every pad disagrees
@@ -1186,11 +1189,7 @@ def generate_pcb(circuit, out_dir="."):
 
     # --- footprints -----------------------------------------------------
     physical = [p for p in circuit.parts if (p.footprint or "").strip()]
-    partners = _decoupling_partner(circuit)
-
-    bridge_pins = _ground_bridges(circuit)
-
-    by_block, bridges = {}, []
+    nodes, blocks = {}, {}
     for part in physical:
         node, _src = load_footprint(libs, part.footprint.strip())
         _set_uuid(node, uid(f"fp:{part.ref}"))
@@ -1217,6 +1216,36 @@ def generate_pcb(circuit, out_dir="."):
             add_field(node, part.ref, fname, fvalue)
         add_unit_info(node, unit_info(model.part_sym[part.ref]))
         strip_attrs(node, SYMBOL_DRIVEN_FP_ATTRS)
+        nodes[part.ref] = node
+        blocks[part.ref] = block
+    return {"nodes": nodes, "net_names": net_names, "codes": codes,
+            "net_class": net_class, "blocks": blocks}
+
+
+def generate_pcb(circuit, out_dir="."):
+    """Emit an AUTO-PLACED, unrouted board. Returns (path, report dict).
+
+    This is the bootstrap placer: it gives a new design a sane, checkable
+    starting point for a human to lay out. It is no longer what main.py
+    writes — the board of record is generated from the layout source by
+    generators/routed_pcb.py. Run it with ``python3 main.py --autoplace``.
+    """
+    problems = check_against_fab()
+    if problems:
+        raise RuntimeError("netclasses violate docs/FAB_CONSTRAINTS.md:\n  - "
+                           + "\n  - ".join(problems))
+
+    libs = KicadLibraries()
+    prep = prepare_footprints(circuit, libs)
+    net_names, codes, net_class = (prep["net_names"], prep["codes"],
+                                   prep["net_class"])
+    partners = _decoupling_partner(circuit)
+    bridge_pins = _ground_bridges(circuit)
+
+    by_block, bridges = {}, []
+    for ref, node in prep["nodes"].items():
+        part = next(p for p in circuit.parts if p.ref == ref)
+        block = prep["blocks"][ref]
         item = Placed(part.ref, node, block)
         if part.ref in bridge_pins:
             # Parts that bond to both ground systems leave their block and go
@@ -1316,7 +1345,7 @@ def generate_pcb(circuit, out_dir="."):
 
     report = {
         "path": path,
-        "parts": len(physical),
+        "parts": len(prep["nodes"]),
         "nets": len(net_names),
         "board_mm": (round(x1 - x0, 2), round(y1 - y0, 2)),
         "outline_rect": (round(x0, 3), round(y0, 3), round(x1, 3), round(y1, 3)),

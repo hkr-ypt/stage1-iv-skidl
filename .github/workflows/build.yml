@@ -38,8 +38,14 @@ jobs:
           # stdlib distutils shim.
           SETUPTOOLS_USE_DISTUTILS=stdlib pip install --no-build-isolation kinparse
 
-      - name: Install kicad-cli, so the KiCad-side checks really run
+      - name: Install KiCad 10, so the KiCad-side checks really run
         run: |
+          # KiCad 10: the board of record carries a footprint (units ...)
+          # block KiCad 9 and older cannot read, so on the distro's KiCad 7
+          # its DRC could only ever be SKIPPED. Checks that cannot run say
+          # SKIPPED, never PASS; this step is what lets them run.
+          sudo add-apt-repository -y ppa:kicad/kicad-10.0-releases \
+            || echo "::warning::KiCad 10 PPA unavailable; falling back"
           sudo apt-get update -qq
           sudo apt-get install -y -qq --no-install-recommends kicad \
             || echo "::warning::kicad-cli unavailable; KiCad-side checks SKIP"
@@ -109,8 +115,18 @@ jobs:
       - name: Update PCB from Schematic would change nothing
         run: python3 validation/update_pcb_noop.py
 
-      - name: Board structural checks (courtyards, edges, ground split, parity)
-        run: python3 validation/drc_check.py
+      # The board of record: generated from the SKiDL circuit + layout/ (the
+      # human-routed board's placement and copper) + layout/bipolar.eco. It
+      # must be exactly what those sources generate, agree with the circuit,
+      # introduce nothing the original's checks do not already report, and
+      # pass KiCad 10 DRC: clean under the rules it was routed to, fully
+      # connected, and with no violation of the repository's netclass policy
+      # that the original human routing does not already have.
+      - name: Board of record (source, parity, heuristics, KiCad DRC)
+        run: python3 validation/routed_board_check.py
+
+      - name: The layout source still reproduces the original routed board
+        run: python3 tools/reproduce_reference.py
 
       - name: Board clearances still match the fabrication capability
         run: |
@@ -209,17 +225,13 @@ jobs:
             echo "(it first shipped in KiCad 8) — KiCad ERC SKIPPED, not passed."
           fi
 
-      # The board is UNROUTED on purpose, so DRC is expected to report
-      # unconnected_items and nothing else. validation/drc_check.py fails the
-      # job on any other violation class and reports the ratsnest as a count.
-      # Where kicad-cli has no `pcb drc` (KiCad 7), it says SKIPPED — DRC is
-      # never reported as passing on the strength of not having been run.
-      # DRC really runs here: kicad-cli gained `pcb drc` in KiCad 8, but
-      # pcbnew.WriteDRCReport() has existed since KiCad 7, and drc_check.py
-      # falls back to it. A KiCad that HAS DRC and refuses to run it — an
-      # uncompilable stage1_iv.kicad_dru, say — is a hard failure, not a skip.
-      - name: KiCad DRC
-        run: python3 validation/drc_check.py
+      # The bootstrap auto-placer (generators/pcb.py) is no longer the board
+      # of record, but it is how a new design gets a starting placement; keep
+      # it emitting a board that passes its own checks. That board is
+      # UNROUTED on purpose, so its DRC reports unconnected_items as a routing
+      # metric and fails on every other violation class.
+      - name: The bootstrap auto-placer still emits a checkable board
+        run: python3 main.py --autoplace
 
   build-without-kicad:
     # The design must build with no KiCad at all, and must then say SKIPPED.

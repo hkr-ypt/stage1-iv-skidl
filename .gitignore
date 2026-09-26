@@ -13,3 +13,9 @@ kicad_paths.local.json
 
 # CI-side library checkout
 .kicad-libs/
+
+# Scratch output: the auto-placed bootstrap board, reproduction and DRC
+# caches (tools/reproduce_reference.py, validation/routed_board_check.py).
+build/
+# KiCad writes per-user view state next to a project it opens.
+stage1_iv.kicad_prl

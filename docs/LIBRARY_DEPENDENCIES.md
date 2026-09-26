@@ -41,7 +41,7 @@ as each part's `KiCad_Lib` field and verified by
 | `Connector:USB_C_Receptacle_USB2.0_16P` | J3 | `Connector.kicad_sym:348661` |
 | `Connector_Generic:Conn_01x01` | J4, J5, J6, J7 | `Connector_Generic.kicad_sym:5` |
 | `Connector_Generic:Conn_01x05` | J2 | `Connector_Generic.kicad_sym:631` |
-| `Device:C` | C10, C11, C12, C13, C14, C15 +28 | `Device.kicad_sym:1761` |
+| `Device:C` | C10, C11, C12, C13, C14, C15 +30 | `Device.kicad_sym:1761` |
 | `Device:C_Polarized` | C1, C17, C18, C2, C29, C5 +3 | `Device.kicad_sym:5140` |
 | `Device:Crystal` | Y1, Y2 | `Device.kicad_sym:9588` |
 | `Device:D` | D1, D2, D3, D4 | `Device.kicad_sym:11674` |
@@ -69,7 +69,7 @@ runtime dependency — laying out the PCB needs these libraries installed.
 | `Capacitor_SMD:CP_Elec_6.3x5.4` | C8 |
 | `Capacitor_SMD:CP_Elec_6.3x7.7` | C7 |
 | `Capacitor_SMD:CP_Elec_8x10.5` | C5, C6 |
-| `Capacitor_SMD:C_0603_1608Metric` | C10, C11, C12, C13, C19, C20 +22 |
+| `Capacitor_SMD:C_0603_1608Metric` | C10, C11, C12, C13, C19, C20 +24 |
 | `Capacitor_SMD:C_0805_2012Metric` | C14, C15, C16, C3, C39, C4 |
 | `Capacitor_Tantalum_SMD:CP_EIA-3528-21_Kemet-B` | C1, C17, C18, C2, C29 |
 | `Connector:Banana_Jack_1Pin` | J4, J5, J6, J7 |

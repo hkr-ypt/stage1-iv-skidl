@@ -1,6 +1,6 @@
 # Component Manifest — Stage 1 I–V Characterization System
 
-Total components: **121**
+Total components: **123**
 
 | Ref | Value | MPN | KiCad Library | Footprint | Sheet | Status |
 |-----|-------|-----|---------------|-----------|-------|--------|
@@ -42,6 +42,7 @@ Total components: **121**
 | C28 | 100nF | generic | Device:C | Capacitor_SMD:C_0603_1608Metric | 7 ADC | OK — pin numbers read from Device.kicad_sym:1761 |
 | C29 | 10uF/16V | generic | Device:C_Polarized | Capacitor_Tantalum_SMD:CP_EIA-3528-21_Kemet-B | 7 ADC | OK — pin numbers read from Device.kicad_sym:5140 |
 | C30 | 100nF | generic | Device:C | Capacitor_SMD:C_0603_1608Metric | 7 ADC | OK — pin numbers read from Device.kicad_sym:1761 |
+| C31 | 100nF | generic | Device:C | Capacitor_SMD:C_0603_1608Metric | 7 ADC | OK — pin numbers read from Device.kicad_sym:1761 |
 | C32 | 20pF | generic | Device:C | Capacitor_SMD:C_0603_1608Metric | 2 MCU | OK — pin numbers read from Device.kicad_sym:1761 |
 | C33 | 20pF | generic | Device:C | Capacitor_SMD:C_0603_1608Metric | 2 MCU | OK — pin numbers read from Device.kicad_sym:1761 |
 | C34 | 100nF | generic | Device:C | Capacitor_SMD:C_0603_1608Metric | 2 MCU | OK — pin numbers read from Device.kicad_sym:1761 |
@@ -55,6 +56,7 @@ Total components: **121**
 | C42 | 100nF | generic | Device:C | Capacitor_SMD:C_0603_1608Metric | 2 MCU | OK — pin numbers read from Device.kicad_sym:1761 |
 | C43 | 2.2uF | generic | Device:C | Capacitor_SMD:C_0603_1608Metric | 2 MCU | OK — pin numbers read from Device.kicad_sym:1761 |
 | C44 | 100nF | generic | Device:C | Capacitor_SMD:C_0603_1608Metric | 7 ADC | OK — pin numbers read from Device.kicad_sym:1761 |
+| C45 | 100nF | generic | Device:C | Capacitor_SMD:C_0603_1608Metric | 2 MCU | OK — pin numbers read from Device.kicad_sym:1761 |
 | D1 | 1N4148 | 1N4148 | Device:D | Diode_SMD:D_SOD-123 | 6 Voltage Sense | OK — pin numbers read from Device.kicad_sym:11674 |
 | D2 | 1N4148 | 1N4148 | Device:D | Diode_SMD:D_SOD-123 | 6 Voltage Sense | OK — pin numbers read from Device.kicad_sym:11674 |
 | D3 | 1N4148 | 1N4148 | Device:D | Diode_SMD:D_SOD-123 | 6 Voltage Sense | OK — pin numbers read from Device.kicad_sym:11674 |

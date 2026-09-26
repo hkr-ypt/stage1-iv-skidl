@@ -2,8 +2,9 @@
 
 This note records why the Stage 1 measurement chain was unipolar, what was
 changed to make both DUT voltage and DUT current signed over the whole range
-the source can apply, and exactly what the human-routed board in `routed/`
-needs in order to implement it. The SKiDL blocks (`blocks/current_sense.py`,
+the source can apply, and exactly how that change was carried onto the
+human-routed board (§5: implemented as `layout/bipolar.eco` on the board of
+record `stage1_iv.kicad_pcb`; `routed/` stays the unipolar original). The SKiDL blocks (`blocks/current_sense.py`,
 `blocks/voltage_sense.py`, `blocks/adc.py`) carry the same reasoning next to
 the parts; `validation/measurement_range.py` recomputes every number below
 from the live part values on each build.
@@ -168,11 +169,14 @@ AIN1 and AIN3 stay tied to AGND through R16/R18 and are useful self-checks:
 AIN1 − AIN3 reads the ADC's own zero; AIN1 − AINCOM at PGA 1 reads −VREF,
 i.e. exactly half of negative full scale.
 
-## 5. Engineering change for the routed board (`routed/diodes.kicad_pcb`)
+## 5. Engineering change on the routed board — as implemented
 
-`routed/` is **not modified** by this change: no copper was drawn and no part
-moved. `tools/compare_routed_board.py` compares the routed board with the SKiDL
-design by reference designator; today it reports exactly this list **[fact]**:
+The change is implemented, drawn and DRC-checked. It lives in
+`layout/bipolar.eco`, applied by `generators/routed_pcb.py` to the captured
+human layout (`layout/stage1_iv.layout`) to produce the board of record
+`stage1_iv.kicad_pcb`. `routed/` is **not modified**: it remains the
+unipolar original, and `tools/compare_routed_board.py` still reports exactly
+the difference below between it and the SKiDL design **[fact]**:
 
 ```
 NEW    R32   10.0k 0.1%  R_0603  [1=/voltage_sense/SENSE_P_AMP, 2=AGND]
@@ -183,90 +187,111 @@ VALUE  R13   '1.0k'  -> '40.2k 0.1%'
 NET    U6.5  'AGND' -> 'VREF_2V5'          (U6 REF)
 NET    U7.5  'AGND' -> 'VREF_2V5'          (U7 REF)
 NET    U8.5  'AGND' -> 'VREF_2V5'          (ADS1256 AINCOM)
-BOARD  C31   100nF [+3V3D, DGND]           (pre-existing: on the board, not in SKiDL)
-BOARD  C45   100nF [+3V3D, DGND]           (pre-existing: on the board, not in SKiDL)
 ```
 
-C44 (100 nF, VREF_2V5–AGND at U8) was already on the routed board; it is now
-also in the SKiDL design with the same reference, value, footprint and nets,
-because this change makes that node the ADC's negative input.
+C31 and C45 (100 nF +3V3D decouplers the layout designer added by hand) were
+on the routed board but not in the SKiDL design; they are now in
+`blocks/adc.py` and `blocks/mcu.py` with the board's references, values and
+nets, so the regenerated board keeps them. C44 was already carried.
 
-Coordinates below are read from `routed/diodes.kicad_pcb` (mm, KiCad board
-coordinates). Route choices are suggestions for the layout designer; they have
-not been drawn or DRC-checked.
+Coordinates are KiCad board millimetres. Every operation below is in
+`layout/bipolar.eco` with its reason. New tracks are 0.25 mm (the SENSE and
+LOCAL_ANALOG netclass width) and keep the **repository** netclass clearances
+(0.25 mm to sense nets, 0.30 mm to ±15 V) — stricter than the 0.20 mm the
+board was routed to. They were found with `tools/eco_route.py` (two-layer A*
+against the real copper), then snapped to pad centres, 45° runs and existing
+track points; KiCad's DRC judged the result.
 
-**A. BOM only — no copper (3 parts).** R11 (B.Cu, 101.8, 44.5), R12 (F.Cu,
-97.2, 82.3), R13 (B.Cu, 104.3, 82.0): same 0603 footprints, new values.
+**A. Values only — no copper (3 parts).** R11 (B.Cu), R12 (F.Cu), R13 (B.Cu):
+same 0603 footprints, new values from the circuit.
 
-**B. U8 pin 5, AINCOM → VREF_2V5 (tiny).** Pin 5 (123.84, 49.875) is joined to
-AGND only by a three-segment F.Cu stub:
-`(123.84, 49.875)→(124.708, 49.875)→(125.09, 49.493)→(125.09, 48.09)`.
-Delete those three segments; pins 2/3 keep their own route
-`(123.84, 47.925)→(124.925, 47.925)→(125.09, 48.09)→(126.34, 48.09)→via (126.5, 48.25)`.
-Then join pad 5 to pad 4 (VREFP, 123.84, 49.225, already VREF_2V5): the pads
-are adjacent at 0.65 mm pitch, so this is a pad-to-pad jumper. C44 (120.725,
-48.5) already decouples the node.
+**B. U8 pin 5, AINCOM → VREF_2V5 — as proposed.** Removed the three-segment
+F.Cu AGND stub `(123.84, 49.875)→(124.708, 49.875)→(125.09, 49.493)→(125.09,
+48.09)`; pins 2/3 keep their own route into that junction. Added a 0.65 mm
+pad-centre-to-pad-centre jumper pin 4 (VREFP) → pin 5 on F.Cu. AINCOM and VREFP
+are now the same copper, decoupled by C44 as before.
 
-**C. U6 pin 5, REF → VREF_2V5 (one trace, ≈14 mm).** THT pad at
-(105.565, 51.06), currently connected only by the AGND pours (no tracks), so
-the re-net needs nothing removed; refilling the zones isolates it. One feasible
-path: on B.Cu, run alongside the existing I_SENSE_OUT route
-`(105.565, 48.52)→(109.295, 52.25)→(118.1, 52.25)` on its south side, east to
-x ≈ 117.1, then via onto the F.Cu VREF_2V5 segment U2.6 → C9
-`(117.1, 54.975)→(117.1, 57.125)`. Pairing REF with I_SENSE_OUT keeps the
-signal and the node it is referred to together. The B.Cu +15VA run at
-x = 104.465 lies west of the pad and is not crossed.
+**C. U6 pin 5, REF → VREF_2V5 — 13.9 mm, 1 via (differs from the proposal).**
+F.Cu from the pad centre (105.565, 51.06) east at y = 50.75 over U6's B.Cu
+output track (I_SENSE_OUT), a via at (108.95, 50.75), then B.Cu east at
+y = 50.75 — 1.5 mm north of I_SENSE_OUT's y = 52.25 run — and a 45° step onto
+the existing VREF_2V5 via at (118.75, 49.25), where the U2 → U8 trunk meets the
+TP8 branch. *The proposal* went south of I_SENSE_OUT and via'd onto the U2 → C9
+segment. The pad's B.Cu side is fenced by I_SENSE_OUT's diagonal from U6
+pin 6, so either path needs a via; the implemented one is the shortest the
+router found at the policy clearances and ends on an existing trunk via instead
+of adding a second one next to U2.
 
-**D. U7 pin 5, REF → VREF_2V5 (one trace, ≈15–20 mm).** THT pad at
-(108.79, 84.54), zone-connected only. Nearest VREF_2V5 copper: the B.Cu segment
-`(121.35, 59.8)→(121.35, 67.65)` and R1 pin 1 (116.575, 72.75). One feasible
-path pairs with V_SENSE_OUT's B.Cu diagonal `(108.79, 82.0)→(121.75, 69.04)`
-on its south-east side, ending on the x = 121.35 segment. Tapping near U2/C9
-or U8 rather than downstream of R1/U4 keeps the DC IR difference between the
-REF tap and AINCOM to a few µV (it is a fixed offset either way and
-calibrates out).
+**D. U7 pin 5, REF → VREF_2V5 — 19.7 mm, no via (differs from the proposal).**
+B.Cu from the pad centre (108.79, 84.54) up between U7's pad columns, out
+between pins 6 and 7, north past pin 7, then a 45° run to the corner
+(117.75, 70.25) of the existing B.Cu VREF_2V5 track that feeds the DAC's
+reference (U4 pin 2) and R1. *The proposal* paired it with V_SENSE_OUT's B.Cu
+diagonal on its south-east side, ending on the x = 121.35 segment near U2.
+On the real copper that path does not exist without a via: V_SENSE_OUT's own
+B.Cu route (U7 pin 6 → diagonal → x = 121.75 up to its via at y = 59.2)
+separates U7 pin 5 from every VREF_2V5 track, and the only B.Cu gap is between
+U7 pins 6 and 7, north-west of V_SENSE_OUT. That gap is the tightest point of
+the ECO: 0.048 mm over the policy clearance to both pin 7 (+15VA, 0.30 mm) and
+V_SENSE_OUT (0.25 mm), i.e. 0.35 and 0.30 mm of actual gap — 0.10–0.15 mm
+over the 0.20 mm the board was routed to.
 
-**E. R32 and R33 (two new 0603s, four short stubs).** They belong at U7's
-inputs with their AGND pads side by side, so any AGND noise is common-mode to
-U7. The F.Cu area left of U7 pins 2–3, roughly x 97.3–100.0, y 78.9–81.5, holds
-only the AGND pour: R33 at about (98.9, 79.46), right pad stubbed to U7.2
-(101.17, 79.46); R32 at about (98.9, 80.95), right pad stubbed to the
-SENSE_P_AMP track at y = 82.25 or to U7.3 (101.17, 82.0); both left pads into
-the F.Cu AGND pour. Keep clear of U7's courtyard (x ≥ ≈100.1).
+The tap is downstream of the DAC-reference branch, which the proposal wanted
+to avoid; the cost, from the board's copper **[calc]** (1 oz, 0.49 mΩ/□ at
+25 °C, vias neglected): U7's tap is 51 mΩ of track from U2 pin 6 and U8 AINCOM
+28 mΩ, on different branches. The DC current on the tap's branch — the
+R1 + R2 divider's 125 µA plus the DAC8552 reference load (not quantified here;
+a resistor-string DAC's reference load does not depend on code
+**[judgement]**) — shifts U7's zero by about 6 µV plus 5 µV per 100 µA of
+DAC load, relative to U2; AINCOM moves by 2.8 µV per 100 µA of ADC reference
+load. Both are fixed offsets, about 30 µV referred to the DUT for the divider
+term — one-twentieth of U7's typical offset, and removed by the per-session
+zero calibration §7 already requires. The REF pins' own, signal-dependent
+current ((V_REF − A2 out)/80 kΩ **[calc]** from the 40 kΩ output-stage
+resistors **[DS]**) through their routes (U6: 47 mΩ,
+U7: 90 mΩ from U2 pin 6) is at most ≈ 8 µV at the ADC, a few ppm of full scale.
 
-**Scale of the change.** 3 value changes, 2 new 0603 footprints, 3 re-netted
-pads, 3 short track segments removed, 2 new traces of 14–20 mm, 1 pad-to-pad
-jumper, 4 stubs. No part moves; no existing route other than the U8 pin-5 stub
-is touched. **[judgement]** A minor ECO.
+**E. R32 and R33 — as proposed, positions refined.** Two 0603s on F.Cu left of
+U7's inputs, in the only courtyard-free space there: R33 at (98.4, 79.2), R32
+at (98.4, 80.7), both rotated 180° so pad 1 (signal) faces U7 and both pad 2s
+(AGND) sit side by side and join the F.Cu AGND pour by thermal relief, keeping
+AGND noise common-mode to U7. R33 pad 1 → U7 pin 2 on F.Cu (2.1 mm); R32 pad 1
+drops 1.55 mm straight onto the existing R12 → U7 pin 3 track. Their
+designators go on F.Fab (no clear spot on silk, as the layout already does for
+C23 below them); R12's designator, which R32 now covers, moves beside R12.
 
-**Netclasses.** VREF_2V5 is in SENSE (0.25 mm / 0.25 mm); SENSE_P_AMP and
-SENSE_M_AMP in LOCAL_ANALOG. No netclass changes are needed.
+**Scale.** 3 value changes, 2 new parts, 3 re-netted pads, 3 segments removed,
+15 segments and 1 via added (total new copper 37.9 mm), 1 silk designator
+moved. No part moved; no existing track or via other than U8 pin 5's stub was
+touched; outline, holes and pour definitions unchanged. Board of record: 115
+footprints, 861 tracks, 95 vias.
 
-### How to apply it without losing layout work
-
-- Make the schematic change in the **routed project** (`routed/*.kicad_sch`):
-  three values, the REF pins of U6/U7 and AINCOM of U8 onto VREF_2V5, R32/R33
-  added on the voltage-sense sheet. Then Update PCB from that schematic.
-- Do **not** push the generated schematic straight onto the routed board: the
-  routed board's C31 and C45 are not in the SKiDL design and would be deleted,
-  and its C44 carries a KiCad-assigned UUID, so path matching would replace it
-  (relink by reference if you do). Back-porting C31/C45 into SKiDL is a
-  separate, unrelated change.
-- Afterwards: refill zones, run DRC in KiCad 10, and run
-  `python3 tools/compare_routed_board.py` — it should report only C31 and C45.
+**Result [fact], KiCad 10.0.6** (`validation/routed_board_check.py`, zones
+refilled, all track errors, schematic parity): 0 unconnected items, 0 parity
+problems; 0 errors under the rules the board was routed to (with clearance
+checking on, which the routed project had off); under the repository netclass
+policy, 114 clearance errors — every one present at the same place on the
+unipolar original (which has 116; the ECO removed the 2 that involved U8
+pin 5's stub) — and none new. See `docs/physical_design.md`.
 
 ## 6. Verification performed for this change
 
-- `python3 main.py` with the pinned KiCad 9.0.9.1 libraries: structural check,
-  SKiDL ERC (0/0), 11/11 connectivity assertions (two new: measurement zero on
-  VREF_2V5; Kelvin attenuator topology), measurement-range check PASS,
-  Update-PCB no-op on the generated board, 14 board checks.
-- `tools/kicad_roundtrip.py` with kicad-cli 7.0.11: KiCad reads 313
-  connections in 66 nets, 113 components, all identifiers resolve.
-- `tools/test_guard_fails.sh` including two new injections (AINCOM back on
-  AGND; R11 back to 13.0 k), both caught.
-- Not verified here: KiCad ERC dialog and DRC (need KiCad 8+/10), any SPICE
-  or bench measurement, and the routed-board ECO itself (not drawn).
+- `python3 main.py` with the pinned KiCad 9.0.9.1 libraries and KiCad 10.0.6:
+  structural check, SKiDL ERC (0/0), 11/11 connectivity assertions (two new:
+  measurement zero on VREF_2V5; Kelvin attenuator topology),
+  measurement-range check PASS, and `validation/routed_board_check.py` on the
+  routed board (generated from source; parity; Update-PCB no-op; KiCad DRC as
+  in §5).
+- `tools/reproduce_reference.py`: the layout source regenerates the unipolar
+  original — identical copper, placement, connectivity, KiCad DRC and zone
+  fill (`docs/physical_design.md`).
+- `tools/kicad_roundtrip.py` and `kicad-cli sch erc` (KiCad 10.0.6): KiCad
+  reads the netlist's connectivity; KiCad ERC 0 errors, 0 warnings.
+- `tools/test_guard_fails.sh`: 23 injections, including AINCOM back on AGND,
+  R11 back to 13.0 k, an ECO track dropped (unrouted) and an ECO that no
+  longer matches its base.
+- Not verified: any SPICE or bench measurement, fabrication-house DFM, and the
+  board by a person in KiCad's GUI.
 
 ## 7. Open risks
 
@@ -278,9 +303,10 @@ SENSE_M_AMP in LOCAL_ANALOG. No netclass changes are needed.
   (~0.1 µA/°C typ): nA-level diode leakage is not resolvable (pre-existing, R9).
 - Fault cases (external voltage on FORCE−, failed U5) can still drive the ADC
   inputs past their rails through 100 Ω (pre-existing, R15).
-- VREF_2V5 now also feeds the two INA REF pins through ~15–20 mm traces; the
-  DC effect is µV and calibrated, but keep those traces away from digital and
-  FORCE copper.
+- VREF_2V5 now also feeds the two INA REF pins through 13.9 mm (U6) and
+  19.7 mm (U7) traces, U7's tapped from the DAC-reference branch; the DC
+  effect is µV and calibrated (§5 D). Both run over the AGND area, at least
+  5 mm from any digital or FORCE copper **[fact]**.
 - The worst-case current-channel headroom (97 mV at AVDD = 4.75 V) assumes
   AVDD within the ADS1256's 4.75–5.25 V range; the +5 V bench supply must be
   set accordingly.

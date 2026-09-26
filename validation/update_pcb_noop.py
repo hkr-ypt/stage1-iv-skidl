@@ -188,6 +188,10 @@ def read_board(path):
             break
     if root is None:
         raise RuntimeError(f"{path}: not a kicad_pcb file")
+    return board_from_root(root)
+
+
+def board_from_root(root):
     nets = {str(n[2]) for n in _kids(root, "net")
             if len(n) > 2 and str(n[2])}
     return root, [BoardFootprint(n) for n in _kids(root, "footprint")], nets
@@ -254,9 +258,14 @@ _SYMBOL_ATTRS = {"exclude_from_bom", "exclude_from_pos_files",
                  "exclude_from_board"}
 
 
-def dry_run(board_path=BOARD_FILE, circuit=None):
-    """Every change "Update PCB from Schematic" would make. Empty == no-op."""
-    _root, footprints, board_nets = read_board(board_path)
+def dry_run(board_path=BOARD_FILE, circuit=None, root=None):
+    """Every change "Update PCB from Schematic" would make. Empty == no-op.
+
+    ``root`` — an already-parsed ``(kicad_pcb ...)`` to use instead of reading
+    ``board_path``.
+    """
+    _root, footprints, board_nets = read_board(board_path) if root is None \
+        else board_from_root(root)
     want = netlist_components(circuit)
 
     actions = []
@@ -467,7 +476,12 @@ def self_test(board_path=BOARD_FILE, verbose=True):
 
     problems = []
 
-    live = dry_run(board_path)
+    # The circuit is built once: every dry run below compares against the
+    # same schematic, and building it is most of a dry run's cost.
+    import main as project_main
+    _n, _p, circuit = project_main.build()
+
+    live = dry_run(board_path, circuit)
     if live:
         problems.append(
             f"the board itself is not a no-op ({len(live)} actions); "
@@ -477,17 +491,22 @@ def self_test(board_path=BOARD_FILE, verbose=True):
                 print(f"  live: {a}")
         return problems
 
-    import tempfile
     with open(board_path, encoding="utf-8") as fh:
         text = fh.read()
+    # Copper (tracks, vias, pours) is neither read by the updater model nor
+    # touched by any injection; on a routed board it is most of the file, so
+    # it is dropped once here rather than re-parsed for every injection.
+    root = next(c for c in parse_sexp(text) if _head(c) == "kicad_pcb")
+    root[:] = [c for c in root
+               if _head(c) not in ("segment", "arc", "via", "zone")]
+    text = write_sexp(root) + "\n"
 
     n_linked = None          # symbol-linked footprints, counted on demand
     for name, (capture, category, mutate) in sorted(_INJECTIONS.items()):
-        tree = parse_sexp(text)
-        root = next(c for c in tree if _head(c) == "kicad_pcb")
-        before = write_sexp(root)
+        root = next(c for c in parse_sexp(text) if _head(c) == "kicad_pcb")
+        before = next(c for c in parse_sexp(text) if _head(c) == "kicad_pcb")
         mutate(root)
-        if write_sexp(root) == before:
+        if root == before:
             # The injection changed nothing, so the "defect" is not in the
             # board to begin with and the count below would be vacuous. This
             # is how a generator that quietly stopped escaping net names would
@@ -498,15 +517,7 @@ def self_test(board_path=BOARD_FILE, verbose=True):
                 f"reintroduces is already present in the generated board, or "
                 f"the injection is stale.")
             continue
-        with tempfile.NamedTemporaryFile("w", suffix=".kicad_pcb",
-                                         delete=False,
-                                         encoding="utf-8") as tmp:
-            tmp.write(write_sexp(root) + "\n")
-            tmp_path = tmp.name
-        try:
-            counts = summarise(dry_run(tmp_path))
-        finally:
-            os.unlink(tmp_path)
+        counts = summarise(dry_run(circuit=circuit, root=root))
         source = baseline if capture == "categories" else baseline[capture]
         reported = source["categories"].get(category)
         want, note = reported, ""
@@ -524,7 +535,7 @@ def self_test(board_path=BOARD_FILE, verbose=True):
                     f"below does not apply to it")
                 continue
             if n_linked is None:
-                n_linked = len(netlist_components())
+                n_linked = len(netlist_components(circuit))
             want = n_linked
             note = f", i.e. one per footprint: {reported}/{captured_fps}"
         got = counts.get(category, 0)

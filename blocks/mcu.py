@@ -37,6 +37,9 @@ def create_mcu_block(n):
               footprint="Capacitor_SMD:C_0805_2012Metric")
     C40 = C()(ref="C40", tag="C40", value="1uF")
     C43 = C()(ref="C43", tag="C43", value="2.2uF")  # VCAP1 (added, see header)
+    # One more +3V3D decoupler at U9, added on the routed board by its
+    # designer; carried here so the regenerated board keeps it.
+    C45 = C()(ref="C45", tag="C45", value="100nF")
     FB2 = L_FerriteBead()(ref="FB2", tag="FB2", value="BLM21PG221SN1D")
     R21 = R()(ref="R21", tag="R21", value="10k")
     C41 = C()(ref="C41", tag="C41", value="100nF")
@@ -59,8 +62,9 @@ def create_mcu_block(n):
     # U9["VDD"] resolves to ALL FOUR VDD pads of the LQFP-64 (19/32/48/64) and
     # U9["VSS"] to all four VSS pads (18/31/47/63); every rail pad is bonded.
     n.P3V3D += (U9["VDD"], U9["VBAT"], C34[1], C35[1], C36[1], C37[1],
-                C39[1], FB2[1], R21[1], J2["Pin_4"])
-    n.DGND += (U9["VSS"], U9["VSSA"], C34[2], C35[2], C36[2], C37[2], C39[2])
+                C39[1], C45[1], FB2[1], R21[1], J2["Pin_4"])
+    n.DGND += (U9["VSS"], U9["VSSA"], C34[2], C35[2], C36[2], C37[2], C39[2],
+               C45[2])
     n.VDDA += FB2[2], U9["VDDA"], C38[1], C40[1]
     n.DGND += C38[2], C40[2]
     vcap = Net("VCAP1"); vcap += U9["VCAP1"], C43[1]
@@ -171,7 +175,7 @@ def create_mcu_block(n):
 
     return {
         "U9": U9, "Y2": Y2, "C32": C32, "C33": C33, "C34": C34, "C35": C35,
-        "C36": C36, "C37": C37, "C38": C38, "C39": C39, "C40": C40, "C43": C43,
+        "C36": C36, "C37": C37, "C38": C38, "C39": C39, "C40": C40, "C43": C43, "C45": C45,
         "FB2": FB2, "R21": R21, "C41": C41, "SW1": SW1, "R22": R22, "R23": R23,
         "LED1": LED1, "J2": J2, "J3": J3, "U10": U10, "R24": R24, "R25": R25,
         "R26": R26, "R27": R27, "R28": R28, "R29": R29, "C42": C42,

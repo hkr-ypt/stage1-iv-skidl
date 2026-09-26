@@ -1,7 +1,18 @@
 # PCB generation and board setup
 
-This document covers Prompt 3: how `stage1_iv.kicad_pcb` is produced, where
-every board-setup number comes from, and — plainly — what state the board is
+> **Superseded as a description of `stage1_iv.kicad_pcb`.** The board of
+> record is now the human placement and routing from `routed/`, captured as
+> source in `layout/` and carried through the bipolar ECO: it is **fully
+> routed**. See [`physical_design.md`](physical_design.md). The auto-placer
+> this document describes is kept as a bootstrap tool — `python3 main.py
+> --autoplace` writes its unrouted board to `build/autoplace/` — and its
+> numbers below (board size, 247/253 connections to route, 0 tracks) describe
+> that board, not the one in the repository root. The netclass, design-rule,
+> fabrication-constraint and Update-PCB sections still describe the
+> repository's policy and remain current.
+
+This document covers Prompt 3: how the auto-placed board is produced, where
+every board-setup number comes from, and — plainly — what state that board is
 actually in.
 
 ## The headline, first

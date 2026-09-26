@@ -26,18 +26,23 @@ design decisions, and where a reviewer's attention is most useful.
   options that were rejected and the routed-board change list are in
   [`docs/bipolar_measurement.md`](docs/bipolar_measurement.md).
 
-> **Important context about the PCB.** The repository contains a *generated*
-> `stage1_iv.kicad_pcb` that is **placed but unrouted**, and its placement is a
-> machine-generated starting point, not a considered layout. The board you
-> received was routed by a human, who also changed component placement
-> substantially while keeping the schematic unchanged. So this document treats
-> the **schematic as the electrical source of truth**. It describes the
-> repository board only where its *setup* (netclasses, design rules, ground-pour
-> strategy) is likely to have carried into the routed board. PCB-level
-> observations are therefore mostly written as **things to check on the routed
-> board** (§11). The routed KiCad project is now in the repository under
-> `routed/`; it predates the bipolar-measurement change and needs the small
-> engineering change listed in `docs/bipolar_measurement.md` §5.
+> **Important context about the PCB.** The board in the repository root,
+> `stage1_iv.kicad_pcb`, is now the **human-placed, human-routed board**,
+> regenerated from source: its placement and copper are captured from the
+> original routed project (`routed/`, unipolar, kept unmodified as the
+> reference) into `layout/stage1_iv.layout`, and the bipolar-measurement change
+> is applied to it as a reasoned ECO (`layout/bipolar.eco`: R32/R33 placed,
+> U6/U7 REF and U8 AINCOM re-routed to VREF_2V5, three AGND stub segments
+> removed; no other part moved and no other track touched). It is fully
+> routed; KiCad 10 DRC reports 0 unconnected items and 0 errors under the
+> rules it was routed to — see `docs/physical_design.md`, which also records
+> what is *not* clean (the repository's stricter netclass policy, which the
+> original human routing does not meet either). The schematic remains the
+> electrical source of truth. Where sections below describe the earlier
+> auto-placed board (placement, outline size, mounting holes), they describe
+> the bootstrap output of `python3 main.py --autoplace`, not the board of
+> record; §11's observations were written as things to check on the routed
+> board and still apply to it.
 
 ---
 
@@ -798,14 +803,20 @@ There are no jumpers or solder-bridge options in the design.
 
 ### 11.1 What is in the repository versus what you received
 
-| Aspect | Repository `stage1_iv.kicad_pcb` (generated) | Routed board (human) |
+> **Update.** The table compares the earlier *auto-placed* board (now only
+> produced by `python3 main.py --autoplace`) with the human board. The board
+> of record, `stage1_iv.kicad_pcb`, is now the human board regenerated from
+> `layout/` with the bipolar ECO applied (`docs/physical_design.md`): the
+> right-hand column, plus R32/R33 and the three REF/AINCOM routes.
+
+| Aspect | Auto-placed board (`--autoplace`, bootstrap only) | Routed board (human; now the board of record) |
 |---|---|---|
-| Routing | **None** (0 tracks, 253 unrouted connections) | Routed; predates the bipolar-measurement change (`docs/bipolar_measurement.md` §5) |
+| Routing | **None** (0 tracks, 253 unrouted connections) | Fully routed: 861 tracks, 95 vias with the bipolar ECO (849/94 on the unipolar original) |
 | Placement | Automatic shelf-packing by sheet. Not optimized | Significantly re-placed |
 | Outline | 132.2 × 117.8 mm rectangle, 4 × M3 holes inset 5.5 mm | 107.3 × 62.3 mm (`routed/diodes.kicad_pcb` Edge.Cuts) |
 | Layers | 2-layer, 1 oz, 1.6 mm FR-4 (assumed fab, `docs/FAB_CONSTRAINTS.md`) | Check |
 | Ground pours | AGND zone (left) and DGND zone (right), **both layers**, 2 mm gap at x ≈ 52.2–54.2 mm. R31 and U8 straddle the gap | Check whether the routed board kept this strategy |
-| Netclasses / rules | In `stage1_iv.kicad_pro` and `stage1_iv.kicad_dru` (generated from `libraries/netclasses.py`) | Probably inherited if the same project file was used |
+| Netclasses / rules | In `stage1_iv.kicad_pro` and `stage1_iv.kicad_dru` (generated from `libraries/netclasses.py`) | Not inherited: one `Default` class, 0.20 mm, and clearance checking switched off in its project. Clean at 0.20 mm with it on; 116 clearance errors under the repository policy (`docs/physical_design.md`) |
 | KiCad version | Board schema 20241229, which carries a `(units …)` block; the repository says **KiCad 10** is required | — |
 
 Because placement changed, ignore the repository board's physical
@@ -909,7 +920,8 @@ blocks/*.py  +  libraries/custom_symbols.py  (SKiDL, the electrical source)
         ▼
      main.py ──► stage1_iv.net            (flat netlist: documentation and validation only)
              ──► stage1_iv.kicad_sch + 8 sheets   (generated schematic = KiCad source of truth)
-             ──► stage1_iv.kicad_pcb      (generated, placed, unrouted board)
+             ──► stage1_iv.kicad_pcb      (generated from the circuit + layout/stage1_iv.layout
+                                           + layout/bipolar.eco: placed and fully routed)
              ──► component_manifest.md
 tools/gen_project_config.py ──► stage1_iv.kicad_pro (netclasses), stage1_iv.kicad_dru, sym/fp-lib-table
 ```
@@ -928,11 +940,13 @@ tools/gen_project_config.py ──► stage1_iv.kicad_pro (netclasses), stage1_i
   versions migrate it on load.
 - **Human edits.** The routed PCB (`routed/diodes.kicad_pcb`, KiCad 10.0)
   was changed by hand (placement and routing), and its schematic gained C31,
-  C44 and C45. C44 is now in the SKiDL source; C31 and C45 are not. `main.py`
-  regenerates only the root `stage1_iv.kicad_pcb` and never touches
-  `routed/`. `tools/compare_routed_board.py` lists what separates the routed
-  board from the SKiDL design (today: the bipolar-measurement change, plus
-  C31/C45).
+  C44 and C45; all three are now in the SKiDL source. Its placement and
+  copper are captured in `layout/stage1_iv.layout`, from which `main.py`
+  regenerates the root `stage1_iv.kicad_pcb` (with `layout/bipolar.eco`
+  applied); `routed/` itself is never touched and is the reference
+  `tools/reproduce_reference.py` proves the capture against.
+  `tools/compare_routed_board.py` lists what separates the original routed
+  board from the SKiDL design (today: the bipolar-measurement change).
 - **Re-run check (bipolar-measurement revision).**
   - `python3 main.py` with the pinned KiCad 9.0.9.1 libraries: structural
     check PASS (113 parts, 362 pads, 313 netted), SKiDL ERC 0 errors / 0
@@ -953,11 +967,11 @@ tools/gen_project_config.py ──► stage1_iv.kicad_pro (netclasses), stage1_i
 | Symbol and footprint identifiers resolve. Pin numbers are real pads. No stray pads | Reported pass when KiCad libraries are present (CI). Not reproduced here, because no KiCad libraries were available |
 | KiCad netlist export from the schematic matches | Reported pass (KiCad 7.0.11 `kicad-cli`) |
 | KiCad **ERC dialog** | **Not run** (`manifest.yaml` → `unresolved_items`). Only re-implementations of some rules were run |
-| KiCad **DRC** on the routed board | Not in the repository. The generated board was DRC-checked only in part, with an older KiCad and in an unrouted state |
+| KiCad **DRC** on the routed board | KiCad 10.0.6 on every build where it is installed (CI installs it): 0 unconnected, 0 parity, 0 errors under the as-built rules; 114 clearance errors under the repository's netclass policy, all pre-existing on the original human routing (`docs/physical_design.md`) |
 | U5 OPA548 pinout and lead stagger | **Unverified against the data sheet** (`VERIFY-DATASHEET`) |
 | Circuit simulation (SPICE), thermal analysis | **None in the repository** |
 | Measurement-range arithmetic (worst-case ADC pin voltages, full scale) | `validation/measurement_range.py`, on every build |
-| Routed board vs the SKiDL design | `tools/compare_routed_board.py`: the bipolar change is **not yet applied** to `routed/` (3 values, 2 new resistors, 3 pad nets); C31/C45 exist only on the routed board |
+| Routed board vs the SKiDL design | The board of record carries the bipolar change (`layout/bipolar.eco`); `validation/routed_board_check.py` proves it matches the circuit and Update PCB is a no-op. `routed/` (the unipolar original) still differs by exactly the bipolar change, as `tools/compare_routed_board.py` reports |
 | Bench testing, prototype measurements, calibration data | **None in the repository** |
 | Firmware | **None in the repository** |
 
@@ -1100,7 +1114,7 @@ a list of confirmed defects. Items are ordered roughly by consequence.
 |---|---|---|
 | **KiCad project** | `stage1_iv.kicad_pro` | Netclasses and board setup (generated by `tools/gen_project_config.py`) |
 | **Schematic (source of truth for KiCad)** | `stage1_iv.kicad_sch` (top) + `power`, `mcu`, `dac_sweep`, `output_buffer`, `current_sense`, `voltage_sense`, `adc`, `protection` `.kicad_sch` | Generated from SKiDL. Label-based connectivity. Keep all nine files together |
-| **PCB (repository version)** | `stage1_iv.kicad_pcb` | Generated, **unrouted**, not the final placement. The routed board is delivered separately |
+| **PCB (board of record)** | `stage1_iv.kicad_pcb` | Generated from the circuit + `layout/stage1_iv.layout` + `layout/bipolar.eco`: the human placement and routing with the bipolar ECO, **fully routed** (`docs/physical_design.md`). The unipolar original is `routed/diodes.kicad_pcb` |
 | Custom DRC rules | `stage1_iv.kicad_dru` | Intra-footprint clearance only |
 | Symbols / footprints | `libraries/stage1_iv.kicad_sym`, `libraries/footprints/*.pretty`, `sym-lib-table`, `fp-lib-table` | Project-owned copies |
 | **SKiDL design source** | `blocks/*.py` (one file per sheet), `blocks/nets.py` (global nets), `main.py` (build entry) | The best place to read design intent. Docstrings carry the rationale |
@@ -1111,7 +1125,7 @@ a list of confirmed defects. Items are ordered roughly by consequence.
 | BOM-like table | `component_manifest.md` (generated), `manifest.yaml` | `manifest.yaml` also lists assumptions and unresolved items |
 | PCB generation notes | `docs/pcb_generation.md`, `docs/silkscreen_and_packages.md` | Describe the generated board. Parts are stale (§13.2) |
 | Identifier and library notes | `docs/identifier_resolution.md`, `docs/library_strategy.md`, `docs/LIBRARY_DEPENDENCIES.md`, `docs/power_flags_and_erc.md` | Toolchain history. Low review priority |
-| Validation scripts | `validation/assertions.py` (topology checks), `validation/erc.py`, `validation/footprint_check.py`, `validation/schematic_check.py`, `validation/drc_check.py`, `validation/update_pcb_noop.py` | Structural and connectivity checks only |
+| Validation scripts | `validation/assertions.py` (topology checks), `validation/erc.py`, `validation/footprint_check.py`, `validation/schematic_check.py`, `validation/drc_check.py`, `validation/routed_board_check.py`, `validation/update_pcb_noop.py`, `tools/reproduce_reference.py` | Structural and connectivity checks, and KiCad 10 DRC of the routed board where KiCad 10 is installed |
 | Generators and tools | `generators/schematic.py`, `generators/pcb.py`, `tools/*` | `pcb.py` ~L1088 is the source of the J1 silkscreen error |
 | CI | `.github/workflows/build.yml` | Runs the build and checks |
 | Firmware, simulations, test data, design spec | **Not present** | `Stage1_IV_System_Design.md` is referenced but absent |
