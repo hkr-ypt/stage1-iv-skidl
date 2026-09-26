@@ -7,7 +7,7 @@ reproduce_reference.py — prove the layout source reproduces the routed board.
 design. This regenerates that board from source and checks the claim:
 
 1. **Capture is current.** ``layout/stage1_iv.layout`` equals a fresh capture of
-   ``routed/diodes.kicad_pcb`` (tools/capture_layout.py --check).
+   ``unipolar-routed/diodes.kicad_pcb`` (tools/capture_layout.py --check).
 2. **Reproduction.** generators/routed_pcb.py emits a board from the layout
    plus the reference board's OWN electrical content (values, fields, pad nets,
    schematic links — :func:`parts_from_board`), with footprint geometry from
@@ -18,7 +18,7 @@ design. This regenerates that board from source and checks the claim:
    :data:`KNOWN` differences below, each of which says why it is not a layout
    difference.
 4. **KiCad's opinion** (skipped, and said so, without KiCad 10): the
-   reproduction and the original are each put in a copy of ``routed/`` and run
+   reproduction and the original are each put in a copy of ``unipolar-routed/`` and run
    through ``kicad-cli pcb drc --refill-zones --schematic-parity`` against the
    routed project's own rules and schematic, with the vendored footprint
    library attached. The two results must be identical. That project switches
@@ -56,7 +56,8 @@ from generators.layout import load_layout  # noqa: E402
 from generators.routed_pcb import parts_from_board, emit_board  # noqa: E402
 import compare_boards  # noqa: E402
 
-REFERENCE = os.path.join(ROOT, "routed", "diodes.kicad_pcb")
+from generators.layout import REFERENCE_BOARD as REFERENCE, \
+    REFERENCE_DIR  # noqa: E402
 LAYOUT = os.path.join(ROOT, "layout", "stage1_iv.layout")
 OUT_DIR = os.path.join(ROOT, "build")
 OUT = os.path.join(OUT_DIR, "reference_reproduction.kicad_pcb")
@@ -123,15 +124,16 @@ def kicad_version():
 
 
 def _stage_routed_copy(board, work):
-    """A copy of routed/ whose board is `board`, with the vendored library."""
-    dst = os.path.join(work, "routed")
-    shutil.copytree(os.path.join(ROOT, "routed"), dst)
-    shutil.copy(board, os.path.join(dst, "diodes.kicad_pcb"))
+    """A copy of the reference project whose board is `board`, with the
+    vendored library."""
+    dst = os.path.join(work, os.path.basename(REFERENCE_DIR))
+    shutil.copytree(REFERENCE_DIR, dst)
+    shutil.copy(board, os.path.join(dst, os.path.basename(REFERENCE)))
     with open(os.path.join(ROOT, "fp-lib-table"), encoding="utf-8") as fh:
         table = fh.read().replace("${KIPRJMOD}", ROOT)
     with open(os.path.join(dst, "fp-lib-table"), "w", encoding="utf-8") as fh:
         fh.write(table)
-    return os.path.join(dst, "diodes.kicad_pcb")
+    return os.path.join(dst, os.path.basename(REFERENCE))
 
 
 def kicad_drc(board, work):
@@ -277,7 +279,7 @@ def main(argv=None):
         print(f"   FAIL text overrides not applied: {rep['skipped_texts']}")
         ok = False
 
-    print("3. compare with routed/diodes.kicad_pcb")
+    print(f"3. compare with {os.path.relpath(REFERENCE, ROOT)}")
     sa, sb, explained, unexplained = semantic()
     print(f"   original      {sa}")
     print(f"   reproduction  {sb}")

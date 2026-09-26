@@ -1,7 +1,7 @@
 # PCB generation and board setup
 
 > **Superseded as a description of `stage1_iv.kicad_pcb`.** The board of
-> record is now the human placement and routing from `routed/`, captured as
+> record is now the human placement and routing from `unipolar-routed/`, captured as
 > source in `layout/` and carried through the bipolar ECO: it is **fully
 > routed**. See [`physical_design.md`](physical_design.md). The auto-placer
 > this document describes is kept as a bootstrap tool — `python3 main.py

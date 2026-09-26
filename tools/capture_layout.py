@@ -20,8 +20,8 @@ the emitter and compares the result with the board it came from.
 
 Usage::
 
-    python3 tools/capture_layout.py routed/diodes.kicad_pcb layout/stage1_iv.layout
-    python3 tools/capture_layout.py routed/diodes.kicad_pcb --check layout/stage1_iv.layout
+    python3 tools/capture_layout.py unipolar-routed/diodes.kicad_pcb layout/stage1_iv.layout
+    python3 tools/capture_layout.py unipolar-routed/diodes.kicad_pcb --check layout/stage1_iv.layout
 """
 
 from __future__ import annotations

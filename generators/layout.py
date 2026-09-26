@@ -88,6 +88,14 @@ from generators.footprint_xform import (  # noqa: E402
 
 LAYOUT_VERSION = 1
 
+# The original, unipolar, human-routed KiCad project the base layout is
+# captured from, and which tools/reproduce_reference.py and
+# validation/routed_board_check.py compare against. Its location is defined
+# here and nowhere else.
+REFERENCE_DIR = os.path.join(_REPO_ROOT, "unipolar-routed")
+REFERENCE_BOARD = os.path.join(REFERENCE_DIR, "diodes.kicad_pcb")
+REFERENCE_PROJECT = os.path.join(REFERENCE_DIR, "diodes.kicad_pro")
+
 # Board-level node kinds kept as graphics (verbatim, minus uuid).
 GRAPHIC_KINDS = ("gr_rect", "gr_line", "gr_arc", "gr_circle", "gr_poly",
                  "gr_text", "gr_text_box")

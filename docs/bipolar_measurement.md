@@ -4,7 +4,7 @@ This note records why the Stage 1 measurement chain was unipolar, what was
 changed to make both DUT voltage and DUT current signed over the whole range
 the source can apply, and exactly how that change was carried onto the
 human-routed board (§5: implemented as `layout/bipolar.eco` on the board of
-record `stage1_iv.kicad_pcb`; `routed/` stays the unipolar original). The SKiDL blocks (`blocks/current_sense.py`,
+record `stage1_iv.kicad_pcb`; `unipolar-routed/` stays the unipolar original). The SKiDL blocks (`blocks/current_sense.py`,
 `blocks/voltage_sense.py`, `blocks/adc.py`) carry the same reasoning next to
 the parts; `validation/measurement_range.py` recomputes every number below
 from the live part values on each build.
@@ -174,7 +174,7 @@ i.e. exactly half of negative full scale.
 The change is implemented, drawn and DRC-checked. It lives in
 `layout/bipolar.eco`, applied by `generators/routed_pcb.py` to the captured
 human layout (`layout/stage1_iv.layout`) to produce the board of record
-`stage1_iv.kicad_pcb`. `routed/` is **not modified**: it remains the
+`stage1_iv.kicad_pcb`. `unipolar-routed/` is **not modified**: it remains the
 unipolar original, and `tools/compare_routed_board.py` still reports exactly
 the difference below between it and the SKiDL design **[fact]**:
 

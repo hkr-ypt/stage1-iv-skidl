@@ -25,7 +25,7 @@ Outputs (written next to this file):
 
 The board is generated from source: the SKiDL circuit (parts, values, nets),
 ``layout/stage1_iv.layout`` (the placement and copper of the human-routed board
-in ``routed/``) and ``layout/bipolar.eco`` (the bipolar change, as reasoned
+in ``unipolar-routed/``) and ``layout/bipolar.eco`` (the bipolar change, as reasoned
 add/remove operations) — see generators/routed_pcb.py and
 docs/physical_design.md. It is checked by validation/routed_board_check.py;
 KiCad's DRC runs where KiCad 10 is installed and is reported NOT RUN where it
@@ -302,7 +302,7 @@ def capability_banner(circuit=None, erc_summary=None, checks=None,
         passed = sum(1 for c in checks_.values() if c["status"] == "PASS")
         A(f"  Board checks .......... {passed}/{len(checks_)} PASS "
           f"(source, parity, netclasses; placement heuristics")
-        A("                          relative to the original routed/ board)")
+        A("                          relative to the original unipolar-routed/ board)")
         noop = drc_report["checks"].get("update_pcb_noop", {})
         A(f"  Update PCB from Sch ... "
           + ("would change NOTHING — the board and the schematic agree"
@@ -329,7 +329,7 @@ def capability_banner(circuit=None, erc_summary=None, checks=None,
               f"(the original has the same warnings)")
             A(f"    netclass policy ..... {pol_e} errors, {pol_w} warnings — "
               f"all {pol['pre_existing']} on the original")
-            A(f"                          routed/ board too, "
+            A(f"                          unipolar-routed/ board too, "
               f"{len(pol['new'])} new; NOT clean under the policy classes")
     return "\n".join(lines), env
 

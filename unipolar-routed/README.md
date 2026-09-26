@@ -1,4 +1,4 @@
-# routed/ — the original, unipolar, human-routed board (reference)
+# unipolar-routed/ — the original, unipolar, human-routed board (reference)
 
 This is the KiCad 10 project a person placed and routed: `diodes.kicad_pcb`,
 its project file and its schematic. It implements the design as it was
@@ -9,7 +9,7 @@ AGND; no R32/R33).
 proven against:
 
 * `layout/stage1_iv.layout` is a capture of `diodes.kicad_pcb`
-  (`python3 tools/capture_layout.py routed/diodes.kicad_pcb
+  (`python3 tools/capture_layout.py unipolar-routed/diodes.kicad_pcb
   layout/stage1_iv.layout --check` proves it is current);
 * `python3 tools/reproduce_reference.py` regenerates this board from that
   layout and shows KiCad sees the same board (DRC, zone fill, re-save);

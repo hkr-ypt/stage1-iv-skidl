@@ -2,7 +2,7 @@
 
 * `stage1_iv.layout` — placement, footprint-text positions, every track and
   via, zone definitions, outline, board setup and the as-built design rules of
-  the human-routed board in `../routed/`, captured by
+  the human-routed board in `../unipolar-routed/`, captured by
   `tools/capture_layout.py`. One item per line, sorted.
 * `bipolar.eco` — the bipolar-measurement change, as `(add ...)`/`(remove ...)`
   operations on that layout, each with a `(reason ...)`.

@@ -484,7 +484,7 @@ validation:
              circuit, Update PCB no-op + its calibration, schema, netclass
              coverage, fab conformance, rules file, rule satisfiability;
              courtyard/edge/ground-split/hole/silkscreen heuristics with no
-             finding the original routed/ board lacks; KiCad 10 DRC under the
+             finding the original unipolar-routed/ board lacks; KiCad 10 DRC under the
              as-built rules (every check on) and under the repository policy
              netclasses, with no violation the original lacks]
     result: >
@@ -499,7 +499,7 @@ validation:
              (routed project and every-check-on), refilled zone copper, KiCad
              re-save comparison]
     result: >
-      PASS - the layout source regenerates routed/diodes.kicad_pcb with
+      PASS - the layout source regenerates unipolar-routed/diodes.kicad_pcb with
       identical placement, copper and connectivity (12 known library strings
       on C31/C44/C45 aside), identical DRC, zone copper symmetric difference 0.
   kicad_roundtrip:
