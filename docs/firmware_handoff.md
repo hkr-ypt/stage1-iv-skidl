@@ -112,8 +112,18 @@ V_SWEEP = (R4/R3)·(V_A − V_B/2) = 8.0321·(V_A − V_B/2), with V_A, V_B in 0
   pull that INA128 input to AGND. The voltage channel then reads a
   plausible-looking but wrong value while current flows. Firmware must
   cross-check: with current flowing, the Kelvin voltage must agree with the
-  force-side estimate V_SWEEP − I·(R30 + R10 + R_F1) within a tolerance.
-  Treat a persistent mismatch as an open or swapped sense lead.
+  force-side estimate V_SWEEP − I·(R30 + R10 + R_F1 + R_F2 + R_U12) within a
+  tolerance (F1, F2: 3.0–7.5 Ω each; U12: ≤ 2 Ω). Treat a persistent mismatch
+  as an open or swapped sense lead.
+* **Output disconnected (U12 open).** U12 disconnects FORCE+ whenever a
+  ±15 V rail is missing or low (guaranteed open with either rail absent,
+  guaranteed closed at ≥ ±14.45 V; `final_corrections.md` §2.5). The MCU
+  has no signal for it and cannot command it. Firmware sees it as: I ≈ 0
+  however V_SWEEP is set, with the Kelvin voltage near 0 V (or wherever the
+  DUT's own charge leaves it) instead of following the command. Report that
+  as "output disconnected / analog supply missing", not as an open DUT, and
+  do not adapt any calibration to it. An open DUT reads the same way, so the
+  distinction needs a known load at start-up (or the operator's word).
 * **Current-limit plateau** (~49 mA nominal, set by R7, not characterised by TI
   at this setting) is normal operation, not a fault. Firmware may detect it
   (I flat while V_SWEEP keeps moving) and must not report the plateau region as

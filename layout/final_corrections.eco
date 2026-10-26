@@ -1,0 +1,209 @@
+# final_corrections.eco — the remaining hardware corrections, applied after
+# layout/audit_corrections.eco.
+#
+# Electrical changes (SKiDL, blocks/*.py; reasons there and in
+# docs/audit_corrections.md §"Final corrections"):
+#   F2   series PTC in the FORCE- return (J7 -> F2 -> ISENSE_HI -> R10)
+#   R10  Vishay RS02B10R00BE12, 3 W, DIN0614 body, horizontal, 20.32 mm
+#   U12  TLP176AM photorelay between R30 and FORCE+ (D5/J4), LED string
+#        R39 + D7 across +15VA/-15VA (DUT disconnected unless both rails up)
+#   D8   MBR0540 dead-rail clamp, AGND -> +15VA
+#   D9   MBR0540 dead-rail clamp, -15VA -> AGND
+#   F1   moved away from U5 and R30 (thermal, not courtyard, separation)
+#   H1-H3  isolated M3 mounting holes (board-only footprints)
+#
+# Routing rules are bipolar.eco's: new tracks at their netclass width where
+# the board has room, at the repository's netclass clearances. Paths were
+# found with tools/eco_route.py and checked with KiCad DRC.
+(stage1_iv_eco (version 1) (name "final_corrections") (base "stage1_iv.layout")
+
+  # =====================================================================
+  # FORCE- return: J7 -> F2 -> ISENSE_HI -> R10, R10 in the top band
+  # =====================================================================
+  # FORCE- used to be one net from J7 to R10, TP3 and U6 +IN. It is now
+  # J7 -> F2 only, and the shunt node is ISENSE_HI, so every FORCE- track
+  # goes and the shunt side is redrawn.
+  (remove (segment "/FORCE-" "F.Cu" 0.2 77.5 40.5 92.5 40.5)
+          (reason "FORCE- now ends at F2; the old run crosses the H1 keepout"))
+  (remove (segment "/FORCE-" "F.Cu" 0.2 92.5 40.5 96.75 44.75)
+          (reason "old J7 -> U6 +IN run; U6 +IN is on ISENSE_HI now"))
+  (remove (segment "/FORCE-" "F.Cu" 0.2 96.75 44.75 96.75 47.325)
+          (reason "old J7 -> U6 +IN run; U6 +IN is on ISENSE_HI now"))
+  (remove (segment "/FORCE-" "F.Cu" 0.2 96.75 47.325 97.945 48.52)
+          (reason "old J7 -> U6 +IN run; U6 +IN is on ISENSE_HI now"))
+  (remove (segment "/FORCE-" "B.Cu" 0.2 95.25 45.25 97.945 47.945)
+          (reason "old R10 pad 1 to U6 +IN; R10 has moved"))
+  (remove (segment "/FORCE-" "B.Cu" 0.2 97.945 47.945 97.945 48.52)
+          (reason "old R10 pad 1 to U6 +IN; R10 has moved"))
+  (remove (segment "/FORCE-" "B.Cu" 0.2 91.815 48.52 97.945 48.52)
+          (reason "TP3 -> U6 +IN, redrawn below on ISENSE_HI"))
+
+  (move (footprint "R10" F 93.75 37 0)
+        (reason "R10 RS02B flat in the top band: ends at one temperature"))
+  (add (footprint "F2" F 85.5 44.85 0)
+       (reason "F2 0ZRM0010FF1E in series with FORCE-, between J7 and R10"))
+  (add (segment "/protection/FORCE-" "F.Cu" 0.5 82.2 42.4 84 44.2)
+       (reason "J7 FORCE- to F2, clear of the H1 keepout"))
+  (add (segment "/protection/FORCE-" "F.Cu" 0.5 84 44.2 85 44.2)
+       (reason "J7 FORCE- to F2, clear of the H1 keepout"))
+  (add (segment "/ISENSE_HI" "F.Cu" 0.5 90.6 45.7 90.6 45.05)
+       (reason "F2 to the R10 shunt: the current path"))
+  (add (segment "/ISENSE_HI" "F.Cu" 0.5 90.6 45.05 93.25 42.4)
+       (reason "F2 to the R10 shunt: the current path"))
+  (add (segment "/ISENSE_HI" "F.Cu" 0.5 93.25 42.4 93.25 37.6)
+       (reason "F2 to the R10 shunt: the current path"))
+  (add (segment "/ISENSE_HI" "B.Cu" 0.25 93.25 37.6 93.25 46.75)
+       (reason "Kelvin: U6 +IN senses at R10's pad, not along the current path"))
+  (add (segment "/ISENSE_HI" "B.Cu" 0.25 93.25 46.75 92 48)
+       (reason "Kelvin: U6 +IN senses at R10's pad, not along the current path"))
+  (add (segment "/ISENSE_HI" "B.Cu" 0.25 91.815 48.52 97.945 48.52)
+       (reason "TP3 to U6 +IN (was FORCE-)"))
+
+  # =====================================================================
+  # FORCE+: F1 away from U5 and R30; U12 between R30 and D5/J4
+  # =====================================================================
+  (remove (segment "/protection/F1_MID" "F.Cu" 0.5 93.15 72.55 93.15 74.2)
+          (reason "F1 moves to the bottom edge"))
+  (remove (segment "/protection/F1_MID" "F.Cu" 0.5 93.15 74.2 91.65 75.7)
+          (reason "F1 moves to the bottom edge"))
+  (remove (segment "/protection/F1_MID" "F.Cu" 0.5 91.65 75.7 87.75 75.7)
+          (reason "F1 moves to the bottom edge"))
+  (remove (segment "/protection/FORCE+" "F.Cu" 0.5 87.75 59.5 87.75 63)
+          (reason "R30 pad 2 is FORCE_SW now; U12 sits between it and D5"))
+  (remove (segment "/VO_SENSE" "B.Cu" 0.2 95.045 67.45 94.35 67.45)
+          (reason "F1's old pad 1; VO_SENSE continues to F1's new place"))
+
+  (move (footprint "F1" F 90.6 92 180)
+        (reason "F1 to the bottom edge, away from U5, R30 and the divider"))
+  (add (footprint "U12" F 92.5 69.8 90)
+       (reason "U12 TLP176AM in F1's old place: outputs face R30 pad 2 and D5"))
+  (add (footprint "R39" F 97.6 70.6 180)
+       (reason "R39 620R, U12 LED string"))
+  (add (footprint "D7" B 93 55.8 0)
+       (reason "D7 BZT52C24, U12 LED string threshold"))
+  (add (segment "/protection/FORCE_SW" "F.Cu" 0.5 88.6 63.8 90.9 66.1)
+       (reason "R30 pad 2 to U12 output (pin 6)"))
+  (add (segment "/protection/FORCE+" "F.Cu" 0.5 93.45 66.1 88.75 61.4)
+       (reason "U12 output (pin 4) to D5/J4"))
+  (add (segment "/protection/FORCE+" "F.Cu" 0.5 88.75 61.4 88.75 60.7)
+       (reason "U12 output (pin 4) to D5/J4"))
+  (add (segment "/protection/F1_MID" "B.Cu" 0.5 85.8 90.3 85.8 78.3)
+       (reason "F1 (new place) to R30 pad 1"))
+  (add (segment "/protection/F1_MID" "B.Cu" 0.5 85.8 78.3 87.5 76.6)
+       (reason "F1 (new place) to R30 pad 1"))
+  (add (segment "/VO_SENSE" "B.Cu" 0.5 95.045 67.45 95.045 74.705)
+       (reason "U5 feedback node to F1 (new place)"))
+  (add (segment "/VO_SENSE" "B.Cu" 0.5 95.045 74.705 87.95 81.8)
+       (reason "U5 feedback node to F1 (new place)"))
+  (add (segment "/VO_SENSE" "B.Cu" 0.5 87.95 81.8 87.95 88.1)
+       (reason "U5 feedback node to F1 (new place)"))
+  (add (segment "/VO_SENSE" "B.Cu" 0.5 87.95 88.1 90.6 90.75)
+       (reason "U5 feedback node to F1 (new place)"))
+  (add (segment "/VO_SENSE" "B.Cu" 0.5 90.6 90.75 90.6 92)
+       (reason "U5 feedback node to F1 (new place)"))
+  (add (segment "/protection/SSR_LED_A" "F.Cu" 0.25 95.6 71.3 92.75 71.3)
+       (reason "R39 to U12 LED anode, under the package between the pin rows"))
+  (add (segment "/protection/SSR_LED_A" "F.Cu" 0.25 92.75 71.3 91.6 72.45)
+       (reason "R39 to U12 LED anode, under the package between the pin rows"))
+  (add (segment "/protection/SSR_LED_K" "F.Cu" 0.25 93.77 72.95 93.77 74.4)
+       (reason "U12 LED cathode down to its via"))
+  (add (via "/protection/SSR_LED_K" 93.77 74.4 0.8 0.4 "F.Cu" "B.Cu")
+       (reason "U12 LED cathode to B.Cu, off the pad"))
+  (add (segment "/protection/SSR_LED_K" "B.Cu" 0.25 93.77 74.4 93.77 58.42)
+       (reason "U12 LED cathode to D7, under U12 and past R7/C14"))
+  (add (segment "/protection/SSR_LED_K" "B.Cu" 0.25 93.77 58.42 91.35 56)
+       (reason "U12 LED cathode to D7, under U12 and past R7/C14"))
+  (add (segment "+15VA" "F.Cu" 0.25 99.6 69.9 101.9 69.9)
+       (reason "+15VA from C15 to R39"))
+  (add (segment "-15VA" "B.Cu" 0.25 94.65 55.8 95 55.25)
+       (reason "D7 anode to -15VA at U6 pin 4"))
+  (add (segment "-15VA" "B.Cu" 0.25 95 55.25 97.945 52.305)
+       (reason "D7 anode to -15VA at U6 pin 4"))
+  (add (segment "-15VA" "B.Cu" 0.25 97.945 52.305 97.945 51.06)
+       (reason "D7 anode to -15VA at U6 pin 4"))
+  (add (segment "+15VA" "F.Cu" 0.25 103.9 73.65 104.95 73.65)
+       (reason "D8 cathode to the +15VA run to U7"))
+  (add (segment "-15VA" "B.Cu" 0.25 94.65 53.3 96.95 53.3)
+       (reason "D9 anode to the D7 -> U6 pin 4 run"))
+
+  # =====================================================================
+  # Dead-rail clamps
+  # =====================================================================
+  (add (footprint "D8" F 101.9 74 180)
+       (reason "D8 MBR0540, AGND -> +15VA, at the +15VA run to U7"))
+  (add (via "AGND" 98.6 72.6 0.7 0.35 "F.Cu" "B.Cu")
+       (reason "stitch: the new B.Cu runs (VO_SENSE, LED string) fence off the B.Cu AGND pour under U5/U7; this joins it to F.Cu at D8's anode"))
+  (add (footprint "D9" B 93 53.3 0)
+       (reason "D9 MBR0540, -15VA -> AGND, by U6's -15VA pin in the D5/R7 pocket"))
+
+  # =====================================================================
+  # Mounting holes
+  # =====================================================================
+  (add (board_part "H1" "stage1_iv:MountingHole_3.2mm_M3_Isolated" F 87.7 37.5 0)
+       (reason "M3, between J7 and R10"))
+  (add (board_part "H2" "stage1_iv:MountingHole_3.2mm_M3_Isolated" F 122.2 88.2 0)
+       (reason "M3, bottom edge, AGND/DGND boundary"))
+  (add (board_part "H3" "stage1_iv:MountingHole_3.2mm_M3_Isolated" F 157.7 89.2 0)
+       (reason "M3, bottom edge under J1/J3"))
+
+  # =====================================================================
+  # Silkscreen: designators with no clear 0.5 mm silk spot go on the Fab
+  # layer at the part centre (the convention bipolar.eco and
+  # audit_corrections.eco already use); the SENSE+ jack label moves clear
+  # of F1.
+  # =====================================================================
+  (add (text "F2" property "Reference" (at 0 0 0) (layer "F.Fab")
+             (effects (font (size 1 1) (thickness 0.15))))
+       (reason "no clear silk spot between J7, H1 and F2's pads"))
+  (add (text "U12" property "Reference" (at 0 0 0) (layer "F.Fab")
+             (effects (font (size 1 1) (thickness 0.15))))
+       (reason "no clear silk spot between R30, U5 and R39"))
+  (add (text "R39" property "Reference" (at 0 0 0) (layer "F.Fab")
+             (effects (font (size 1 1) (thickness 0.15))))
+       (reason "no clear silk spot under U5"))
+  (add (text "D7" property "Reference" (at 0 0 0) (layer "B.Fab")
+             (effects (font (size 1 1) (thickness 0.15)) (justify mirror)))
+       (reason "no clear silk spot in the D5/R7 pocket"))
+  (add (text "D8" property "Reference" (at 0 0 0) (layer "F.Fab")
+             (effects (font (size 1 1) (thickness 0.15))))
+       (reason "no clear silk spot between C15/C17 and U7"))
+  (add (text "D9" property "Reference" (at 0 0 0) (layer "B.Fab")
+             (effects (font (size 1 1) (thickness 0.15)) (justify mirror)))
+       (reason "no clear silk spot in the D5/R7 pocket"))
+  (remove (text "R10" property "Reference" (at 5 -3 0) (layer "F.SilkS")
+                (effects (font (size 1 1) (thickness 0.15))))
+          (reason "R10 is a new footprint; the old offset lands on its body outline"))
+  (add (text "R10" property "Reference" (at 10.16 0 0) (layer "F.Fab")
+             (effects (font (size 1 1) (thickness 0.15))))
+       (reason "R10's designator inside its body outline, on F.Fab"))
+  (remove (text "F1" property "Reference" (at 2.8 -2.15 90) (layer "F.SilkS")
+                (effects (font (size 1 1) (thickness 0.15))))
+          (reason "F1 has moved to the bottom edge"))
+  (add (text "F1" property "Reference" (at 2.55 0.6 0) (layer "F.Fab")
+             (effects (font (size 1 1) (thickness 0.15))))
+       (reason "no clear silk spot between the SENSE+ run and the board edge"))
+  (remove (text "TP3" property "Reference" (at 0 3.825 0) (layer "B.SilkS")
+                (effects (font (size 1 1) (thickness 0.15)) (justify mirror)))
+          (reason "it now lands on F2's pad"))
+  (add (text "TP3" property "Reference" (at 0 0 0) (layer "B.Fab")
+             (effects (font (size 1 1) (thickness 0.15)) (justify mirror)))
+       (reason "TP3's designator on B.Fab"))
+  (remove (text "TP5" property "Reference" (at 0 3.825 0) (layer "B.SilkS")
+                (effects (font (size 1 1) (thickness 0.15)) (justify mirror)))
+          (reason "it now lands beside F1"))
+  (add (text "TP5" property "Reference" (at 0 0 0) (layer "B.Fab")
+             (effects (font (size 1 1) (thickness 0.15)) (justify mirror)))
+       (reason "TP5's designator on B.Fab"))
+  (remove (text "U7" property "Reference" (at 2.58 -2.42 0) (layer "F.SilkS")
+                (effects (font (size 1 1) (thickness 0.15))))
+          (reason "D8 now sits where U7's designator was"))
+  (add (text "U7" property "Reference" (at 3.81 3.81 0) (layer "F.Fab")
+             (effects (font (size 1 1) (thickness 0.15))))
+       (reason "U7's designator on F.Fab, at the part"))
+  (remove (graphic (gr_text "SENSE+" (at 84.4 86.5 90) (layer "F.SilkS")
+                            (effects (font (size 0.8 0.8) (thickness 0.15)))))
+          (reason "J5 label moves up, clear of F1"))
+  (add (graphic (gr_text "SENSE+" (at 84.4 85.6 90) (layer "F.SilkS")
+                         (effects (font (size 0.8 0.8) (thickness 0.15)))))
+       (reason "J5 label, clear of F1's pad"))
+)

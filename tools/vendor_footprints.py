@@ -49,6 +49,7 @@ Usage::
 from __future__ import annotations
 
 import argparse
+import math
 import os
 import shutil
 import sys
@@ -67,7 +68,42 @@ from resolve_kicad_libs import (  # noqa: E402
 # mechanical: they have no symbol, so the circuit does not mention them, but
 # generators/pcb.py places them and KiCad checks them against the library like
 # any other footprint.
-BOARD_ONLY_FOOTPRINTS = ["MountingHole:MountingHole_3.2mm_M3_Pad"]
+#   MountingHole_3.2mm_M3_Pad ............ generators/pcb.py's auto-placed
+#                                           bootstrap board
+#   stage1_iv:MountingHole_3.2mm_M3_Isolated  the routed board of record
+#                                           (layout/final_corrections.eco)
+BOARD_ONLY_FOOTPRINTS = ["MountingHole:MountingHole_3.2mm_M3_Pad",
+                         "stage1_iv:MountingHole_3.2mm_M3_Isolated"]
+
+
+def _circle_pts(r, n=32, per_line=4, indent="\t\t\t\t"):
+    """Polygon points of an n-gon of circumradius r, KiCad layout."""
+    pts = [f"(xy {r * math.cos(2 * math.pi * i / n):.6f} "
+           f"{r * math.sin(2 * math.pi * i / n):.6f})" for i in range(n)]
+    pts = [p.replace("-0.000000", "0.000000") for p in pts]
+    return "\n".join(indent + " ".join(pts[i:i + per_line])
+                     for i in range(0, n, per_line))
+
+
+# Back courtyard and a 4.0 mm copper keepout for the isolated M3 hole below.
+_M3_KEEPOUT = (
+    "\t(fp_circle\n\t\t(center 0 0)\n\t\t(end 4.25 0)\n"
+    "\t\t(stroke\n\t\t\t(width 0.05)\n\t\t\t(type solid)\n\t\t)\n"
+    "\t\t(fill no)\n\t\t(layer \"B.CrtYd\")\n\t)\n"
+    "\t(zone\n\t\t(net 0)\n\t\t(net_name \"\")\n"
+    "\t\t(layers \"F.Cu\" \"B.Cu\")\n"
+    "\t\t(uuid \"5f0c3c3e-6d1a-4c1e-9a52-2b1e3a7d4c01\")\n"
+    "\t\t(name \"M3 hardware keepout\")\n"
+    "\t\t(hatch edge 0.5)\n"
+    "\t\t(connect_pads\n\t\t\t(clearance 0)\n\t\t)\n"
+    "\t\t(min_thickness 0.25)\n\t\t(filled_areas_thickness no)\n"
+    "\t\t(keepout\n\t\t\t(tracks not_allowed)\n\t\t\t(vias not_allowed)\n"
+    "\t\t\t(pads allowed)\n\t\t\t(copperpour not_allowed)\n"
+    "\t\t\t(footprints allowed)\n\t\t)\n"
+    "\t\t(placement\n\t\t\t(enabled no)\n\t\t\t(sheetname \"\")\n\t\t)\n"
+    "\t\t(fill\n\t\t\t(thermal_gap 0.5)\n\t\t\t(thermal_bridge_width 0.5)\n\t\t)\n"
+    "\t\t(polygon\n\t\t\t(pts\n" + _circle_pts(4.0) + "\n\t\t\t)\n\t\t)\n\t)\n")
+
 
 # PROJECT FOOTPRINTS — derived, never hand-drawn.
 # A footprint the design needs that upstream does not ship is written here as
@@ -87,6 +123,31 @@ PROJECT_FOOTPRINTS = {
                 "material. Holes opened to 1.2 mm; pads (1.8 mm) unchanged, "
                 "annular ring 0.30 mm."),
     },
+    # Replacements may carry their own expected count as a third element.
+    "MountingHole_3.2mm_M3_Isolated": {
+        "base": "MountingHole:MountingHole_3.2mm_M3",
+        "replace": [
+            # courtyard 3.45 -> 4.25 mm, on BOTH sides (head on top,
+            # nut / standoff underneath)
+            ("(end 3.45 0)", "(end 4.25 0)", 1),
+            ("(at 0 -4.15 0)", "(at 0 -5.25 0)", 1),
+            ("(at 0 4.15 0)", "(at 0 5.25 0)", 1),
+            # designator on F.Fab; "board_only": no symbol, by design, so
+            # KiCad's schematic parity does not report it as extra
+            ("(layer \"F.SilkS\")", "(layer \"F.Fab\")", 1),
+            ("(attr exclude_from_pos_files exclude_from_bom)",
+             "(attr board_only exclude_from_pos_files exclude_from_bom)", 1),
+            ("\t(embedded_fonts no)\n",
+             _M3_KEEPOUT + "\t(embedded_fonts no)\n", 1),
+        ],
+        "count": 1,
+        "why": ("NPTH M3 hole with no annular ring, plus a 4.0 mm-radius "
+                "keepout on F.Cu and B.Cu (no track, via or pour) and a "
+                "4.25 mm courtyard on both sides. An M3 washer (7.0 mm, "
+                "DIN 125) or a 5.5 mm hex standoff (6.35 mm across corners) "
+                "fits inside 7.0 mm, so the hardware cannot touch copper of "
+                "any net: the chassis is not bonded to AGND or DGND here."),
+    },
 }
 
 
@@ -102,11 +163,13 @@ def project_footprint_text(name, vendored_dir=None):
     if head not in text:
         raise LibraryNotFound(f"{src}: no {head} header to rename")
     text = text.replace(head, f'(footprint "{name}"', 1)
-    for old, new in spec["replace"]:
+    for rep in spec["replace"]:
+        old, new = rep[0], rep[1]
+        want = rep[2] if len(rep) > 2 else spec["count"]
         n = text.count(old)
-        if n != spec["count"]:
+        if n != want:
             raise LibraryNotFound(
-                f"{spec['base']}: expected {spec['count']} x {old!r}, found "
+                f"{spec['base']}: expected {want} x {old!r}, found "
                 f"{n}. Upstream changed; re-derive {name} deliberately.")
         text = text.replace(old, new)
     # Say what this file is, in the file.
@@ -134,7 +197,23 @@ def used_footprints():
     for spec in PROJECT_FOOTPRINTS.values():
         nick, name = spec["base"].split(":", 1)
         out.setdefault(nick, set()).add(name)
+    # So does every footprint the original routed board names:
+    # tools/reproduce_reference.py rebuilds that board from these copies,
+    # including parts the design has since changed (R10 was a DIN0207).
+    for fp_id in reference_board_footprints():
+        nick, name = fp_id.split(":", 1)
+        out.setdefault(nick, set()).add(name)
     return out
+
+
+def reference_board_footprints():
+    """Footprint identifiers on the original routed board (unipolar-routed/)."""
+    from generators.layout import REFERENCE_BOARD
+    import re
+    with open(REFERENCE_BOARD, encoding="utf-8") as fh:
+        text = fh.read()
+    return sorted(set(re.findall(r'^\t\(footprint "([^"]+:[^"]+)"', text,
+                                 re.M)))
 
 
 def plan(libs):

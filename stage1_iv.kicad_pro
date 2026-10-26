@@ -110,6 +110,10 @@
           "/SCK1",
           "/SCK2",
           "/mcu/BOOT0",
+          "/mcu/CC1",
+          "/mcu/CC2",
+          "/mcu/LED_A",
+          "/mcu/LED_K",
           "/mcu/LED_STATUS",
           "/mcu/NRST",
           "/mcu/SAFE_HB",
@@ -138,12 +142,14 @@
         "microvia_drill": 0.1,
         "name": "FORCE",
         "nets": [
-          "/FORCE-",
+          "/ISENSE_HI",
           "/VO_SENSE",
           "/output_buffer/VO_RAW",
           "/output_buffer/VO_SNUB",
           "/protection/F1_MID",
-          "/protection/FORCE+"
+          "/protection/FORCE+",
+          "/protection/FORCE-",
+          "/protection/FORCE_SW"
         ],
         "pcb_color": "rgba(0, 0, 0, 0.000)",
         "priority": 1,
@@ -197,13 +203,8 @@
           "/dac_sweep/DIFF_N",
           "/dac_sweep/DIFF_P",
           "/dac_sweep/VREF_HALF_RAW",
-          "/mcu/CC1",
-          "/mcu/CC2",
-          "/mcu/LED_A",
-          "/mcu/LED_K",
           "/mcu/OSC_IN",
           "/mcu/OSC_OUT",
-          "/mcu/VCAP1",
           "/output_buffer/OPA548_ES",
           "/output_buffer/OPA548_ILIM",
           "/voltage_sense/SENSE_M_AMP",
@@ -231,7 +232,9 @@
         "name": "POWER_HV",
         "nets": [
           "+15VA",
-          "-15VA"
+          "-15VA",
+          "/protection/SSR_LED_A",
+          "/protection/SSR_LED_K"
         ],
         "pcb_color": "rgba(0, 0, 0, 0.000)",
         "priority": 4,
@@ -255,6 +258,7 @@
           "+3V3D",
           "+5VA",
           "+5V_RAW",
+          "/mcu/VCAP1",
           "VBUS",
           "VDDA"
         ],
@@ -373,6 +377,22 @@
       },
       {
         "netclass": "DIGITAL",
+        "pattern": "/mcu/CC1"
+      },
+      {
+        "netclass": "DIGITAL",
+        "pattern": "/mcu/CC2"
+      },
+      {
+        "netclass": "DIGITAL",
+        "pattern": "/mcu/LED_A"
+      },
+      {
+        "netclass": "DIGITAL",
+        "pattern": "/mcu/LED_K"
+      },
+      {
+        "netclass": "DIGITAL",
         "pattern": "/mcu/LED_STATUS"
       },
       {
@@ -405,7 +425,7 @@
       },
       {
         "netclass": "FORCE",
-        "pattern": "/FORCE-"
+        "pattern": "/ISENSE_HI"
       },
       {
         "netclass": "FORCE",
@@ -426,6 +446,14 @@
       {
         "netclass": "FORCE",
         "pattern": "/protection/FORCE+"
+      },
+      {
+        "netclass": "FORCE",
+        "pattern": "/protection/FORCE-"
+      },
+      {
+        "netclass": "FORCE",
+        "pattern": "/protection/FORCE_SW"
       },
       {
         "netclass": "GROUND",
@@ -481,31 +509,11 @@
       },
       {
         "netclass": "LOCAL_ANALOG",
-        "pattern": "/mcu/CC1"
-      },
-      {
-        "netclass": "LOCAL_ANALOG",
-        "pattern": "/mcu/CC2"
-      },
-      {
-        "netclass": "LOCAL_ANALOG",
-        "pattern": "/mcu/LED_A"
-      },
-      {
-        "netclass": "LOCAL_ANALOG",
-        "pattern": "/mcu/LED_K"
-      },
-      {
-        "netclass": "LOCAL_ANALOG",
         "pattern": "/mcu/OSC_IN"
       },
       {
         "netclass": "LOCAL_ANALOG",
         "pattern": "/mcu/OSC_OUT"
-      },
-      {
-        "netclass": "LOCAL_ANALOG",
-        "pattern": "/mcu/VCAP1"
       },
       {
         "netclass": "LOCAL_ANALOG",
@@ -540,6 +548,14 @@
         "pattern": "-15VA"
       },
       {
+        "netclass": "POWER_HV",
+        "pattern": "/protection/SSR_LED_A"
+      },
+      {
+        "netclass": "POWER_HV",
+        "pattern": "/protection/SSR_LED_K"
+      },
+      {
         "netclass": "POWER_LV",
         "pattern": "+3V3D"
       },
@@ -550,6 +566,10 @@
       {
         "netclass": "POWER_LV",
         "pattern": "+5V_RAW"
+      },
+      {
+        "netclass": "POWER_LV",
+        "pattern": "/mcu/VCAP1"
       },
       {
         "netclass": "POWER_LV",

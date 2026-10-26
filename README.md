@@ -19,18 +19,24 @@ board. Running it produces a **KiCad netlist** (`stage1_iv.net`), a
 > copper are the human-routed board's (`unipolar-routed/`), captured into
 > [`layout/stage1_iv.layout`](layout/stage1_iv.layout); the bipolar
 > measurement change is applied to it by
-> [`layout/bipolar.eco`](layout/bipolar.eco), and the final hardware audit
-> corrections by [`layout/audit_corrections.eco`](layout/audit_corrections.eco):
-> lists of add/remove operations, each with its reason. See
-> [`docs/physical_design.md`](docs/physical_design.md) and
-> [`docs/audit_corrections.md`](docs/audit_corrections.md).
+> [`layout/bipolar.eco`](layout/bipolar.eco), the final hardware audit
+> corrections by [`layout/audit_corrections.eco`](layout/audit_corrections.eco),
+> the remaining corrections (FORCE+ photorelay, dead-rail clamps, FORCE−
+> PTC, R10, F1 placement, mounting holes) by
+> [`layout/final_corrections.eco`](layout/final_corrections.eco), and the
+> re-routing to the repository clearances by
+> [`layout/policy_clearance.eco`](layout/policy_clearance.eco): lists of
+> add/remove operations, each with its reason. See
+> [`docs/physical_design.md`](docs/physical_design.md),
+> [`docs/audit_corrections.md`](docs/audit_corrections.md) and
+> [`docs/final_corrections.md`](docs/final_corrections.md).
 >
 > **KiCad 10 DRC** (zones refilled, schematic parity on): 0 unconnected, 0
-> parity problems; **0 errors** under the rules the board was routed to (its
-> 0.20 mm netclass plus the scoped intra-footprint rules, every check on). It
-> is **not clean under the repository's stricter netclass policy**: 109
-> clearance errors, every one of them present at the same place on the
-> original human routing; the ECOs add none (the audit ECO removed 8).
+> parity problems, and **0 errors** both under the rules the board was routed
+> to (its 0.20 mm netclass plus the scoped intra-footprint rules, every check
+> on) and under the repository's stricter netclass policy (0.25–0.30 mm
+> around sense and ±15 V nets). Two silkscreen-to-edge warnings at J3 are
+> also on the original.
 >
 > **`unipolar-routed/` is the original, unipolar, human-routed reference** and is never
 > modified. `python3 tools/reproduce_reference.py` proves the layout source
@@ -128,7 +134,9 @@ stage1-iv-skidl/
 ├── layout/
 │   ├── stage1_iv.layout        # placement + copper, captured from unipolar-routed/
 │   ├── bipolar.eco             # the bipolar change: reasoned add/remove ops
-│   └── audit_corrections.eco   # the final hardware audit corrections (F1–F4, V1, …)
+│   ├── audit_corrections.eco   # the final hardware audit corrections (F1–F4, V1, …)
+│   ├── final_corrections.eco   # U12/D7/R39, D8/D9, F2, R10, F1 move, H1–H3
+│   └── policy_clearance.eco    # re-routing to the repository netclass clearances
 │
 ├── tools/
 │   ├── resolve_kicad_libs.py   # THE resolver: reads installed KiCad libraries
@@ -158,6 +166,8 @@ stage1-iv-skidl/
 │   └── schematic_check.py      # schematic <-> netlist consistency validator
 │
 ├── docs/
+│   ├── changes_since_bipolar.md      # every change since the bipolar design (bfbb140)
+│   ├── final_corrections.md          # remaining hardware corrections: analysis, validation
 │   ├── audit_corrections.md          # final hardware audit: what changed, validation record
 │   ├── firmware_handoff.md           # what the hardware requires of the firmware
 │   ├── bringup_checklist.md          # assembly + first-power procedure
@@ -167,7 +177,7 @@ stage1-iv-skidl/
 │   ├── FAB_CONSTRAINTS.md            # assumed fabricator capability (F1..F12)
 │   ├── pcb_generation.md             # netclasses, rules, the auto-placer
 │   ├── audit_identifiers_before.md   # pre-fix baseline
-│   └── audit_identifiers_after.md    # post-fix state of the identifier work (dated snapshot)
+│   └── audit_identifiers_after.md    # identifier audit of the current design (generated)
 │
 ├── unipolar-routed/            # ORIGINAL unipolar human-routed KiCad project:
 │                               # the reference, never modified (its README.md)
@@ -295,8 +305,7 @@ PASS, measurement-range check PASS, 0 unresolved identifiers, 0 unaccounted pads
 - `stage1_iv.kicad_pcb` — the bipolar board, placed and **fully routed**
   (KiCad 9/10 schema, **opens in KiCad 10**; zones are stored unfilled — press
   B, or plot with `--check-zones`). Generated from the circuit,
-  `layout/stage1_iv.layout`, `layout/bipolar.eco` and
-  `layout/audit_corrections.eco`; checked by
+  `layout/stage1_iv.layout` and the four ECOs in `layout/`; checked by
   `validation/routed_board_check.py` (see
   [`docs/physical_design.md`](docs/physical_design.md)). Opening it and
   pressing *Update PCB from Schematic* changes **nothing** — that is a checked
@@ -422,9 +431,13 @@ channels' transfer functions, and the voltage on each ADS1256 input at those
 extremes with worst-case tolerances. Fails the build if any normal operating
 point leaves the ADC's absolute input window (`AGND − 0.1 … AVDD + 0.1 V`) or
 its PGA = 2 full scale. It also bounds the FORCE-path fault (U5 driven into a
-15.5 V rail: 127 mA) and checks R9, R30 and R10 against their power ratings.
-Current result: worst-case headroom 334 mV (V) and 115 mV (I); fault
-dissipation R30 1.63 W of 2 W, R9 and R10 0.16 W of 0.25 W / 0.5 W.
+15.5 V rail, every series part at its guaranteed minimum: 128 mA into a DUT
+short, 143 mA with FORCE+ on AGND) and an external source on J7 (F2 + R10:
+1.19 A), and checks R9, R30 and R10 against their ratings. Current result:
+worst-case headroom 334 mV (V) and 115 mV (I); fault dissipation R30 1.96 W
+of 2 W, R9 0.21 W of 0.25 W, R10 0.16 W of 3 W and 14.3 W of its 15 W
+short-time rating ([`docs/final_corrections.md`](docs/final_corrections.md)
+§2.7).
 
 **Identifier audit (`tools/audit_identifiers.py`)** — per part, whether the
 symbol and footprint resolve, symbol pins vs footprint pads, unaccounted pads,
@@ -459,11 +472,11 @@ the *same live SKiDL circuit* that produced the netlist (module
   runs are byte-identical.
 - **Verified** — `python3 validation/schematic_check.py` reconstructs
   connectivity from the emitted files and asserts the `(reference, pin, net)`
-  set equals the netlist's (354 connections, 135 references, 73 nets), and
+  set equals the netlist's (368 connections, 141 references, 77 nets), and
   `python3 tools/kicad_roundtrip.py` re-checks the same thing through **KiCad's
-  own parser** (`kicad-cli sch export netlist`): KiCad reads the identical 345
+  own parser** (`kicad-cli sch export netlist`): KiCad reads the identical 359
   connections (the 9 PWR_FLAG pins excluded) partitioned into the identical
-  73 nets.
+  77 nets.
 
 Details, conventions, and all documented assumptions: [`SCHEMATIC.md`](SCHEMATIC.md)
 and `manifest.yaml → schematic_assumptions`.
@@ -502,8 +515,8 @@ and `manifest.yaml → schematic_assumptions`.
   *brackets* the ±10 V target — an exact ±10.000 V would need a non-standard
   19.92 kΩ — so firmware leaves the top 0.40% of DAC codes unused. What
   reaches the **DUT** is less at high current: R30 (100 Ω) + R10 (10 Ω) drop
-  ~5.4 V at the 49 mA limit, leaving ~±4.6 V there; the full ±10.04 V arrives
-  only at low current.
+  ~5.4 V at the 49 mA limit (plus up to 0.8 V in F1, F2 and U12), leaving
+  ~±4.6 V there; the full ±10.04 V arrives only at low current.
 - **0 V output whenever firmware is not running** (audit F2). Both DAC
   channels power up at zero scale, so the midpoint from channel B gives
   V_SWEEP ≈ 0 at power-up. The DAC keeps its codes through an MCU reset, halt
@@ -539,11 +552,14 @@ and `manifest.yaml → schematic_assumptions`.
   a forward sweep stays on-scale. See
   [`docs/bipolar_measurement.md`](docs/bipolar_measurement.md).
 - **Star ground** — AGND/DGND meet only at R31 (§C.7).
-- **Defense in depth** — ILIM → PTC fuse → series R → TVS (§C.9). R30
-  (100 Ω, 2 W Vishay PR02) is the passive bound: it carries the ≈ 1.6 W of a
-  127 mA rail-to-DUT fault continuously. The PTC F1 is **not** a backstop: the
-  fault current lies between its 100 mA hold and 200 mA trip, and it derates
-  with temperature (`blocks/protection.py`).
+- **Defense in depth** — ILIM → PTC fuse → series R → photorelay → TVS
+  (§C.9). R30 (100 Ω, 2 W Vishay PR02) is the passive bound: up to 143 mA and
+  1.96 W in the stacked worst-case rail fault. The PTC F1 is **not** a
+  backstop: the fault current lies between its 100 mA hold and 200 mA trip,
+  and it derates with temperature (`blocks/protection.py`). U12 (TLP176AM)
+  disconnects FORCE+ unless both ±15 V rails are up, D8/D9 clamp a dead rail
+  to AGND, and F2 (PTC) limits an external source on FORCE− ahead of the
+  shunt ([`docs/final_corrections.md`](docs/final_corrections.md)).
 
 See the source specification for full derivations. Assumptions carried into this
 design are listed in `manifest.yaml → assumptions`.

@@ -2,7 +2,7 @@
   (version "D")
   (design
     (source "main.py")
-    (date "10/26/2026 09:32 AM")
+    (date "10/26/2026 06:16 PM")
     (tool "SKiDL (2.2.3)")
     (sheet
       (number 1)
@@ -69,7 +69,7 @@
         (field
           (name "SKiDL Tag") "FLG1")
         (field
-          (name "SKiDL Line") "blocks/power.py:114"))
+          (name "SKiDL Line") "blocks/power.py:147"))
       (libsource
         (lib "NO_LIB")
         (part "PWR_FLAG"))
@@ -105,7 +105,7 @@
         (field
           (name "SKiDL Tag") "FLG2")
         (field
-          (name "SKiDL Line") "blocks/power.py:115"))
+          (name "SKiDL Line") "blocks/power.py:148"))
       (libsource
         (lib "NO_LIB")
         (part "PWR_FLAG"))
@@ -141,7 +141,7 @@
         (field
           (name "SKiDL Tag") "FLG3")
         (field
-          (name "SKiDL Line") "blocks/power.py:116"))
+          (name "SKiDL Line") "blocks/power.py:149"))
       (libsource
         (lib "NO_LIB")
         (part "PWR_FLAG"))
@@ -177,7 +177,7 @@
         (field
           (name "SKiDL Tag") "FLG4")
         (field
-          (name "SKiDL Line") "blocks/power.py:117"))
+          (name "SKiDL Line") "blocks/power.py:150"))
       (libsource
         (lib "NO_LIB")
         (part "PWR_FLAG"))
@@ -213,7 +213,7 @@
         (field
           (name "SKiDL Tag") "FLG5")
         (field
-          (name "SKiDL Line") "blocks/power.py:127"))
+          (name "SKiDL Line") "blocks/power.py:160"))
       (libsource
         (lib "NO_LIB")
         (part "PWR_FLAG"))
@@ -249,7 +249,7 @@
         (field
           (name "SKiDL Tag") "FLG6")
         (field
-          (name "SKiDL Line") "blocks/power.py:137"))
+          (name "SKiDL Line") "blocks/power.py:170"))
       (libsource
         (lib "NO_LIB")
         (part "PWR_FLAG"))
@@ -391,7 +391,7 @@
         (field
           (name "SKiDL Tag") "C1")
         (field
-          (name "SKiDL Line") "blocks/power.py:41"))
+          (name "SKiDL Line") "blocks/power.py:66"))
       (libsource
         (lib "NO_LIB")
         (part "C_Polarized"))
@@ -425,7 +425,7 @@
         (field
           (name "SKiDL Tag") "C10")
         (field
-          (name "SKiDL Line") "blocks/power.py:70"))
+          (name "SKiDL Line") "blocks/power.py:95"))
       (libsource
         (lib "NO_LIB")
         (part "C"))
@@ -765,7 +765,7 @@
         (field
           (name "SKiDL Tag") "C2")
         (field
-          (name "SKiDL Line") "blocks/power.py:43"))
+          (name "SKiDL Line") "blocks/power.py:68"))
       (libsource
         (lib "NO_LIB")
         (part "C_Polarized"))
@@ -799,7 +799,7 @@
         (field
           (name "SKiDL Tag") "C20")
         (field
-          (name "SKiDL Line") "blocks/current_sense.py:68"))
+          (name "SKiDL Line") "blocks/current_sense.py:90"))
       (libsource
         (lib "NO_LIB")
         (part "C"))
@@ -833,7 +833,7 @@
         (field
           (name "SKiDL Tag") "C21")
         (field
-          (name "SKiDL Line") "blocks/current_sense.py:69"))
+          (name "SKiDL Line") "blocks/current_sense.py:91"))
       (libsource
         (lib "NO_LIB")
         (part "C"))
@@ -1139,7 +1139,7 @@
         (field
           (name "SKiDL Tag") "C3")
         (field
-          (name "SKiDL Line") "blocks/power.py:45"))
+          (name "SKiDL Line") "blocks/power.py:70"))
       (libsource
         (lib "NO_LIB")
         (part "C"))
@@ -1513,7 +1513,7 @@
         (field
           (name "SKiDL Tag") "C4")
         (field
-          (name "SKiDL Line") "blocks/power.py:47"))
+          (name "SKiDL Line") "blocks/power.py:72"))
       (libsource
         (lib "NO_LIB")
         (part "C"))
@@ -1889,7 +1889,7 @@
         (field
           (name "SKiDL Tag") "C5")
         (field
-          (name "SKiDL Line") "blocks/power.py:56"))
+          (name "SKiDL Line") "blocks/power.py:81"))
       (libsource
         (lib "NO_LIB")
         (part "C_Polarized"))
@@ -1923,7 +1923,7 @@
         (field
           (name "SKiDL Tag") "C6")
         (field
-          (name "SKiDL Line") "blocks/power.py:58"))
+          (name "SKiDL Line") "blocks/power.py:83"))
       (libsource
         (lib "NO_LIB")
         (part "C_Polarized"))
@@ -1957,7 +1957,7 @@
         (field
           (name "SKiDL Tag") "C7")
         (field
-          (name "SKiDL Line") "blocks/power.py:61"))
+          (name "SKiDL Line") "blocks/power.py:86"))
       (libsource
         (lib "NO_LIB")
         (part "C_Polarized"))
@@ -1991,7 +1991,7 @@
         (field
           (name "SKiDL Tag") "C8")
         (field
-          (name "SKiDL Line") "blocks/power.py:64"))
+          (name "SKiDL Line") "blocks/power.py:89"))
       (libsource
         (lib "NO_LIB")
         (part "C_Polarized"))
@@ -2025,7 +2025,7 @@
         (field
           (name "SKiDL Tag") "C9")
         (field
-          (name "SKiDL Line") "blocks/power.py:69"))
+          (name "SKiDL Line") "blocks/power.py:94"))
       (libsource
         (lib "NO_LIB")
         (part "C"))
@@ -2195,7 +2195,7 @@
         (field
           (name "SKiDL Tag") "D5")
         (field
-          (name "SKiDL Line") "blocks/protection.py:78"))
+          (name "SKiDL Line") "blocks/protection.py:117"))
       (libsource
         (lib "NO_LIB")
         (part "D_TVS"))
@@ -2239,6 +2239,108 @@
       (component_classes)
       (tstamps "1a26254c-0960-55b1-8a30-c368e56e3140"))
     (comp
+      (ref "D7")
+      (value "BZT52C24")
+      (description "Zener diode (cathode = pin K)")
+      (footprint "Diode_SMD:D_SOD-123")
+      (fields
+        (field
+          (name "MPN") "BZT52C24")
+        (field
+          (name "KiCad_Lib") "Device:D_Zener")
+        (field
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:38003")
+        (field
+          (name "Project_Symbol") "stage1_iv:D_Zener")
+        (field
+          (name "Description") "Zener diode (cathode = pin K)")
+        (field
+          (name "Footprint") "Diode_SMD:D_SOD-123")
+        (field
+          (name "Datasheet") "~")
+        (field
+          (name "SKiDL Tag") "D7")
+        (field
+          (name "SKiDL Line") "blocks/protection.py:126"))
+      (libsource
+        (lib "NO_LIB")
+        (part "D_Zener"))
+      (sheetpath
+        (names "/")
+        (tstamps "/"))
+      (component_classes)
+      (tstamps "5944a6f0-ac26-5cb9-8315-1252c3b3bcdb"))
+    (comp
+      (ref "D8")
+      (value "MBR0540")
+      (description "Schottky diode (cathode = pin K)")
+      (footprint "Diode_SMD:D_SOD-123")
+      (fields
+        (field
+          (name "MPN") "MBR0540")
+        (field
+          (name "KiCad_Lib") "Device:D_Schottky")
+        (field
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:25682")
+        (field
+          (name "Project_Symbol") "stage1_iv:D_Schottky")
+        (field
+          (name "Description") "Schottky diode (cathode = pin K)")
+        (field
+          (name "Footprint") "Diode_SMD:D_SOD-123")
+        (field
+          (name "Datasheet") "~")
+        (field
+          (name "SKiDL Tag") "D8")
+        (field
+          (name "SKiDL Line") "blocks/power.py:97"))
+      (libsource
+        (lib "NO_LIB")
+        (part "D_Schottky"))
+      (sheetpath
+        (names "/")
+        (tstamps "/"))
+      (component_classes)
+      (tstamps "1a9e4bd4-e545-516e-b242-8c610b08a9c0"))
+    (comp
+      (ref "D9")
+      (value "MBR0540")
+      (description "Schottky diode (cathode = pin K)")
+      (footprint "Diode_SMD:D_SOD-123")
+      (fields
+        (field
+          (name "MPN") "MBR0540")
+        (field
+          (name "KiCad_Lib") "Device:D_Schottky")
+        (field
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:25682")
+        (field
+          (name "Project_Symbol") "stage1_iv:D_Schottky")
+        (field
+          (name "Description") "Schottky diode (cathode = pin K)")
+        (field
+          (name "Footprint") "Diode_SMD:D_SOD-123")
+        (field
+          (name "Datasheet") "~")
+        (field
+          (name "SKiDL Tag") "D9")
+        (field
+          (name "SKiDL Line") "blocks/power.py:98"))
+      (libsource
+        (lib "NO_LIB")
+        (part "D_Schottky"))
+      (sheetpath
+        (names "/")
+        (tstamps "/"))
+      (component_classes)
+      (tstamps "181fe9e3-f81b-577a-9310-97d1057a1413"))
+    (comp
       (ref "F1")
       (value "0ZRM0010FF1E")
       (description "PTC resettable fuse")
@@ -2263,7 +2365,7 @@
         (field
           (name "SKiDL Tag") "F1")
         (field
-          (name "SKiDL Line") "blocks/protection.py:68"))
+          (name "SKiDL Line") "blocks/protection.py:107"))
       (libsource
         (lib "NO_LIB")
         (part "Polyfuse"))
@@ -2272,6 +2374,40 @@
         (tstamps "/"))
       (component_classes)
       (tstamps "c8376089-30f9-5993-9f79-3ca96ebaa282"))
+    (comp
+      (ref "F2")
+      (value "0ZRM0010FF1E")
+      (description "PTC resettable fuse")
+      (footprint "Fuse:Fuse_Bourns_MF-RG300")
+      (fields
+        (field
+          (name "MPN") "0ZRM0010FF1E")
+        (field
+          (name "KiCad_Lib") "Device:Polyfuse")
+        (field
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:94206")
+        (field
+          (name "Project_Symbol") "stage1_iv:Polyfuse")
+        (field
+          (name "Description") "PTC resettable fuse")
+        (field
+          (name "Footprint") "Fuse:Fuse_Bourns_MF-RG300")
+        (field
+          (name "Datasheet") "~")
+        (field
+          (name "SKiDL Tag") "F2")
+        (field
+          (name "SKiDL Line") "blocks/protection.py:120"))
+      (libsource
+        (lib "NO_LIB")
+        (part "Polyfuse"))
+      (sheetpath
+        (names "/")
+        (tstamps "/"))
+      (component_classes)
+      (tstamps "ca28ddcd-8ef6-5d51-abce-9da7a8ae6416"))
     (comp
       (ref "FB1")
       (value "BLM21PG221SN1D")
@@ -2297,7 +2433,7 @@
         (field
           (name "SKiDL Tag") "FB1")
         (field
-          (name "SKiDL Line") "blocks/power.py:37"))
+          (name "SKiDL Line") "blocks/power.py:62"))
       (libsource
         (lib "NO_LIB")
         (part "FerriteBead"))
@@ -2365,7 +2501,7 @@
         (field
           (name "SKiDL Tag") "J1")
         (field
-          (name "SKiDL Line") "blocks/power.py:33"))
+          (name "SKiDL Line") "blocks/power.py:58"))
       (libsource
         (lib "NO_LIB")
         (part "Screw_Terminal_01x04"))
@@ -2467,7 +2603,7 @@
         (field
           (name "SKiDL Tag") "J4")
         (field
-          (name "SKiDL Line") "blocks/protection.py:81"))
+          (name "SKiDL Line") "blocks/protection.py:129"))
       (libsource
         (lib "NO_LIB")
         (part "Conn_01x01"))
@@ -2501,7 +2637,7 @@
         (field
           (name "SKiDL Tag") "J5")
         (field
-          (name "SKiDL Line") "blocks/protection.py:82"))
+          (name "SKiDL Line") "blocks/protection.py:130"))
       (libsource
         (lib "NO_LIB")
         (part "Conn_01x01"))
@@ -2535,7 +2671,7 @@
         (field
           (name "SKiDL Tag") "J6")
         (field
-          (name "SKiDL Line") "blocks/protection.py:83"))
+          (name "SKiDL Line") "blocks/protection.py:131"))
       (libsource
         (lib "NO_LIB")
         (part "Conn_01x01"))
@@ -2569,7 +2705,7 @@
         (field
           (name "SKiDL Tag") "J7")
         (field
-          (name "SKiDL Line") "blocks/protection.py:84"))
+          (name "SKiDL Line") "blocks/protection.py:132"))
       (libsource
         (lib "NO_LIB")
         (part "Conn_01x01"))
@@ -2648,12 +2784,12 @@
       (tstamps "91628e47-8f83-5ba1-abed-4cb134d83eea"))
     (comp
       (ref "R10")
-      (value "10.0R 0.1% 25ppm")
+      (value "10.0R 0.1% 3W")
       (description "Resistor")
-      (footprint "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P10.16mm_Horizontal")
+      (footprint "Resistor_THT:R_Axial_DIN0614_L14.3mm_D5.7mm_P20.32mm_Horizontal")
       (fields
         (field
-          (name "MPN") "10.0R 0.1% 25ppm/K 0.5W metal film, 0207 axial")
+          (name "MPN") "RS02B10R00BE12")
         (field
           (name "KiCad_Lib") "Device:R")
         (field
@@ -2665,13 +2801,13 @@
         (field
           (name "Description") "Resistor")
         (field
-          (name "Footprint") "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P10.16mm_Horizontal")
+          (name "Footprint") "Resistor_THT:R_Axial_DIN0614_L14.3mm_D5.7mm_P20.32mm_Horizontal")
         (field
           (name "Datasheet") "~")
         (field
           (name "SKiDL Tag") "R10")
         (field
-          (name "SKiDL Line") "blocks/current_sense.py:63"))
+          (name "SKiDL Line") "blocks/current_sense.py:84"))
       (libsource
         (lib "NO_LIB")
         (part "R"))
@@ -2705,7 +2841,7 @@
         (field
           (name "SKiDL Tag") "R11")
         (field
-          (name "SKiDL Line") "blocks/current_sense.py:67"))
+          (name "SKiDL Line") "blocks/current_sense.py:89"))
       (libsource
         (lib "NO_LIB")
         (part "R"))
@@ -3421,7 +3557,7 @@
         (field
           (name "SKiDL Tag") "R30")
         (field
-          (name "SKiDL Line") "blocks/protection.py:73"))
+          (name "SKiDL Line") "blocks/protection.py:112"))
       (libsource
         (lib "NO_LIB")
         (part "R"))
@@ -3455,7 +3591,7 @@
         (field
           (name "SKiDL Tag") "R31")
         (field
-          (name "SKiDL Line") "blocks/power.py:38"))
+          (name "SKiDL Line") "blocks/power.py:63"))
       (libsource
         (lib "NO_LIB")
         (part "R"))
@@ -3704,6 +3840,40 @@
       (tstamps "c1ee90a8-14ab-5f9c-a674-53f5cc8bac55")
       (property
         (name "dnp")))
+    (comp
+      (ref "R39")
+      (value "620R 1% 0.25W")
+      (description "Resistor")
+      (footprint "Resistor_SMD:R_1206_3216Metric")
+      (fields
+        (field
+          (name "MPN") "generic")
+        (field
+          (name "KiCad_Lib") "Device:R")
+        (field
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Device.kicad_sym:104590")
+        (field
+          (name "Project_Symbol") "stage1_iv:R")
+        (field
+          (name "Description") "Resistor")
+        (field
+          (name "Footprint") "Resistor_SMD:R_1206_3216Metric")
+        (field
+          (name "Datasheet") "~")
+        (field
+          (name "SKiDL Tag") "R39")
+        (field
+          (name "SKiDL Line") "blocks/protection.py:124"))
+      (libsource
+        (lib "NO_LIB")
+        (part "R"))
+      (sheetpath
+        (names "/")
+        (tstamps "/"))
+      (component_classes)
+      (tstamps "05ba47c2-b500-57b8-adeb-d243301192fa"))
     (comp
       (ref "R4")
       (value "20.0k 0.1%")
@@ -4035,7 +4205,7 @@
         (field
           (name "SKiDL Tag") "TP3")
         (field
-          (name "SKiDL Line") "blocks/current_sense.py:70"))
+          (name "SKiDL Line") "blocks/current_sense.py:92"))
       (libsource
         (lib "NO_LIB")
         (part "TestPoint"))
@@ -4069,7 +4239,7 @@
         (field
           (name "SKiDL Tag") "TP4")
         (field
-          (name "SKiDL Line") "blocks/current_sense.py:71"))
+          (name "SKiDL Line") "blocks/current_sense.py:93"))
       (libsource
         (lib "NO_LIB")
         (part "TestPoint"))
@@ -4239,7 +4409,7 @@
         (field
           (name "SKiDL Tag") "U1")
         (field
-          (name "SKiDL Line") "blocks/power.py:35"))
+          (name "SKiDL Line") "blocks/power.py:60"))
       (libsource
         (lib "NO_LIB")
         (part "LD1117S33TR_SOT223"))
@@ -4317,6 +4487,40 @@
       (component_classes)
       (tstamps "5628e4a6-a160-5f8a-a145-fc60506ebdd3"))
     (comp
+      (ref "U12")
+      (value "TLP176AM")
+      (description "MOSFET photorelay, 1-Form-A, 60 V, 0.7 A (DUT disconnect)")
+      (footprint "Package_SO:Toshiba_SOIC-4-6_4.4x3.6mm_P1.27mm")
+      (fields
+        (field
+          (name "MPN") "TLP176AM(TPL,E")
+        (field
+          (name "KiCad_Lib") "Relay_SolidState:TLP175A")
+        (field
+          (name "Pins_Verified") "RESOLVED")
+        (field
+          (name "Symbol_Source") "Relay_SolidState.kicad_sym:9219")
+        (field
+          (name "Project_Symbol") "stage1_iv:TLP175A")
+        (field
+          (name "Description") "MOSFET photorelay, 1-Form-A, 60 V, 0.7 A (DUT disconnect)")
+        (field
+          (name "Footprint") "Package_SO:Toshiba_SOIC-4-6_4.4x3.6mm_P1.27mm")
+        (field
+          (name "Datasheet") "https://toshiba.semicon-storage.com/info/docget.jsp?did=13665&prodName=TLP175A")
+        (field
+          (name "SKiDL Tag") "U12")
+        (field
+          (name "SKiDL Line") "blocks/protection.py:123"))
+      (libsource
+        (lib "NO_LIB")
+        (part "TLP176AM"))
+      (sheetpath
+        (names "/")
+        (tstamps "/"))
+      (component_classes)
+      (tstamps "17961b9f-b52d-544b-815d-76d693295643"))
+    (comp
       (ref "U2")
       (value "REF5025AIDGKT")
       (description "2.500V precision voltage reference")
@@ -4341,7 +4545,7 @@
         (field
           (name "SKiDL Tag") "U2")
         (field
-          (name "SKiDL Line") "blocks/power.py:36"))
+          (name "SKiDL Line") "blocks/power.py:61"))
       (libsource
         (lib "NO_LIB")
         (part "REF5025ADGK"))
@@ -4477,7 +4681,7 @@
         (field
           (name "SKiDL Tag") "U6")
         (field
-          (name "SKiDL Line") "blocks/current_sense.py:66"))
+          (name "SKiDL Line") "blocks/current_sense.py:88"))
       (libsource
         (lib "NO_LIB")
         (part "INA128"))
@@ -4698,7 +4902,15 @@
         (pin "1")
         (pintype "PASSIVE"))
       (node
+        (ref "D8")
+        (pin "1")
+        (pintype "PASSIVE"))
+      (node
         (ref "J1")
+        (pin "1")
+        (pintype "PASSIVE"))
+      (node
+        (ref "R39")
         (pin "1")
         (pintype "PASSIVE"))
       (node
@@ -4954,6 +5166,14 @@
         (pin "2")
         (pintype "PASSIVE"))
       (node
+        (ref "D7")
+        (pin "2")
+        (pintype "PASSIVE"))
+      (node
+        (ref "D9")
+        (pin "2")
+        (pintype "PASSIVE"))
+      (node
         (ref "J1")
         (pin "2")
         (pintype "PASSIVE"))
@@ -5176,6 +5396,14 @@
       (node
         (ref "D5")
         (pin "2")
+        (pintype "PASSIVE"))
+      (node
+        (ref "D8")
+        (pin "2")
+        (pintype "PASSIVE"))
+      (node
+        (ref "D9")
+        (pin "1")
         (pintype "PASSIVE"))
       (node
         (ref "R10")
@@ -5598,16 +5826,40 @@
         (pin "1")
         (pintype "PASSIVE"))
       (node
-        (ref "R30")
-        (pin "2")
+        (ref "U12")
+        (pin "4")
         (pintype "PASSIVE")))
     (net
       (code 26)
       (name "FORCE-")
       (class "Default")
       (node
+        (ref "F2")
+        (pin "1")
+        (pintype "PASSIVE"))
+      (node
         (ref "J7")
         (pin "1")
+        (pintype "PASSIVE")))
+    (net
+      (code 27)
+      (name "FORCE_SW")
+      (class "Default")
+      (node
+        (ref "R30")
+        (pin "2")
+        (pintype "PASSIVE"))
+      (node
+        (ref "U12")
+        (pin "6")
+        (pintype "PASSIVE")))
+    (net
+      (code 28)
+      (name "ISENSE_HI")
+      (class "Default")
+      (node
+        (ref "F2")
+        (pin "2")
         (pintype "PASSIVE"))
       (node
         (ref "R10")
@@ -5622,7 +5874,7 @@
         (pin "3")
         (pintype "INPUT")))
     (net
-      (code 27)
+      (code 29)
       (name "I_SENSE_OUT")
       (class "Default")
       (node
@@ -5638,7 +5890,7 @@
         (pin "6")
         (pintype "OUTPUT")))
     (net
-      (code 28)
+      (code 30)
       (name "LED_K")
       (class "Default")
       (node
@@ -5650,7 +5902,7 @@
         (pin "2")
         (pintype "PASSIVE")))
     (net
-      (code 29)
+      (code 31)
       (name "LED_STATUS")
       (class "Default")
       (node
@@ -5662,7 +5914,7 @@
         (pin "2")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 30)
+      (code 32)
       (name "MISO2")
       (class "Default")
       (node
@@ -5674,7 +5926,7 @@
         (pin "35")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 31)
+      (code 33)
       (name "MOSI1")
       (class "Default")
       (node
@@ -5686,7 +5938,7 @@
         (pin "23")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 32)
+      (code 34)
       (name "MOSI2")
       (class "Default")
       (node
@@ -5698,7 +5950,7 @@
         (pin "36")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 33)
+      (code 35)
       (name "NRST")
       (class "Default")
       (node
@@ -5722,7 +5974,7 @@
         (pin "7")
         (pintype "INPUT")))
     (net
-      (code 34)
+      (code 36)
       (name "OPA548_ES")
       (class "Default")
       (node
@@ -5734,7 +5986,7 @@
         (pin "7")
         (pintype "PASSIVE")))
     (net
-      (code 35)
+      (code 37)
       (name "OPA548_ILIM")
       (class "Default")
       (node
@@ -5750,7 +6002,7 @@
         (pin "3")
         (pintype "PASSIVE")))
     (net
-      (code 36)
+      (code 38)
       (name "OSC_IN")
       (class "Default")
       (node
@@ -5766,7 +6018,7 @@
         (pin "1")
         (pintype "PASSIVE")))
     (net
-      (code 37)
+      (code 39)
       (name "OSC_OUT")
       (class "Default")
       (node
@@ -5782,7 +6034,7 @@
         (pin "2")
         (pintype "PASSIVE")))
     (net
-      (code 38)
+      (code 40)
       (name "RESET_ADC")
       (class "Default")
       (node
@@ -5798,7 +6050,7 @@
         (pin "42")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 39)
+      (code 41)
       (name "SAFE_HB")
       (class "Default")
       (node
@@ -5810,7 +6062,7 @@
         (pin "25")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 40)
+      (code 42)
       (name "SAFE_HB_AC")
       (class "Default")
       (node
@@ -5822,7 +6074,7 @@
         (pin "3")
         (pintype "PASSIVE")))
     (net
-      (code 41)
+      (code 43)
       (name "SAFE_HB_R")
       (class "Default")
       (node
@@ -5834,7 +6086,7 @@
         (pin "1")
         (pintype "PASSIVE")))
     (net
-      (code 42)
+      (code 44)
       (name "SCK1")
       (class "Default")
       (node
@@ -5846,7 +6098,7 @@
         (pin "21")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 43)
+      (code 45)
       (name "SCK2")
       (class "Default")
       (node
@@ -5858,7 +6110,7 @@
         (pin "34")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 44)
+      (code 46)
       (name "SENSE+")
       (class "Default")
       (node
@@ -5882,7 +6134,7 @@
         (pin "1")
         (pintype "PASSIVE")))
     (net
-      (code 45)
+      (code 47)
       (name "SENSE-")
       (class "Default")
       (node
@@ -5906,7 +6158,7 @@
         (pin "1")
         (pintype "PASSIVE")))
     (net
-      (code 46)
+      (code 48)
       (name "SENSE_M_AMP")
       (class "Default")
       (node
@@ -5922,7 +6174,7 @@
         (pin "2")
         (pintype "INPUT")))
     (net
-      (code 47)
+      (code 49)
       (name "SENSE_P_AMP")
       (class "Default")
       (node
@@ -5938,7 +6190,31 @@
         (pin "3")
         (pintype "INPUT")))
     (net
-      (code 48)
+      (code 50)
+      (name "SSR_LED_A")
+      (class "Default")
+      (node
+        (ref "R39")
+        (pin "2")
+        (pintype "PASSIVE"))
+      (node
+        (ref "U12")
+        (pin "1")
+        (pintype "PASSIVE")))
+    (net
+      (code 51)
+      (name "SSR_LED_K")
+      (class "Default")
+      (node
+        (ref "D7")
+        (pin "1")
+        (pintype "PASSIVE"))
+      (node
+        (ref "U12")
+        (pin "3")
+        (pintype "PASSIVE")))
+    (net
+      (code 52)
       (name "SWCLK")
       (class "Default")
       (node
@@ -5950,7 +6226,7 @@
         (pin "49")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 49)
+      (code 53)
       (name "SWDIO")
       (class "Default")
       (node
@@ -5962,7 +6238,7 @@
         (pin "46")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 50)
+      (code 54)
       (name "U6_RG1")
       (class "Default")
       (node
@@ -5974,7 +6250,7 @@
         (pin "1")
         (pintype "PASSIVE")))
     (net
-      (code 51)
+      (code 55)
       (name "U6_RG2")
       (class "Default")
       (node
@@ -5986,7 +6262,7 @@
         (pin "8")
         (pintype "PASSIVE")))
     (net
-      (code 52)
+      (code 56)
       (name "U7_RG1")
       (class "Default")
       (node
@@ -5998,7 +6274,7 @@
         (pin "1")
         (pintype "PASSIVE")))
     (net
-      (code 53)
+      (code 57)
       (name "U7_RG2")
       (class "Default")
       (node
@@ -6010,7 +6286,7 @@
         (pin "8")
         (pintype "PASSIVE")))
     (net
-      (code 54)
+      (code 58)
       (name "USB_DM")
       (class "Default")
       (node
@@ -6022,7 +6298,7 @@
         (pin "44")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 55)
+      (code 59)
       (name "USB_DM_CONN")
       (class "Default")
       (node
@@ -6038,7 +6314,7 @@
         (pin "1")
         (pintype "PASSIVE")))
     (net
-      (code 56)
+      (code 60)
       (name "USB_DM_ESD")
       (class "Default")
       (node
@@ -6050,7 +6326,7 @@
         (pin "6")
         (pintype "PASSIVE")))
     (net
-      (code 57)
+      (code 61)
       (name "USB_DP")
       (class "Default")
       (node
@@ -6062,7 +6338,7 @@
         (pin "45")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 58)
+      (code 62)
       (name "USB_DP_CONN")
       (class "Default")
       (node
@@ -6078,7 +6354,7 @@
         (pin "3")
         (pintype "PASSIVE")))
     (net
-      (code 59)
+      (code 63)
       (name "USB_DP_ESD")
       (class "Default")
       (node
@@ -6090,7 +6366,7 @@
         (pin "4")
         (pintype "PASSIVE")))
     (net
-      (code 60)
+      (code 64)
       (name "VBUS")
       (class "Default")
       (node
@@ -6126,7 +6402,7 @@
         (pin "5")
         (pintype "PASSIVE")))
     (net
-      (code 61)
+      (code 65)
       (name "VBUS_SENSE")
       (class "Default")
       (node
@@ -6142,7 +6418,7 @@
         (pin "14")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 62)
+      (code 66)
       (name "VCAP1")
       (class "Default")
       (node
@@ -6154,7 +6430,7 @@
         (pin "30")
         (pintype "POWER-OUT")))
     (net
-      (code 63)
+      (code 67)
       (name "VDDA")
       (class "Default")
       (node
@@ -6178,7 +6454,7 @@
         (pin "13")
         (pintype "POWER-IN")))
     (net
-      (code 64)
+      (code 68)
       (name "VO_RAW")
       (class "Default")
       (node
@@ -6198,7 +6474,7 @@
         (pin "6")
         (pintype "OUTPUT")))
     (net
-      (code 65)
+      (code 69)
       (name "VO_SENSE")
       (class "Default")
       (node
@@ -6222,7 +6498,7 @@
         (pin "2")
         (pintype "INPUT")))
     (net
-      (code 66)
+      (code 70)
       (name "VO_SNUB")
       (class "Default")
       (node
@@ -6234,7 +6510,7 @@
         (pin "2")
         (pintype "PASSIVE")))
     (net
-      (code 67)
+      (code 71)
       (name "VREF_2V5")
       (class "Default")
       (node
@@ -6274,7 +6550,7 @@
         (pin "5")
         (pintype "INPUT")))
     (net
-      (code 68)
+      (code 72)
       (name "VREF_HALF")
       (class "Default")
       (node
@@ -6290,7 +6566,7 @@
         (pin "2")
         (pintype "INPUT")))
     (net
-      (code 69)
+      (code 73)
       (name "VREF_HALF_RAW")
       (class "Default")
       (node
@@ -6306,7 +6582,7 @@
         (pin "3")
         (pintype "INPUT")))
     (net
-      (code 70)
+      (code 74)
       (name "V_DAC")
       (class "Default")
       (node
@@ -6318,7 +6594,7 @@
         (pin "4")
         (pintype "OUTPUT")))
     (net
-      (code 71)
+      (code 75)
       (name "V_DACB")
       (class "Default")
       (node
@@ -6330,7 +6606,7 @@
         (pin "3")
         (pintype "OUTPUT")))
     (net
-      (code 72)
+      (code 76)
       (name "V_SENSE_OUT")
       (class "Default")
       (node
@@ -6346,7 +6622,7 @@
         (pin "6")
         (pintype "OUTPUT")))
     (net
-      (code 73)
+      (code 77)
       (name "V_SWEEP")
       (class "Default")
       (node

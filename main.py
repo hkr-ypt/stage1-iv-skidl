@@ -97,8 +97,9 @@ def build():
 SHEET_OF = {
     # FLG1..FLG6 are PWR_FLAG virtual symbols on the rails that enter the
     # board at J1 / FB1 / the R31 star point — see blocks/power.py.
+    # D8/D9: the dead-rail clamps (docs/final_corrections.md §2.5).
     "1 Power": ["J1", "U1", "U2", "FB1", "R31", "C1", "C2", "C3", "C4", "C5",
-                "C6", "C7", "C8", "C9", "C10",
+                "C6", "C7", "C8", "C9", "C10", "D8", "D9",
                 "#FLG1", "#FLG2", "#FLG3", "#FLG4", "#FLG5", "#FLG6"],
     "2 MCU": ["U9", "Y2", "C32", "C33", "C34", "C35", "C36", "C37", "C38", "C39",
               "C40", "C43", "FB2", "R21", "C41", "SW1", "R22", "R23", "LED1",
@@ -126,7 +127,10 @@ SHEET_OF = {
               "R20", "R15", "R16", "R17", "R18", "C24", "C25", "TP8", "C44"],
     # J4..J7 are the four separate single-pin DUT banana jacks
     # (FORCE+, SENSE+, SENSE-, FORCE-) — see blocks/protection.py.
-    "8 Protection/DUT": ["F1", "R30", "D5", "J4", "J5", "J6", "J7"],
+    # U12/R39/D7: the FORCE+ photorelay and its LED string; F2: the FORCE-
+    # PTC (docs/final_corrections.md §2.5, §2.6).
+    "8 Protection/DUT": ["F1", "R30", "D5", "J4", "J5", "J6", "J7",
+                         "U12", "R39", "D7", "F2"],
 }
 
 
@@ -226,7 +230,8 @@ def write_pcb(circuit):
 
     path, report = generate_routed_pcb(circuit, out_dir=HERE)
     print(f"\nKiCad board written to {path}")
-    print(f"  {report['parts']} footprints, {report['nets']} nets, "
+    print(f"  {report['parts']} footprints + {report['board_parts']} "
+          f"board-only (mounting holes), {report['nets']} nets, "
           f"{report['segments']} tracks, {report['vias']} vias, "
           f"{report['zones']} zones")
     print(f"  from {report['layout']} + "
@@ -343,10 +348,9 @@ def capability_banner(circuit=None, erc_summary=None, checks=None,
               f"{pol['parity']} parity problems")
             A(f"    as-built rules ...... {ab_e} errors, {ab_w} warnings "
               f"(the original has the same warnings)")
-            A(f"    netclass policy ..... {pol_e} errors, {pol_w} warnings — "
-              f"all {pol['pre_existing']} on the original")
-            A(f"                          unipolar-routed/ board too, "
-              f"{len(pol['new'])} new; NOT clean under the policy classes")
+            A(f"    netclass policy ..... {pol_e} errors, {pol_w} warnings, "
+              f"{pol['unconnected']} unconnected "
+              f"({len(pol['new_warnings'])} warnings the original lacks)")
     return "\n".join(lines), env
 
 
@@ -475,7 +479,8 @@ def main():
         routed = ("fully routed, 0 unconnected (KiCad DRC)"
                   if drc["status"] != "SKIPPED"
                   else "routing per layout/; KiCad DRC NOT RUN")
-        print(f"  Board .............. {pcb_report['parts']} footprints, "
+        print(f"  Board .............. {pcb_report['parts']} footprints "
+              f"+ {pcb_report['board_parts']} mounting holes, "
               f"{pcb_report['segments']} tracks, {pcb_report['vias']} vias, "
               f"{routed}")
     # Derived from the ERC result, never asserted. run_erc() already raises on

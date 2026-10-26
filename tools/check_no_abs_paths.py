@@ -43,10 +43,11 @@ EXEMPT_FILES = {
     # are candidates probed at runtime, never written into any output.
     "tools/resolve_kicad_libs.py",
     "tools/kicad_env.py",
-    # Provenance records: the whole point is to say which file on which
-    # machine a value came from. Regenerated, never read back as a path.
+    # Provenance record of the state BEFORE the identifier fixes: it says
+    # which file on which machine a value came from, and is kept verbatim as
+    # history. (The "after" report is generated with portable paths -
+    # repo-relative, or rooted at ${KICAD9_*_DIR} - so it is checked.)
     "docs/audit_identifiers_before.md",
-    "docs/audit_identifiers_after.md",
     "libraries/provenance/opa548t_akl_symbol.txt",
     # Narrative documents quoting diagnostic transcripts verbatim.
     "docs/identifier_resolution.md",

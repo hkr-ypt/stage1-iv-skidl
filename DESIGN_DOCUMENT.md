@@ -36,6 +36,16 @@ design decisions, and where a reviewer's attention is most useful.
   obligations the hardware now creates are in
   [`docs/firmware_handoff.md`](docs/firmware_handoff.md), and the first-power
   procedure is in [`docs/bringup_checklist.md`](docs/bringup_checklist.md).
+- **Revision: remaining hardware corrections.** FORCE+ now passes a
+  photorelay U12 (TLP176AM) that is guaranteed open unless both ±15 V rails
+  are up (LED string R39 + D7 BZT52C24 across the rails); D8/D9 clamp a dead
+  ±15 V rail to AGND; FORCE− has a series PTC F2 ahead of the shunt; R10 is
+  the orderable Vishay RS02B10R00BE12 (10.00 Ω 0.1 % 20 ppm/°C 3 W); F1 moved
+  away from R30 and U5; three isolated M3 mounting holes; and the board is
+  re-routed to the repository netclass clearances (0 policy DRC errors). The
+  record, with what is guaranteed, expected or left to the bench, is
+  [`docs/final_corrections.md`](docs/final_corrections.md). Sections below
+  that predate it are corrected where they state a fact it changed.
 
 > **Important context about the PCB.** The board in the repository root,
 > `stage1_iv.kicad_pcb`, is now the **human-placed, human-routed board**,
@@ -48,9 +58,11 @@ design decisions, and where a reviewer's attention is most useful.
 > routed; KiCad 10 DRC reports 0 unconnected items and 0 errors under the
 > rules it was routed to. A second ECO, `layout/audit_corrections.eco`,
 > places and routes the audit-correction parts and the new silkscreen labels
-> (see `docs/audit_corrections.md`). `docs/physical_design.md` also records
-> what is *not* clean (the repository's stricter netclass policy, which the
-> original human routing does not meet either). The schematic remains the
+> (see `docs/audit_corrections.md`); `layout/final_corrections.eco` places
+> the parts of the remaining corrections and the mounting holes, and
+> `layout/policy_clearance.eco` re-routes the human 0.20 mm runs to the
+> repository's netclass clearances, under which KiCad DRC is now clean too
+> (`docs/final_corrections.md`). The schematic remains the
 > electrical source of truth. Where sections below describe the earlier
 > auto-placed board (placement, outline size, mounting holes), they describe
 > the bootstrap output of `python3 main.py --autoplace`, not the board of
@@ -108,7 +120,7 @@ rationale written in the SKiDL source, `README.md` or `manifest.yaml`.
 | Measure DUT voltage without lead or shunt drops | `blocks/voltage_sense.py` | 4-wire Kelvin: separate SENSE± jacks into an INA128 |
 | Signed V and I over the whole sweep (hysteresis on a fixed DUT) | `blocks/current_sense.py`, `blocks/voltage_sense.py`, `blocks/adc.py` | INA128 REF pins and ADC AINCOM on VREF_2V5; Kelvin attenuator k = 0.1992; current gain sized to the physical current bound. Checked by `validation/measurement_range.py` |
 | Hardware current limit ≈ 50 mA | `blocks/output_buffer.py` | OPA548 programmable current limit, R7 = 1.43 MΩ → ≈ 49.35 mA |
-| Protection in depth for DUT and instrument | `blocks/protection.py` | OPA548 ILIM (uncharacterized at this setting) → 100 Ω 2 W R30 (the bound that holds whatever ILIM does) → TVS D5. The PTC F1 is in series but is **not** a backstop at the fault current (§10). Rail clamps on the sense inputs |
+| Protection in depth for DUT and instrument | `blocks/protection.py`, `blocks/power.py` | OPA548 ILIM (typical only at this setting) → 100 Ω 2 W R30 (the passive bound that holds whatever ILIM does) → photorelay U12 (open unless both ±15 V rails are up) → TVS D5. F1 (FORCE+) and F2 (FORCE−) are series PTCs; F1 is **not** a backstop at the fault current (§10); F2 limits an external source on J7. D8/D9 clamp a dead ±15 V rail. Rail clamps on the sense inputs |
 | Ratiometric accuracy | `blocks/power.py`, `blocks/adc.py` | One REF5025 (2.500 V) feeds the DAC reference (through U11), the ADC reference, and the measurement zero (INA128 REF pins, ADC AINCOM). The sweep midpoint is DAC channel B, so it shares the DAC's reference pin |
 | Keep analog and digital apart | `blocks/power.py`, `docs/pcb_generation.md` | Separate AGND/DGND nets and pours, joined only at R31 (0 Ω). Separate SPI buses for DAC and ADC |
 
@@ -129,9 +141,9 @@ document are therefore analysis only. They are not requirements.
 | Output safe state | U11 (TMUX1101) connects VREF_2V5 to the DAC only while the PC5 heartbeat keeps DAC_ARM high. Without the heartbeat both DAC outputs are 0 V and V_SWEEP ≈ 0, reached ≈ 50 ms after the heartbeat stops | U11, R35, D6, C47, C48, R36, R37 |
 | Output stage | OPA548T power op-amp, unity-gain follower, feedback taken after R9 (10 Ω) | U5, R9, C19 |
 | Current limit | R7 = 1.43 MΩ → **≈ 49.35 mA** (from the formula implied in the repository, [DS-check]) | R7, C14 |
-| Series elements outside the loop | F1 (PTC, 100 mA hold at 23 °C) + R30 100 Ω 2 W (PR02) + R10 10.0 Ω 0.1 % 25 ppm/°C | F1, R30, R10 |
-| DUT compliance | ±10.04 V at I → 0, about ±4.6 V at 49 mA (less by F1's resistance) | §5.4 |
-| Current sense | R10 = 10.0 Ω low-side shunt in FORCE−, INA128 G = 1 + 50k/35.7k = 2.4006 → **24.0 V/A**, REF on VREF_2V5: `I_SENSE_OUT = 2.500 V + 24.0 V/A·I` | R10, U6, R11 |
+| Series elements outside the loop | F1 (PTC, 100 mA hold at 23 °C) + R30 100 Ω 2 W (PR02) + U12 (≤ 2 Ω) + F2 (PTC) + R10 10.00 Ω 0.1 % 20 ppm/°C 3 W | F1, R30, U12, F2, R10 |
+| DUT compliance | ±10.04 V at I → 0, about ±4.6 V at 49 mA (less by F1's, F2's and U12's resistance) | §5.4 |
+| Current sense | R10 = 10.0 Ω low-side shunt (Vishay RS02B10R00BE12) after F2 in FORCE−, INA128 G = 1 + 50k/35.7k = 2.4006 → **24.0 V/A**, REF on VREF_2V5: `I_SENSE_OUT = 2.500 V + 24.0 V/A·I` | R10, U6, R11 |
 | Voltage sense | Kelvin SENSE± → rail clamps → 40.2 kΩ/10.0 kΩ dividers to AGND (k = 0.1992) → INA128 **G = 1** (R14 **DNP**), REF on VREF_2V5: `V_SENSE_OUT = 2.500 V + 0.1992·V_K` | U7, R12–R14, R32, R33, D1–D4 |
 | ADC | ADS1256 24-bit, 7.68 MHz crystal, **AIN0 − AINCOM = current, AIN2 − AINCOM = voltage, AINCOM on VREF_2V5**, VREF 2.500 V, PGA 2 (±2.500 V), AVDD 5 V, DVDD 3.3 V | U8, Y1, C44 |
 | **Measurable window** | **V: ±11.8 V guaranteed (±12.55 V nominal FS). I: ±97.8 mA guaranteed (±104 mA nominal FS). Both signed; both cover everything the source can apply (±10.04 V, ±91.3 mA)** | §6 |
@@ -139,7 +151,7 @@ document are therefore analysis only. They are not requirements.
 | Host interface | USB 2.0 full-speed through a USB-C receptacle (data only; VBUS is sensed but does not power the board). SWD header | J3, J2 |
 | DUT connection | Four 4 mm banana jacks: J4 FORCE+, J5 SENSE+, J6 SENSE−, J7 FORCE− | §5.4 |
 | Grounds | AGND and DGND joined only at R31 (0 Ω, 0805). U8 is the only IC with pins on both | §8.3 |
-| Part count | 126 board parts (123 fitted, 3 DNP: R14, R38, C49), plus 9 schematic-only PWR_FLAGs; 73 nets. The routed board has no mounting holes (§11, `docs/audit_corrections.md`) | `component_manifest.md` |
+| Part count | 132 board parts (129 fitted, 3 DNP: R14, R38, C49), plus 9 schematic-only PWR_FLAGs; 77 nets. The routed board also carries three board-only isolated M3 mounting holes H1–H3 (`docs/final_corrections.md` §2.4) | `component_manifest.md` |
 | Firmware | **Not in this repository.** Only the MCU pin assignment is defined | §9 |
 
 ---
@@ -165,14 +177,14 @@ document are therefore analysis only. They are not requirements.
    U5 OPA548 follower (+IN = V_SWEEP) ─OUT─► R9 10 Ω ─► VO_SENSE (TP2) ──┬──► back to U5 −IN (loop closes here)
      ILIM: R7 1.43 MΩ → ≈49 mA; E/S: R8 → +15VA (always on)              │
                                                                          ▼
-   F1 PTC ─► R30 100 Ω ─► FORCE+ ──┬─► J4 FORCE+ ─────────┐
-                                   └─ D5 TVS ─► AGND       │
-                                                         [ DUT ]   (FORCE and SENSE join only at the DUT)
-   AGND ◄─ R10 10 Ω shunt ◄─ FORCE− ◄─ J7 FORCE− ─────────┘
+   F1 PTC ─► R30 100 Ω ─► U12 photorelay ─► FORCE+ ──┬─► J4 FORCE+ ─────────┐
+     (U12 LED: +15VA ─ R39 ─ LED ─ D7 24 V zener ─ −15VA) └─ D5 TVS ─► AGND     │
+                                                                           [ DUT ]   (FORCE and SENSE join only at the DUT)
+   AGND ◄─ R10 10 Ω shunt ◄─ ISENSE_HI ◄─ F2 PTC ◄─ FORCE− ◄─ J7 FORCE− ───┘
                                   (J5 SENSE+ and J6 SENSE− connect to the DUT terminals)
 
  MEASUREMENT PATH  (zero at VREF_2V5 = 2.500 V; both channels read against AINCOM)
-   FORCE− / AGND (across R10) ──► U6 INA128, G = 2.40, REF = VREF_2V5 ──I_SENSE_OUT (TP4)──► R15/C24 ──► U8 AIN0
+   ISENSE_HI / AGND (across R10) ──► U6 INA128, G = 2.40, REF = VREF_2V5 ──I_SENSE_OUT (TP4)──► R15/C24 ──► U8 AIN0
    J5 SENSE+ / J6 SENSE− ─► D1–D4 rail clamps ─► R12/R13 40.2 kΩ, R32/R33 10.0 kΩ to AGND (k = 0.1992)
                          ─► U7 INA128, G = 1 (R14 DNP), REF = VREF_2V5 ──V_SENSE_OUT (TP7)──► R17/C25 ──► U8 AIN2
    VREF_2V5 ──► U8 AINCOM (pin 5, beside VREFP pin 4; C44 bypass)     AIN1/AIN3: R16/R18 to AGND, spare self-checks
@@ -198,7 +210,7 @@ generated from one SKiDL block file.
 | 5 Current sense | `current_sense.kicad_sch` | `blocks/current_sense.py` | R10 shunt, U6 INA128, R11 |
 | 6 Voltage sense | `voltage_sense.kicad_sch` | `blocks/voltage_sense.py` | U7 INA128, R12/R13, R14 (DNP), D1–D4 |
 | 7 ADC | `adc.kicad_sch` | `blocks/adc.py` | U8 ADS1256, Y1, input RC filters, pull-ups |
-| 8 Protection/DUT | `protection.kicad_sch` | `blocks/protection.py` | F1, R30, D5, J4–J7 |
+| 8 Protection/DUT | `protection.kicad_sch` | `blocks/protection.py` | F1, R30, U12 + R39 + D7, D5, F2, J4–J7 |
 
 **Reading the schematic.** The schematic is machine-generated. Every symbol is
 a generic rectangle with its pins split left and right. Connectivity comes
@@ -495,9 +507,13 @@ both outputs are `VREF·code/65536`, and both channels share one VREF pin
 ### 5.4 Force path, DUT terminals, compliance (Sheet 8)
 
 **Topology (design fact):**
-`VO_SENSE → F1 (PTC, 0ZRM0010FF1E) → F1_MID → R30 100 Ω 1 % 2 W (Vishay PR02, PR02000201000FB100, axial DIN0411) → FORCE+ → J4`.
+`VO_SENSE → F1 (PTC, 0ZRM0010FF1E) → F1_MID → R30 100 Ω 1 % 2 W (Vishay PR02, PR02000201000FB100, axial DIN0411) → FORCE_SW → U12 (TLP176AM photorelay) → FORCE+ → J4`.
 D5 (SMBJ15CA, bidirectional TVS) is connected from FORCE+ to AGND.
-J5 SENSE+, J6 SENSE− and J7 FORCE− are wired straight through to Sheets 6 and 5.
+U12's LED is in a series string across the rails, `+15VA → R39 620 Ω → LED →
+D7 BZT52C24 → −15VA`, so U12 is guaranteed open while either rail is absent
+and guaranteed closed at ≥ ±14.45 V (`docs/final_corrections.md` §2.5).
+`J7 FORCE− → F2 (PTC, 0ZRM0010FF1E) → ISENSE_HI` goes to the shunt on
+Sheet 5. J5 SENSE+ and J6 SENSE− are wired straight through to Sheet 6.
 The four jacks are separate 1-pin 4 mm banana footprints (`Connector:Banana_Jack_1Pin`),
 and each has its function (FORCE+, FORCE−, SENSE+, SENSE−) printed beside it on
 the front silkscreen.
@@ -505,56 +521,57 @@ FORCE and SENSE therefore meet **only at the DUT**, which is the point of a
 Kelvin connection.
 
 **DUT compliance (analysis, consistent with repository comments).**
-V_DUT ≈ V_SWEEP − I·(R_F1 + R30 + R10) − lead drops, with R30 + R10 = 110 Ω.
+V_DUT ≈ V_SWEEP − I·(R_F1 + R30 + R_U12 + R_F2 + R10) − lead drops, with R30 + R10 = 110 Ω.
 
 | DUT current | Drop in R30 + R10 | Maximum \|V_DUT\| (V_SWEEP = 10.04 V) |
 |---:|---:|---:|
 | 1 µA | 0.11 mV | ≈ 10.04 V |
 | 1 mA | 0.11 V | ≈ 9.93 V |
 | 10 mA | 1.10 V | ≈ 8.94 V |
-| 49.35 mA (ILIM) | 5.43 V | ≈ **4.61 V** minus I·R_F1 |
+| 49.35 mA (ILIM, typical) | 5.43 V | ≈ **4.61 V** minus I·(R_F1 + R_U12 + R_F2) |
 
-F1's resistance is not recorded in the repository **[DS-check]**.
+F1 and F2 are 3.0–7.5 Ω each (Bel: Rmin, R1max); U12 is ≤ 2 Ω. At 49 mA they
+cost up to 0.83 V more.
 
 **Why R30 is there.** `protection.py` describes it as a passive dead-short
 limiter, one of four protection layers (§10). It costs compliance at high
 current, and the repository says so explicitly.
 
-**Power in R30 (audit F3).** At the nominal current limit (for example a
-shorted DUT) R30 dissipates 0.049² × 100 ≈ 0.24 W. The ILIM setting is not
-characterised (§5.3), so R30 is sized for the worst credible fault instead: U5's
-output driven into a rail with the current set only by R9 + F1 + R30 + R10.
+**Power in R30 (audit F3; bound revised in `docs/final_corrections.md` §2.7).**
+At the nominal current limit (for example a shorted DUT) R30 dissipates
+0.049² × 100 ≈ 0.24 W. The ILIM setting is not characterised (§5.3), so R30
+is sized for the worst credible fault instead: U5's output driven into a
+15.5 V rail with the current set only by the series parts at their
+guaranteed minima (R9 −1 %, F1/F2 3.0 Ω, R30 −1 % and hot, U12 0 Ω,
+R10 −0.1 %):
 
 ```
-I = 15.5 V / (9.9 + 3.0 + 99 + 9.9) Ω = 127 mA
-P(R30) ≈ 1.6 W (1.63 W worst-case tolerance combination)   rating 2 W at 70 °C
-P(R9) = P(R10) ≈ 0.16 W                                    ratings 0.25 W / 0.5 W
+DUT short:         I ≤ 15.5 V / 121.2 Ω = 128 mA
+FORCE+ to AGND:    I ≤ 15.5 V / 108.2 Ω = 143 mA    P(R30) ≤ 1.96 W of 2 W (98 %)
+                                                    P(R9) ≤ 0.21 W of 0.25 W, P(R10) ≤ 0.16 W of 3 W
 ```
 
 `validation/measurement_range.py` checks this envelope against the ratings on
-every build. The PR02's own hot-spot rise at 1.6 W is about 120 K (Rth
+every build. The PR02's own hot-spot rise at 2 W is about 150 K (Rth
 75 K/W), so it is mounted axially with its body raised about 3 mm off the
 board. It lies along the board's Y axis at (87.75, 75.7) mm, 7 mm (courtyards)
-from the precision divider (R12/R13/R32/R33). It is **not** well separated from
-F1: R30 sits electrically between F1 and D5/J4, and the only room within reach
-is the strip beside F1, so the courtyards are 2.1 mm apart (the old 1206 was
-2.5 mm away). R30's heat lowers F1's hold current. In a fault that makes F1 trip
-sooner; on the normal plateau (0.24 W in R30) it reduces the hold margin. Bring-up
-measures this (`docs/bringup_checklist.md`); real separation needs the
-protection area re-laid out. The original 1206 part (1/4 W) would have been overloaded more than
+from the precision divider (R12/R13/R32/R33). F1 was moved to the bottom
+edge, 14.1 mm body to body from R30 and 22.8 mm from U5 (it was 2.6 mm and
+0.9 mm). The original 1206 part (1/4 W) would have been overloaded more than
 six times in this fault.
 
 ### 5.5 Current sense (Sheet 5)
 
 **Topology (design fact):**
 
-- R10 is a 10.0 Ω 0.1 % 25 ppm/°C, 0.5 W metal-film axial resistor (DIN0207,
-  10.16 mm pitch). It sits in the **low side**, between FORCE− (J7) and AGND.
-  Its fault dissipation is ≈ 0.16 W (§5.4). The precision grade was set by the
-  audit: R10 is the current-scale element and enters every current reading
-  directly.
-- U6 (INA128P, DIP-8): +IN = FORCE− (the shunt high side, also TP3
-  "ISENSE_HI"). −IN = AGND. **REF = VREF_2V5.** R11 = 35.7 kΩ 0.1 % across
+- R10 is a Vishay Dale RS02B10R00BE12: 10.00 Ω 0.1 % 20 ppm/°C, 3 W
+  wirewound axial (DIN0614 footprint, 20.32 mm pitch, mounted flat). It sits
+  in the **low side**, between ISENSE_HI (J7 through F2) and AGND. Its
+  DUT-short dissipation is ≤ 0.16 W (§5.4); the 3 W rating (5× for 5 s) is for
+  an external source on J7 until F2 trips (`docs/final_corrections.md` §2.2,
+  §2.6). The precision grade was set by the audit: R10 is the current-scale
+  element and enters every current reading directly.
+- U6 (INA128P, DIP-8): +IN = ISENSE_HI (the shunt high side, also TP3). −IN = AGND. **REF = VREF_2V5.** R11 = 35.7 kΩ 0.1 % across
   RG1/RG2. Supplies are ±15VA with 100 nF 50 V X7R each.
 - The output I_SENSE_OUT (TP4) goes to ADS1256 AIN0 through R15 100 Ω and is
   converted against AINCOM (VREF_2V5). C24 1 nF runs from AIN0 to AIN1, which
@@ -589,7 +606,7 @@ ADC reads AIN0 − AINCOM = 24.006 V/A · I     → ±1.185 V at ±49.35 mA, ±2
   currents". Whether the current channel really resolves the currents involved
   should be checked → **R9**.
 - **Accuracy contributors.**
-  - R10 is now 0.1 %, 25 ppm/°C. R11 is 35.7 kΩ 0.1 %; its TCR is not
+  - R10 is now 0.1 %, 20 ppm/°C (RS02B). R11 is 35.7 kΩ 0.1 %; its TCR is not
     specified in its value.
   - The INA128 gain-equation error at G ≈ 2.40 comes on top of that
     **[DS-check]**.
@@ -856,10 +873,16 @@ Observations (design facts, with consequences as inference):
   The residual window is the ≈ 50 ms disarm time, during which the last
   commanded voltage decays to zero. U5 stays enabled, so the DUT sees ≈ 0 V
   from a low impedance, not an open circuit.
-- **Partial supply states.** For example, ±15 V present without +5 V: the
-  INA128 outputs then drive an unpowered ADC through 100 Ω. The reverse case
-  leaves the DAC and ADC powered with the amplifiers unpowered. Neither case is
-  handled in hardware.
+- **Partial supply states (`docs/final_corrections.md` §2.5).** With one
+  ±15 V rail absent, the amplifiers' quiescent current used to drag the dead
+  rail toward the live one, forward-biasing the sense clamps into the DUT, and
+  U5 ran single-supply. Now D8/D9 hold a dead rail within a Schottky drop
+  (≤ 0.51 V) of AGND, and U12 is guaranteed open (FORCE+ disconnected) unless
+  both rails are up; it is guaranteed closed at ≥ ±14.45 V. ±15 V present
+  without +5 V leaves the DAC unpowered (V_SWEEP ≈ 0) and the INA128 outputs
+  driving an unpowered ADC through its input filter resistors; +5 V without
+  ±15 V has no drive at all. The switching transients themselves are measured
+  at bring-up.
 
 ### 8.3 Star ground
 
@@ -932,25 +955,27 @@ Notes and review points:
 
 ## 10. Protection and fault behavior
 
-### 10.1 Protection layers on FORCE+ (as described in `protection.py`)
+### 10.1 Protection layers on FORCE+ and FORCE− (as described in `protection.py`)
 
 | Layer | Part | Intended role (repository) | Observations (analysis) |
 |---|---|---|---|
 | 1 | U5 ILIM (R7) | Normal current plateau (≈ 49 mA nominal) | **Not characterised** at this setting: SBOS070D specifies ILIM accuracy only at 2.5 A. Nothing else relies on its value. U5 also has internal thermal shutdown |
-| 2 | F1 PTC 0ZRM0010FF1E | Series PTC. **Not a backstop** | Holds 100 mA and trips at 200 mA at 23 °C. The whole fault envelope (≤ 127 mA) lies between the two, where the data sheet promises neither. Hold current derates to 68 mA at 50 °C, 56 mA at 60 °C and 45 mA at 70 °C, so above about 65 °C ambient it can trip on the **normal** 49 mA plateau. Contingency if bench tests show nuisance trips: 0ZRM0017FF1E (170 mA hold, same body and footprint), as a conditional swap only |
-| 3 | R30 100 Ω 1 % 2 W, Vishay PR02 | **The current bound**, passive | Bounds a rail-to-DUT fault to 127 mA and carries the resulting ≈ 1.6 W continuously (§5.4) |
+| 2 | F1 PTC 0ZRM0010FF1E | Series PTC. **Not a backstop** | Holds 100 mA and trips at 200 mA at 23 °C. The whole fault envelope (≤ 143 mA) lies between the two, where the data sheet promises neither. Hold current derates to 68 mA at 50 °C, 56 mA at 60 °C and 45 mA at 70 °C, so above about 65 °C ambient it can trip on the **normal** 49 mA plateau. Contingency if bench tests show nuisance trips: 0ZRM0017FF1E (170 mA hold, same body and footprint), as a conditional swap only |
+| 3 | R30 100 Ω 1 % 2 W, Vishay PR02 | **The current bound**, passive | Bounds a DUT short to 128 mA and FORCE+ to AGND to 143 mA, carrying up to 1.96 W (98 % of rating) in that stacked worst case (§5.4) |
+| 3a | U12 TLP176AM photorelay | Disconnects FORCE+ unless both ±15 V rails are up | Guaranteed open with either rail absent, closed at ≥ ±14.45 V; ≤ 2 Ω, 0.7 A when on (`docs/final_corrections.md` §2.5) |
 | 4 | D5 SMBJ15CA to AGND | Absorbs transients. The 15 V stand-off clears the ±10.04 V sweep | Its leakage returns to AGND without passing through the DUT or R10, so it does **not** corrupt the current reading. **Inference** |
+| 5 | F2 PTC 0ZRM0010FF1E in FORCE− | Limits an external source on J7 ahead of the shunt | ≤ 1.19 A at 15.5 V (Imax 2 A); R10 carries ≤ 14.3 W until it trips, inside its 5 × 3 W short-time rating. Nothing is connected across or around the shunt (`docs/final_corrections.md` §2.6) |
 
 **Fault scenarios (analysis, for review):**
 
 | Scenario | Expected behavior | Point to check |
 |---|---|---|
 | DUT short, ILIM working | I ≈ 49 mA. R30 about 0.24 W, U5 about 0.46 W plus quiescent | U5 temperature (R6) |
-| DUT short, ILIM failed or set wrong, or U5 driven into a rail | Current is limited only by R9 + F1 + R30 + R10: 15.5 V / 121.8 Ω = 127 mA. R30 ≈ 1.6 W (rated 2 W), R9 and R10 ≈ 0.16 W each. F1 may or may not trip | Checked on every build by `validation/measurement_range.py`. The PR02 runs hot (≈ 120 K rise), so it is mounted raised and 7 mm from the divider. It is only 2.1 mm from F1 (§5.4) |
+| DUT short, ILIM failed or set wrong, or U5 driven into a rail | Current is limited only by the series parts at their minima: 15.5 V / 121.2 Ω = 128 mA (DUT short), 143 mA (FORCE+ to AGND). R30 ≤ 1.96 W (rated 2 W), R9 ≤ 0.21 W, R10 ≤ 0.16 W. F1 may or may not trip | Checked on every build by `validation/measurement_range.py`. The PR02 runs hot, so it is mounted raised and 7 mm from the divider; F1 is 14 mm from it (§5.4) |
 | External voltage applied to FORCE+ (charged capacitor, powered DUT) | D5 clamps and F1 limits sustained current | D5 energy rating against realistic sources. U5 output back-driven through R30/F1 |
-| External voltage applied to FORCE− | **No dedicated protection.** R10 (1 W) goes straight to AGND, and U6 +IN is directly on FORCE−. `protection.py` says FORCE− protection "lives on" Sheet 5, but Sheet 5 has none | The INA128 input overvoltage rating **[DS-check]** and R10 (R15) |
+| External voltage applied to FORCE− | F2 limits it: ≤ 1.19 A at 15.5 V until F2 trips (typically < 1 s), R10 ≤ 14.3 W against 15 W for 5 s; the shunt node reaches ≈ 12 V, inside the INA128's ±40 V input rating. Above ≈ 26 V F2's 2 A Imax is exceeded: outside the board's envelope | Recalibrate R10 after such an event (`docs/final_corrections.md` §2.6) |
 | Overvoltage on SENSE± | D1–D4 clamp the jack-side node to ±15VA. R12/R13 (40.2 kΩ) and R32/R33 then divide it: U7 sees at most ≈3.1 V | The clamps sit **before** the series resistors, so fault current goes straight into the ±15 V rails through the 1N4148Ws. The bench supply may not sink that current (R15) |
-| Board unpowered, DUT connected | The sense clamps are referenced to 0 V rails. The U5 output state is undefined | — |
+| Board unpowered, or one ±15 V rail absent, DUT connected | U12 is open, so U5 is disconnected from FORCE+. The sense clamps are referenced to rails held near 0 V (D8/D9) | Bring-up §5 |
 | Power-up / MCU reset / halt / crash | V_SWEEP ≈ 0 at power-up (midpoint from channel B). On reset, halt or crash the heartbeat stops and U11 removes the DAC reference within ≈ 50 ms (§5.2, §8.2) | Measured at bring-up (`docs/bringup_checklist.md`) |
 | Firmware loads channel B below full scale while armed | The positive ceiling rises above +10.04 V, up to U3B's saturation (+13.8 V … +15 V) | Firmware contract, not hardware protection (`docs/firmware_handoff.md`) |
 
@@ -986,12 +1011,12 @@ There are no jumpers or solder-bridge options in the design.
 
 | Aspect | Auto-placed board (`--autoplace`, bootstrap only) | Routed board (human; now the board of record) |
 |---|---|---|
-| Routing | **None** (0 tracks, 253 unrouted connections) | Fully routed: 889 tracks, 107 vias with both ECOs (849/94 on the unipolar original) |
+| Routing | **None** (0 tracks, 253 unrouted connections) | Fully routed: 897 tracks, 113 vias with all four ECOs (849/94 on the unipolar original) |
 | Placement | Automatic shelf-packing by sheet. Not optimized | Significantly re-placed |
 | Outline | 132.2 × 117.8 mm rectangle, 4 × M3 holes inset 5.5 mm | 107.3 × 62.3 mm (`unipolar-routed/diodes.kicad_pcb` Edge.Cuts) |
 | Layers | 2-layer, 1 oz, 1.6 mm FR-4 (assumed fab, `docs/FAB_CONSTRAINTS.md`) | Check |
 | Ground pours | AGND zone (left) and DGND zone (right), **both layers**, 2 mm gap at x ≈ 52.2–54.2 mm. R31 and U8 straddle the gap | Check whether the routed board kept this strategy |
-| Netclasses / rules | In `stage1_iv.kicad_pro` and `stage1_iv.kicad_dru` (generated from `libraries/netclasses.py`) | Not inherited: one `Default` class, 0.20 mm, and clearance checking switched off in its project. Clean at 0.20 mm with it on; 109 clearance errors under the repository policy, all pre-existing on the original (116 there) (`docs/physical_design.md`, `docs/audit_corrections.md`) |
+| Netclasses / rules | In `stage1_iv.kicad_pro` and `stage1_iv.kicad_dru` (generated from `libraries/netclasses.py`) | Not inherited: one `Default` class, 0.20 mm, and clearance checking switched off in its project. Clean at 0.20 mm with it on. Under the repository policy the original routing had 109 clearance errors at this point; `layout/policy_clearance.eco` re-routes them and the board of record is now clean under the policy too (`docs/final_corrections.md` §2.3) |
 | KiCad version | Board schema 20241229, which carries a `(units …)` block; the repository says **KiCad 10** is required | — |
 
 Because placement changed, ignore the repository board's physical
@@ -1004,14 +1029,14 @@ intent** are the parts that carry over.
 
 | Netclass | Nets | Clearance / track (mm) | Rationale (repository) |
 |---|---|---|---|
-| POWER_HV | +15VA, −15VA | 0.30 / 0.50 | 2× the fab minimum, for the 30 V rail-to-rail |
-| POWER_LV | +5V_RAW, +5VA, +3V3D, VDDA, VBUS | 0.20 / 0.40 | Covers U1's 800 mA rating |
+| POWER_HV | +15VA, −15VA, SSR_LED_A/K (the U12 LED string across them) | 0.30 / 0.50 | 2× the fab minimum, for the 30 V rail-to-rail |
+| POWER_LV | +5V_RAW, +5VA, +3V3D, VDDA, VBUS, VCAP1 | 0.20 / 0.40 | Covers U1's 800 mA rating |
 | GROUND | AGND, DGND | 0.20 / 0.40 | Poured. Width applies to stitching and the R31 link |
-| FORCE | FORCE+, FORCE−, VO_RAW, VO_SENSE, F1_MID, VO_SNUB | 0.25 / 0.50 | Sized for the fault case (127 mA envelope) |
+| FORCE | FORCE+, FORCE−, VO_RAW, VO_SENSE, F1_MID, FORCE_SW, ISENSE_HI, VO_SNUB | 0.25 / 0.50 | Sized for the fault case (143 mA envelope; ISENSE_HI up to 1.19 A until F2 trips) |
 | SENSE | SENSE±, VREF_2V5, DAC_VREF, V_DAC, V_DACB, VREF_HALF, V_SWEEP, I_SENSE_OUT, V_SENSE_OUT | 0.25 / 0.25 | High-impedance precision. Extra clearance for surface leakage |
 | DIGITAL | SPI1/SPI2, DRDY, RESET_ADC, SWD, NRST, BOOT0, LED, VBUS_SENSE, SAFE_HB*, DAC_ARM | 0.20 / 0.25 | Density compromise around the LQFP-64 and SSOP-28 |
 | USB | USB_DM/DP and their _ESD/_CONN segments | 0.20 / 0.38, pair gap 0.20 | About 100–110 Ω on 2 layers. A **stated compromise** for full speed |
-| LOCAL_ANALOG | 23 block-local analog nodes (RG, filter, crystal, ILIM …) | 0.25 / 0.25 | Same character as SENSE |
+| LOCAL_ANALOG | 19 block-local analog nodes (RG, filter, crystal, ILIM …) | 0.25 / 0.25 | Same character as SENSE. VCAP1, CC1/CC2 and LED_K were moved out (to POWER_LV / DIGITAL): none is a high-impedance analog node |
 
 `stage1_iv.kicad_dru` narrows pad-to-pad clearance to 0.13 mm **inside** J3,
 U2, U4 and U9 only. Their intrinsic pad gaps (0.15–0.20 mm) are below the
@@ -1060,8 +1085,8 @@ reviewer should look at.
    - The lead stagger matching the purchased part (R1, now verified against
      SBOS070D), and the widened 1.2 mm drills.
    - R30, R9 and R10 kept clear of heat-sensitive precision parts (U2, U3, R1–R6).
-     R30 (PR02, ≈ 1.6 W in the fault case) is mounted raised, away from the
-     Kelvin divider and F1.
+     R30 (PR02, ≤ 1.96 W in the fault case) is mounted raised, away from the
+     Kelvin divider; F1 is 14 mm from it (`docs/final_corrections.md` §2.1).
 8. **Decoupling proximity.** Check that these sit at their pins with short
    ground returns to the correct pour: C15/C16 at U5, C20–C23 at U6/U7,
    C11/C12 at U3, C13 at U4, C28/C30 at U8, and C34–C38/C43 at U9.
@@ -1103,7 +1128,9 @@ blocks/*.py  +  libraries/custom_symbols.py  (SKiDL, the electrical source)
      main.py ──► stage1_iv.net            (flat netlist: documentation and validation only)
              ──► stage1_iv.kicad_sch + 8 sheets   (generated schematic = KiCad source of truth)
              ──► stage1_iv.kicad_pcb      (generated from the circuit + layout/stage1_iv.layout
-                                           + layout/bipolar.eco + layout/audit_corrections.eco:
+                                           + layout/bipolar.eco + layout/audit_corrections.eco
+                                           + layout/final_corrections.eco
+                                           + layout/policy_clearance.eco:
                                            placed and fully routed)
              ──► component_manifest.md
 tools/gen_project_config.py ──► stage1_iv.kicad_pro (netclasses), stage1_iv.kicad_dru, sym/fp-lib-table
@@ -1117,10 +1144,10 @@ tools/gen_project_config.py ──► stage1_iv.kicad_pro (netclasses), stage1_i
   (`docs/library_strategy.md`, `manifest.yaml`).
 - The project **owns its symbols**. Every schematic symbol is embedded in its
   sheet, and `libraries/stage1_iv.kicad_sym` holds them all, so the project
-  opens without external libraries. The footprints used (35 library files,
-  including the mounting hole, plus one project footprint generated by
-  `tools/vendor_footprints.py`: the OPA548's TO-220-7 with 1.2 mm drills) are
-  vendored in `libraries/footprints/`.
+  opens without external libraries. The footprints used (37 library files,
+  plus two project footprints generated by `tools/vendor_footprints.py`: the
+  OPA548's TO-220-7 with 1.2 mm drills and the isolated M3 mounting hole with
+  its copper keepout) are vendored in `libraries/footprints/`.
 - The schematic uses the KiCad 7 format (version 20230121). Newer KiCad
   versions migrate it on load.
 - **Human edits.** The routed PCB (`unipolar-routed/diodes.kicad_pcb`, KiCad 10.0)
@@ -1160,7 +1187,7 @@ tools/gen_project_config.py ──► stage1_iv.kicad_pro (netclasses), stage1_i
 | Symbol and footprint identifiers resolve. Pin numbers are real pads. No stray pads | Reported pass when KiCad libraries are present (CI). Not reproduced here, because no KiCad libraries were available |
 | KiCad netlist export from the schematic matches | Reported pass (KiCad 7.0.11 `kicad-cli`) |
 | KiCad **schematic ERC** | `kicad-cli sch erc` (10.0.7), run in CI: **0 errors, 0 warnings** on the audit-corrections revision (`docs/audit_corrections.md`) |
-| KiCad **DRC** on the routed board | KiCad 10.0.7 on every build where it is installed (CI installs it): 0 unconnected, 0 parity, 0 errors under the as-built rules (2 pre-existing silk-to-edge warnings at J3); 109 clearance errors under the repository's netclass policy, all pre-existing on the original human routing, none new. **Not DRC-clean under the policy** (`docs/physical_design.md`, `docs/audit_corrections.md`) |
+| KiCad **DRC** on the routed board | KiCad 10.0.7 on every build where it is installed (CI installs it): 0 unconnected, 0 parity, 0 errors under the as-built rules and **0 errors under the repository's netclass policy** (2 pre-existing silk-to-edge warnings at J3 under both); `validation/routed_board_check.py` requires that (`docs/final_corrections.md` §2.3) |
 | U5 OPA548 pinout and lead stagger | **Verified**: every pin is cross-checked against TI SBOS070D on every symbol build (`RESOLVED`) |
 | Circuit simulation (SPICE), thermal analysis | **None in the repository** |
 | Measurement-range arithmetic (worst-case ADC pin voltages, full scale) | `validation/measurement_range.py`, on every build |
@@ -1217,8 +1244,9 @@ a list of confirmed defects. Items are ordered roughly by consequence.
     on the bench that a −V → +V → −V sweep of a resistor reads a straight
     line through the origin with no step at 0 V.
 - **R3 — R30 rating and protection ordering. Resolved (audit F3).**
-  - Fact: R30 is a 2 W PR02, sized for the 127 mA rail fault (≈ 1.6 W). F1 is
-    no longer described as a backstop.
+  - Fact: R30 is a 2 W PR02, sized for the rail fault (≤ 143 mA, ≤ 1.96 W
+    with F2 and U12 in the path). F1 is no longer described as a backstop,
+    and it now sits 14 mm from R30.
   - Check: R30's body temperature and its effect on neighbours at bring-up.
 - **R8 — Output state at power-up, reset and firmware fault. Resolved in
   hardware (audit F2).**
@@ -1227,7 +1255,8 @@ a list of confirmed defects. Items are ordered roughly by consequence.
     software heartbeat stopping (§5.2, §8.2).
   - Check: the bring-up measurements of the pump voltage, the disarm time and
     the reset, halt and crash behaviour (`docs/bringup_checklist.md`).
-  - Still not provided: an output *disconnect* or relay.
+  - A disconnect now exists only for missing rails (U12); firmware cannot
+    open it, so "zero" is still a 0 V setpoint.
 
 ### B. Component and data sheet checks
 
@@ -1243,12 +1272,13 @@ a list of confirmed defects. Items are ordered roughly by consequence.
   and its drift 0.10 µA/°C typ, before calibration. The ADC's PGA (up to 64)
   adds resolution but not accuracy. Compare with the currents the application
   needs, such as diode leakage.
-- **R10 — Accuracy of the scaling parts.** R10 is now 0.1 %, 25 ppm/°C
+- **R10 — Accuracy of the scaling parts.** R10 is now 0.1 %, 20 ppm/°C
   (R11, R12/R13 and R32/R33 are 0.1 %; their TCR tracking sets the drift of k).
   Also the INA128 gain error and the REF5025 grade.
 - **R11 — Supply assumptions.**
   - No on-board regulation of ±15 V.
-  - No reverse-polarity protection, fusing or sequencing.
+  - No reverse-polarity protection or fusing. Sequencing: U12 and D8/D9
+    cover a missing ±15 V rail (`docs/final_corrections.md` §2.5).
   - The ground connection through USB to the host and earth.
 - **R12 — Reference decoupling.** C9 is now 4.7 µF (REF5025 needs 1 … 100 µF,
   SBOS410O). C44 (100 nF) bypasses VREFP/AINCOM at the ADS1256 (it was already
@@ -1264,7 +1294,8 @@ a list of confirmed defects. Items are ordered roughly by consequence.
 - **R14 — ADS1256 crystal.** C26/C27 return to AGND while the crystal pins are
   on the DGND side of the split.
 - **R15 — Input protection.**
-  - FORCE− has no TVS or fuse.
+  - FORCE− has a series PTC (F2) and no TVS, by design: a clamp there would
+    be a current path around the shunt (`docs/final_corrections.md` §2.6).
   - The SENSE clamps sit ahead of the series resistors and dump fault current
     into the ±15 V rails.
   - The INA128 input overvoltage ratings.
@@ -1289,9 +1320,9 @@ a list of confirmed defects. Items are ordered roughly by consequence.
 - **R21 — U5 thermal copper and mechanics.** Heat placement relative to the
   precision parts.
 - **R22 — Synchronization.** Update PCB from Schematic reports no changes.
-  DRC is clean on the routed board under its as-built rules, and **not** clean
-  under the project netclasses: 109 pre-existing clearance errors remain
-  (`docs/audit_corrections.md`).
+  DRC is clean on the routed board under its as-built rules and under the
+  project netclasses (the 109 clearance errors of the human routing were
+  fixed, `docs/final_corrections.md` §2.3).
 
 ### D. Firmware assumptions implied by the hardware (no firmware in the repository)
 
@@ -1373,8 +1404,11 @@ Taken from `stage1_iv.net` (ref.pin).
 | VO_SENSE | R9.2, C19.2, U5.2 (−IN), F1.1, TP2 |
 | OPA548_ILIM / OPA548_ES | U5.3, R7.1, C14.1 / U5.7, R8.1 |
 | F1_MID | F1.2, R30.1 |
-| FORCE+ | R30.2, D5.1, J4.1 |
-| FORCE− | J7.1, R10.1, U6.3 (+IN), TP3 |
+| FORCE_SW | R30.2, U12.6 |
+| FORCE+ | U12.4, D5.1, J4.1 |
+| SSR_LED_A / SSR_LED_K | R39.2, U12.1 / U12.3, D7 (K) |
+| FORCE− | J7.1, F2.1 |
+| ISENSE_HI | F2.2, R10.1, U6.3 (+IN), TP3 |
 | SENSE+ | J5.1, R12.1, D1.2 (A), D2.1 (K), TP5 |
 | SENSE− | J6.1, R13.1, D3.2 (A), D4.1 (K), TP6 |
 | SENSE_P_AMP / SENSE_M_AMP | R12.2, R32.1, U7.3 / R13.2, R33.1, U7.2 |
@@ -1382,9 +1416,9 @@ Taken from `stage1_iv.net` (ref.pin).
 | I_SENSE_OUT | U6.6, R15.1, TP4 — 2.500 V + 24.0 V/A·I |
 | V_SENSE_OUT | U7.6, R17.1, TP7 — 2.500 V + 0.1992·V_K |
 | ADC_AIN0…3 | R15.2/U8.6/C24.1, R16.2/U8.7/C24.2, R17.2/U8.8/C25.1, R18.2/U8.9/C25.2 |
-| AGND (selected) | R10.2, U6.2 (−IN), R32.2, R33.2, R16.1, R18.1, U8.2/.3, C44.2, U2.4, U4.8, R2.2, R4.2, R35.2, U11.3, D5.2, C26.2, C27.2, **R31.1** |
+| AGND (selected) | R10.2, U6.2 (−IN), R32.2, R33.2, R16.1, R18.1, U8.2/.3, C44.2, U2.4, U4.8, R2.2, R4.2, R35.2, U11.3, D5.2, C26.2, C27.2, D8 (A), D9 (K), **R31.1** |
 | DGND (selected) | J1.4, U1.1, U8.17, U9 VSS/VSSA, U10.2, J3 GND/S1, J2.3, D6.1 (A), C48.1, R37.1, **R31.2** |
-| +15VA / −15VA | J1.1 / J1.2, plus the U3/U5/U6/U7 supplies, the D1/D3 cathodes / the D2/D4 anodes, R8 / R7, C14 |
+| +15VA / −15VA | J1.1 / J1.2, plus the U3/U5/U6/U7 supplies, the D1/D3 cathodes / the D2/D4 anodes, R8 / R7, C14, R39.1 and D8 (K) / D7 (A) and D9 (A) |
 | +5V_RAW / +5VA | J1.3, U1.3, FB1.1, C1, C3 / FB1.2, U2.2, U4.1, U8.1, U11.5, R34.1, C7, C10, C13, C28, C29, C46 |
 
 ## Appendix B — Calculations
@@ -1399,12 +1433,14 @@ Taken from `stage1_iv.net` (ref.pin).
 | Zero | code_A = code_B/2 = 32767.5 | ±0.15 mV at 32767/32768 |
 | OPA548 ILIM | 15 kΩ × 4.75 V / (13.75 kΩ + 1.43 MΩ) [DS-check] | 49.35 mA |
 | U5 output required | 10.04 V + 49.35 mA × 10 Ω | 10.53 V |
-| Out-of-loop resistance | R30 + R10 (+ R_F1) | 110 Ω + R_F1 |
-| DUT voltage at ILIM | 10.04 − 0.04935 × 110 | ≈ 4.61 V (− I·R_F1) |
+| Out-of-loop resistance | R30 + R10 (+ R_F1 + R_U12 + R_F2) | 110 Ω + 6 … 17 Ω |
+| DUT voltage at ILIM | 10.04 − 0.04935 × 110 | ≈ 4.61 V (− I·(R_F1 + R_U12 + R_F2)) |
 | R30 power at ILIM | 0.04935² × 100 | 0.244 W |
-| Rail fault current (U5 driven into a rail) | 15.5 V / (9.9 + 3.0 + 99 + 9.9) Ω | 127 mA |
-| R30 power, rail fault | 0.127² × 99 … worst tolerance | 1.60 … 1.63 W (2 W PR02) |
-| R9, R10 power, rail fault | 0.127² × 10 | ≈ 0.16 W each (0.25 W / 0.5 W parts) |
+| Rail fault current, DUT short (U5 driven into a rail) | 15.5 V / (9.9 + 3.0 + 95.3 + 0 + 3.0 + 9.99) Ω, all at their minima | 128 mA |
+| Rail fault current, FORCE+ to AGND | 15.5 V / (9.9 + 3.0 + 95.3 + 0) Ω | 143 mA |
+| R30 power, rail fault | max over R30's tolerance and heating of V²R/(R + R_rest)² | ≤ 1.96 W (2 W PR02) |
+| R9, R10 power, rail fault | as above | ≤ 0.21 W (0.25 W part) / ≤ 0.16 W (3 W part) |
+| External 15.5 V on J7 | 15.5 V / (3.0 + 9.99) Ω until F2 trips | 1.19 A, R10 ≤ 14.3 W (15 W for 5 s) |
 | R9, R10 power at ILIM | 0.04935² × 10 | 24 mW each |
 | U5 output-stage power, shorted DUT | (15 − 0.04935 × ~115) × 0.04935 | ≈ 0.46 W (+ quiescent) |
 | Physical current bound, any passive DUT | 10.04 V / (R30 + R10) | 91.3 mA (92.5 mA worst tolerance) |

@@ -113,7 +113,11 @@ NETCLASSES = {
             "track 0.50 mm: OPA548 supply feed at I_LIMIT 49 mA is trivial for "
             "this width; 0.50 mm is chosen for low impedance on the buffer's "
             "supply rather than for current. via 0.8/0.4 mm >= F7."),
-        "nets": ["+15VA", "-15VA"],
+        "nets": ["+15VA", "-15VA",
+                 # U12's LED string (blocks/protection.py) runs from +15VA to
+                 # -15VA; its two inner nodes sit between the rails (about
+                 # +10 V and +8.6 V), so they keep the rails' spacing.
+                 "SSR_LED_A", "SSR_LED_K"],
     },
     "POWER_LV": {
         "clearance": 0.20,
@@ -127,7 +131,12 @@ NETCLASSES = {
             "0.40 mm carries ~1.1 A at a 10 C rise (IPC-2152 external), so "
             "0.40 mm covers the regulator's full rating with margin. "
             "via 0.7/0.35 mm >= F7."),
-        "nets": ["+5V_RAW", "+5VA", "+3V3D", "VDDA", "VBUS"],
+        "nets": ["+5V_RAW", "+5VA", "+3V3D", "VDDA", "VBUS",
+                 # STM32 VCAP_1: the 1.2 V core-regulator output and its
+                 # 4.7 uF capacitor (C43, blocks/mcu.py). A low-impedance
+                 # supply node, not a high-impedance analog one: it was in
+                 # LOCAL_ANALOG by first classification only.
+                 "VCAP1"],
     },
     "GROUND": {
         "clearance": 0.20,
@@ -149,13 +158,17 @@ NETCLASSES = {
         "via_diameter": 0.80,
         "via_drill": 0.40,
         "derivation": (
-            "The DUT drive path: OPA548 -> R9 -> F1 -> R30 -> D5 -> J4. "
+            "The DUT drive path: OPA548 -> R9 -> F1 -> R30 -> U12 -> D5 -> "
+            "J4, and the return J7 -> F2 -> R10. "
             "clearance 0.25 mm for +/-11 V compliance with margin over F4. "
             "track 0.50 mm: OPA548 ILIM is set to ~49 mA (R7 = 1.43 M), but "
             "the fuse F1 holds 100 mA and the TVS D5 conducts fault current, "
             "so the track is sized for the FAULT case, not the operating one; "
             "0.50 mm at 1 oz carries ~1.4 A at a 10 C rise."),
         "nets": ["FORCE+", "FORCE-", "VO_RAW", "VO_SENSE", "F1_MID",
+                 # R30 -> U12 (photorelay) and F2 -> R10 (shunt high side):
+                 # the same current and the same +/-11 V as FORCE+/FORCE-.
+                 "FORCE_SW", "ISENSE_HI",
                  # U5 output snubber midpoint (R38/C49, DNP): sits on the
                  # +/-11 V output node, so it keeps the output's clearance.
                  "VO_SNUB"],
@@ -194,6 +207,16 @@ NETCLASSES = {
         "nets": ["SCK1", "MOSI1", "CS_DAC", "SCK2", "MOSI2", "MISO2",
                  "CS_ADC", "DRDY", "RESET_ADC", "SWDIO", "SWCLK", "NRST",
                  "BOOT0", "LED_STATUS", "VBUS_SENSE",
+                 # The status LED's cathode node, LED1 K to R23 (1 k) to
+                 # PC13, which sinks it (blocks/mcu.py). 0..3.3 V switching,
+                 # the same signal as LED_STATUS; "/mcu/LED_A" is its
+                 # pre-audit board name (see LOCAL_ANALOG's old note), kept
+                 # so the original board in unipolar-routed/ is classified
+                 # the same way under this policy.
+                 "LED_K", "/mcu/LED_A",
+                 # USB-C CC1/CC2: 5.1 k Rd to DGND at the connector (sink
+                 # role). 0..5 V configuration lines, not precision analog.
+                 "CC1", "CC2",
                  # Safe-state heartbeat (PC5) through the charge pump to the
                  # DAC reference gate: 3.3 V logic levels, kHz edges.
                  "SAFE_HB", "SAFE_HB_R", "SAFE_HB_AC", "DAC_ARM"],
@@ -230,15 +253,12 @@ NETCLASSES = {
             "SENSE (high-impedance, low-current) so the same numbers apply; "
             "kept as a separate class so the Kelvin/reference nets can be "
             "tightened later without touching these."),
-        # "/mcu/LED_A" is the pre-audit BOARD name of the R23 -> LED1 net
-        # (LED1 was sourced then; it is sunk now, so the net is LED_K). It
-        # matches no net on the board of record and stays listed, in board
-        # form, only so that the original board in unipolar-routed/, which
-        # validation/routed_board_check.py DRC-checks under THIS policy as
-        # its baseline, keeps the class it always had: otherwise the same
-        # copper would count as "new" violations purely through the rename.
-        "nets": ["VCAP1", "OSC_IN", "OSC_OUT", "CC1", "CC2", "LED_K",
-                 "/mcu/LED_A",
+        # VCAP1, CC1/CC2, LED_K (and its pre-audit board name /mcu/LED_A)
+        # were here by first classification. None is a high-impedance analog
+        # node: VCAP1 is a regulator output (POWER_LV), CC1/CC2 are 5.1 k
+        # USB-C configuration lines and LED_K is the status-LED logic sink
+        # (both DIGITAL). Moved, with the reason at each new home.
+        "nets": ["OSC_IN", "OSC_OUT",
                  "VREF_HALF_RAW", "DIFF_P", "DIFF_N",
                  "OPA548_ILIM", "OPA548_ES",
                  "U6_RG1", "U6_RG2", "U7_RG1", "U7_RG2",

@@ -414,6 +414,37 @@ def D_TVS():
                  "SMBJ15CA", "RESOLVED", "Bidirectional TVS diode")
 
 
+def D_Zener():
+    # BZT52C24 (Diodes Inc. DS18004): 22.8..25.6 V at 5 mA, IR <= 0.1 uA at
+    # VR = 16.8 V, 370 mW at TA = 25 C, SOD-123. Device:D_Zener pin 1 = K.
+    return _part("Device:D_Zener", "D", "Diode_SMD:D_SOD-123",
+                 "BZT52C24", "RESOLVED", "Zener diode (cathode = pin K)")
+
+
+def D_Schottky():
+    # MBR0540 (onsemi MBR0520L..0540 Rev 8): 40 V, 0.5 A, VF <= 0.51 V at
+    # 0.5 A, SOD-123. Device:D_Schottky pin 1 = K.
+    return _part("Device:D_Schottky", "D", "Diode_SMD:D_SOD-123",
+                 "MBR0540", "RESOLVED", "Schottky diode (cathode = pin K)")
+
+
+def PhotoRelay_TLP176AM():
+    # Toshiba TLP176AM: 1-Form-A MOSFET photorelay, 60 V / 0.7 A, RON <= 2
+    # ohm, IFT <= 3 mA, IFC >= 0.1 mA, 4-pin SO6 (11-4M1S): 1 = LED anode,
+    # 3 = LED cathode, 4 and 6 = the two output terminals (AC/DC, either
+    # polarity). Relay_SolidState:TLP175A is the same 4-pin SO6 pinout and
+    # carries the matching Toshiba_SOIC-4-6 footprint; its pins are unnamed
+    # ("~"), so the aliases name them by NUMBER, which still comes from the
+    # symbol file. The ordered part is the TLP176AM (TLP175A's successor
+    # family; the TLP175A itself is not the part fitted).
+    return _part("Relay_SolidState:TLP175A", "U",
+                 "Package_SO:Toshiba_SOIC-4-6_4.4x3.6mm_P1.27mm",
+                 "TLP176AM(TPL,E", "RESOLVED",
+                 "MOSFET photorelay, 1-Form-A, 60 V, 0.7 A (DUT disconnect)",
+                 aliases={"A": 1, "K": 3, "OUT1": 4, "OUT2": 6},
+                 keywords="photorelay SSR MOSFET", name="TLP176AM")
+
+
 def LED():
     return _part("Device:LED", "D", "LED_SMD:LED_0805_2012Metric",
                  "generic", "RESOLVED", "Light emitting diode")
@@ -697,6 +728,10 @@ ALIAS_DOCUMENTATION = {
     "ADS1256 / stage1_iv:ADS1256": {
         "XTAL1": (19, "XTAL1/CLKIN"), "CLKIN": (19, "XTAL1/CLKIN"),
         "SYNC": (14, "SYNC/PDWN"), "PDWN": (14, "SYNC/PDWN"),
+    },
+    "PhotoRelay_TLP176AM / Relay_SolidState:TLP175A": {
+        "A": (1, "~ (LED anode)"), "K": (3, "~ (LED cathode)"),
+        "OUT1": (4, "~ (output)"), "OUT2": (6, "~ (output)"),
     },
     "USBLC6_2SC6 / Power_Protection:USBLC6-2SC6": {
         "IO1": (1, "I/O1"), "IO2": (3, "I/O2"),
