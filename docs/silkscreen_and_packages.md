@@ -38,6 +38,26 @@ the source failed with *"footprint 'Capacitor_SMD:CP_Elec_8x10.5' does not
 exist in libraries/footprints/Capacitor_SMD.pretty"* until the new footprints
 were vendored.
 
+### Ceramic ratings on the ±15 V rails (final hardware audit)
+
+The ceramic decouplers on the ±15 V rails had no voltage rating or dielectric
+in their values. They are now specified explicitly, and the footprints are
+unchanged:
+
+| Ref | Rail | Value now |
+|---|---|---|
+| C11, C12 (U3) | ±15VA | 100 nF 50 V X7R |
+| C15, C16 (U5) | ±15VA | 100 nF 50 V X7R |
+| C20, C21 (U6) | ±15VA | 100 nF 50 V X7R |
+| C22, C23 (U7) | ±15VA | 100 nF 50 V X7R |
+
+The audit asked for at least 25 V. 50 V X7R was chosen because X7R MLCCs lose
+much of their capacitance under DC bias near their rated voltage, and a 15 V
+rail is 60 % of a 25 V part. Other value changes from the same audit: C9 is
+4.7 µF 10 V X7R (REF5025 stability range), C43 is 4.7 µF 10 V X5R (STM32F411
+single VCAP), C48 is 470 nF 16 V X7R and C49 (DNP) is 10 nF 50 V X7R. See
+`docs/audit_corrections.md`.
+
 ## Reference designators: all on F.Fab
 
 **Every one of the 114 designators is on F.Fab. None is on F.SilkS.**
@@ -113,13 +133,24 @@ which is the one region guaranteed clear of copper and part silk:
   top and bottom margins, with `AGND <` and `> DGND` labels. Ticks rather than
   a full line: the split lane holds R31 and U8, and silk across them would be
   both unreadable and a `silk_overlap` violation.
-* **J1, the bench supply input** — all four pins labelled individually
-  (`+15V IN`, `GND IN`, `-15V IN`, `+5V IN`) **and** a pinout legend in the
-  bottom margin in pin order. Putting +15 V on the −15 V terminal destroys the
-  analog front end, so this connector is labelled twice: the margin is
-  guaranteed clear, so the legend lands even if a per-pad label cannot be
-  fitted. On this board both did.
-* **DUT terminals** — `FORCE+`, `SENSE+`, `SENSE-`, `FORCE-` beside J4–J7.
+* **J1, the bench supply input** — **correction (final hardware audit,
+  F1).** This bullet used to say that all four J1 pins were labelled
+  individually and again in a legend, "on this board both did". That was not
+  true on either board. The `--autoplace` bootstrap board's hand-written table
+  read `+15V IN`, `GND IN`, `-15V IN`, `+5V IN` for pins 1–4, which disagrees
+  with the circuit (pin 2 is −15 V, pin 3 is +5 V, pin 4 is GND), and the
+  routed board of record had no J1 labels at all. Now:
+  - `generators/pcb.py` reads the bootstrap labels and legend from the nets on
+    J1's pads (`1 +15V | 2 -15V | 3 +5V | 4 GND`) and stops if a net has no
+    label;
+  - the board of record (`layout/audit_corrections.eco`) carries a
+    `BENCH SUPPLY` heading and `+15V`, `-15V`, `+5V`, `GND` beside pins 1–4
+    on F.SilkS, and J1's value is `BENCH SUPPLY 1:+15V 2:-15V 3:+5V 4:GND`.
+  Putting +15 V on the −15 V terminal destroys the analog front end, and the
+  labels are the only guard: there is no reverse-polarity protection.
+* **DUT terminals** — `FORCE+`, `SENSE+`, `SENSE-`, `FORCE-` beside J4–J7 on
+  the bootstrap board. The board of record now carries the same four labels
+  on F.SilkS (audit F1); it had none before.
 
 ## Polarity and pin-1 markers
 

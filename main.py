@@ -53,6 +53,7 @@ from validation.measurement_range import (
     run_measurement_range, MeasurementRangeError,
 )
 from validation.footprint_check import run_footprint_check, FootprintCheckError
+from libraries.custom_symbols import is_dnp, is_virtual
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "tools"))
 import kicad_env  # noqa: E402
@@ -104,12 +105,17 @@ SHEET_OF = {
               "J2", "J3", "U10", "R24", "R25", "R26", "R27", "R28", "R29", "C42",
               # C45: +3V3D decoupler added on the routed board, carried here.
               "C45",
+              # R36/C47/D6/C48/R37: the safe-state heartbeat charge pump.
+              "R36", "C47", "D6", "C48", "R37",
               # FLG7 = VBUS (from the USB host), FLG8 = VDDA (after FB2).
               "#FLG7", "#FLG8"],
+    # U11/C46/R35: the DAC reference gate; R34: the CS_DAC pull-up (audit F2);
+    # FLG9: DAC_VREF, driven from VREF_2V5 through U11's passive switch.
     "3 DAC/Sweep": ["U4", "C13", "U3", "C11", "C12", "R1", "R2", "R3", "R4",
-                    "R5", "R6", "TP1"],
+                    "R5", "R6", "TP1", "U11", "C46", "R35", "R34", "#FLG9"],
+    # R38/C49: the output snubber, DNP (audit V1).
     "4 Power Buffer": ["U5", "R7", "R8", "C14", "C15", "C16", "C17", "C18", "R9",
-                       "C19", "TP2"],
+                       "C19", "TP2", "R38", "C49"],
     "5 Current Sense": ["R10", "U6", "R11", "C20", "C21", "TP3", "TP4"],
     # R32/R33 are the bottom arms of the Kelvin attenuator (R12/R13 on top).
     "6 Voltage Sense": ["U7", "R12", "R13", "R14", "R32", "R33", "D1", "D2",
@@ -143,16 +149,26 @@ def write_component_manifest(circuit):
                 part.fields.get("Symbol_Source", "the symbol library")),
             "VERIFY-DATASHEET": "VERIFY pin#s @ datasheet",
         }.get(pv, pv)
+        if is_virtual(part):
+            fit = "virtual"
+        elif is_dnp(part):
+            fit = "DNP"
+        else:
+            fit = "fit"
         rows.append((part.ref, str(part.value), mpn, lib,
-                     part.footprint or "", sheet_for(part.ref), status))
+                     part.footprint or "", sheet_for(part.ref), fit, status))
 
+    n_virtual = sum(1 for r in rows if r[6] == "virtual")
+    n_dnp = sum(1 for r in rows if r[6] == "DNP")
     lines = [
         "# Component Manifest — Stage 1 I–V Characterization System",
         "",
-        f"Total components: **{len(rows)}**",
+        f"Total components: **{len(rows)}** — {len(rows) - n_virtual} on the "
+        f"board ({len(rows) - n_virtual - n_dnp} fitted, {n_dnp} DNP "
+        f"footprints) and {n_virtual} schematic-only PWR_FLAG symbols.",
         "",
-        "| Ref | Value | MPN | KiCad Library | Footprint | Sheet | Status |",
-        "|-----|-------|-----|---------------|-----------|-------|--------|",
+        "| Ref | Value | MPN | KiCad Library | Footprint | Sheet | Fit | Status |",
+        "|-----|-------|-----|---------------|-----------|-------|-----|--------|",
     ]
     for r in rows:
         lines.append("| " + " | ".join(r) + " |")

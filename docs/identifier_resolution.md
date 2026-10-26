@@ -234,8 +234,11 @@ right pads. The genuine defects were the missing GND/VBUS pads and the
 single-orientation data pair; those are fixed.
 
 **Shield decision (stated, not accidental).** The shield is tied **directly** to
-`DGND`, with no series RC or ferrite. The board is bus-powered from a single
-USB-C cable and lives in one enclosure, so there is no chassis-to-signal-ground
+`DGND`, with no series RC or ferrite. (Correction: this paragraph used to say
+the board is bus-powered. It is not: it is powered only from the bench supply
+on J1, and VBUS is only sensed on PA0. The reasoning below does not depend on
+it.) The board lives in one enclosure with a single USB-C cable to the host,
+so there is no chassis-to-signal-ground
 potential difference for an isolating network to manage; a direct tie is the
 lowest-impedance return for cable-shield ESD and common-mode current and keeps
 the shell from floating. The analog domain is unaffected: AGND reaches DGND only
@@ -282,7 +285,21 @@ Two modelling errors in the previous symbol are corrected by this: `XTAL1` and
 The design also only ever modelled AIN0–AIN3; AIN4–AIN7 and D0–D3 now exist and
 are explicitly no-connect.
 
-### 4b. `stage1_iv:OPA548T` — VERIFY-DATASHEET, **not fully resolved**
+### 4b. `stage1_iv:OPA548T` — RESOLVED (cross-checked against SBOS070D)
+
+> **Update (final hardware audit corrections).** The TI data sheet is now
+> available to the build as a committed verbatim excerpt,
+> `libraries/provenance/opa548_sbos070d_pin_functions.txt` (SBOS070D, Dec 2019,
+> §5 "Pin Functions"; PDF SHA-256 `f6e90347…77adbe`). The table reads
+> 1 VIN+, 2 VIN–, 3 ILIM, 4 V–, 5 V+, 6 VO, 7 E/S, which agrees with the
+> Alternate KiCad Library symbol below on every pin.
+> `tools/author_project_symbols.py` now parses both and stops the build on
+> any disagreement, so the part is flagged `RESOLVED`. The lead stagger comes
+> from the package drawing, which is an image and does not survive text
+> extraction, so it stays a mechanical check against the purchased part. The
+> footprint is a project copy with 1.2 mm drills,
+> `stage1_iv:TO-220-7_P2.54x3.7mm_StaggerOdd_Lead3.8mm_Vertical_Drill1.2mm`.
+> The historical record follows.
 
 | | |
 |---|---|
@@ -303,9 +320,10 @@ are explicitly no-connect.
 | 7 | `E/S` | — |
 
 This is a published, version-pinned, machine-readable third-party library — not
-the manufacturer data sheet. It is flagged `VERIFY-DATASHEET` and is the one
-part in the design still carrying that flag. **Confirm these seven pin numbers
-and the TO-220-7 lead stagger against SBOS070 before fabrication.**
+the manufacturer data sheet. It *was* flagged `VERIFY-DATASHEET` and was the
+last part carrying that flag. The pin numbers are now confirmed against
+SBOS070D (update above). The TO-220-7 lead stagger still has to be confirmed
+against the purchased part.
 
 ---
 
@@ -406,9 +424,13 @@ U9 and every AVDD/AGND/DVDD/DGND pad of U8 carries its rail net, which is what
    network egress proxy — only `github.com`, `raw.githubusercontent.com`,
    `gitlab.com` and PyPI are reachable. SBOS070 was never read. U5's pin numbers
    and its footprint come from the Alternate KiCad Library instead, are pinned
-   to a commit and a file hash, and are flagged `VERIFY-DATASHEET`. **This is
-   the one part of the brief that could not be completed as specified.**
+   to a commit and a file hash, and were flagged `VERIFY-DATASHEET`.
+   **Resolved since** for the pin numbers: they are cross-checked against the
+   SBOS070D Pin Functions table on every symbol build (§4b). The lead stagger
+   remains a mechanical check.
 2. **`lib_symbol_issues` / `lib_symbol_mismatch`.** Explicitly out of scope per
    the brief; counts reported in §5a, not fixed.
 3. **KiCad ERC dialog and PCB ratsnest inspection.** Not possible headlessly on
-   KiCad 7; see §6 for what replaced them.
+   KiCad 7; see §6 for what replaced them. **Resolved since:** CI and the audit
+   corrections run `kicad-cli sch erc` (KiCad 10.0.7: 0 errors, 0 warnings) and
+   KiCad DRC on the routed board (0 unconnected).

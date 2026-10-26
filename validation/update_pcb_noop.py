@@ -235,11 +235,14 @@ def netlist_components(circuit=None):
             "fields": dict(symbol_fields(model, part)),
             "units": unit_info(model.part_sym[part.ref]),
             "pads": pads,
-            # Nothing in this schematic marks a symbol excluded from the BOM,
-            # the board or the position files, and none is DNP; so the netlist
-            # carries none of those properties and the footprint must not
-            # claim them. See generators/schematic.py SYMBOL_DRIVEN_FP_ATTRS.
-            "attributes": set(),
+            # A DNP symbol (libraries/custom_symbols.py::dnp) is emitted with
+            # (in_bom no) (dnp yes), so its footprint must say
+            # exclude_from_bom; nothing else marks a symbol excluded from the
+            # BOM, the board or the position files. See
+            # generators/schematic.py SYMBOL_DRIVEN_FP_ATTRS and
+            # generators/pcb.py DNP_FP_ATTRS.
+            "attributes": ({"exclude_from_bom"}
+                           if getattr(part, "dnp", False) else set()),
         }
     return out
 
@@ -538,6 +541,26 @@ def self_test(board_path=BOARD_FILE, verbose=True):
                 n_linked = len(netlist_components(circuit))
             want = n_linked
             note = f", i.e. one per footprint: {reported}/{captured_fps}"
+        elif name == "unconnected-nets":
+            # KiCad printed two lines per OPEN pad (Add net, then Connect
+            # pin): 49 + 49 = 98 on the captured board (the fixture's
+            # "Add net unconnected-(...)." count). The calibrated quantity is
+            # that ratio, held against this board's own open pads — fewer
+            # since the audit corrections wired U4 VOUTB and PC5.
+            captured_open = source["_message_lines"][
+                "Add net unconnected-(...)."]
+            if reported != 2 * captured_open:
+                problems.append(
+                    f"baseline 'net' = {reported} is not two per open pad "
+                    f"({captured_open}); the per-pad scaling does not apply")
+                continue
+            open_now = sum(
+                1 for comp in netlist_components(circuit).values()
+                for net in comp["pads"].values()
+                if str(net).startswith("unconnected-("))
+            want = 2 * open_now
+            note = (f", i.e. two per open pad: {reported}/{captured_open}; "
+                    f"{open_now} open pads here")
         got = counts.get(category, 0)
         if verbose:
             print(f"  inject {name:<17} -> {category}={got} "

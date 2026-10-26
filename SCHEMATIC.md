@@ -55,14 +55,19 @@ synthesized generic rectangle:
 - Properties on every instance: `Reference`, `Value` (visible),
   `Footprint`, `Datasheet`, `MPN`, `KiCad_Lib`, `Sheet` (owning block) and
   `Pins_Verified`. Virtual `power:PWR_FLAG` symbols are emitted with KiCad's
-  `(power)` attribute and a `#`-prefixed reference (`#FLG1`..`#FLG8`), matching
+  `(power)` attribute and a `#`-prefixed reference (`#FLG1`..`#FLG9`), matching
   the upstream symbol; KiCad therefore keeps them out of the netlist export and
   off the board, while ERC still counts their `power_out` pin as a driver.
   The emitter hides this property only when its value is the
   literal `STD`; since every part now carries `RESOLVED` or
   `VERIFY-DATASHEET`, the flag is drawn **visible on every symbol**, stating on
-  the sheet itself where that part's pin numbers came from. `VERIFY-DATASHEET`
-  (currently U5/OPA548T only) is the one that still needs action.
+  the sheet itself where that part's pin numbers came from. No part is
+  flagged `VERIFY-DATASHEET` any more: U5/OPA548T, the last one, is now
+  cross-checked against TI SBOS070D (`RESOLVED`). If a future part needs the
+  flag, it will show on the sheet the same way.
+- **DNP parts** (R14, R38, C49) are emitted with `(in_bom no)` and
+  `(dnp yes)`, so KiCad greys them out and leaves them out of BOM exports.
+  Their footprints carry `exclude_from_bom` and `dnp` on the board.
 
 ## Connectivity model (label classes)
 

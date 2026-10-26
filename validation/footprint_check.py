@@ -58,11 +58,6 @@ UNCONNECTED_PAD_ALLOWLIST = {
         "Trim/NR is left open to keep the factory-trimmed 2.500 V and the "
         "internal noise-reduction network undisturbed.",
     ),
-    "U4": (
-        {"3"},
-        "DAC8552 channel B (V_{OUT}B) is reserved/unpopulated in Stage 1; "
-        "only channel A drives the sweep.",
-    ),
     "U8": (
         {"10", "11", "12", "13", "25", "26", "27", "28"},
         "ADS1256: AIN4..AIN7 are spare analog inputs (Stage 1 digitises two "
@@ -70,11 +65,12 @@ UNCONNECTED_PAD_ALLOWLIST = {
         "the general-purpose digital I/O, unused here.",
     ),
     "U9": (
-        {"3", "4", "8", "9", "10", "11", "15", "16", "17", "22", "24", "25",
+        {"3", "4", "8", "9", "10", "11", "15", "16", "17", "22", "24",
          "26", "27", "28", "29", "37", "38", "39", "40", "43", "50", "51",
          "52", "53", "54", "55", "56", "57", "58", "59", "61", "62"},
         "STM32F411RETx: GPIOs not used by Stage 1 (no LSE crystal on "
-        "PC14/PC15, no USB_ID on PA10, remaining ports A/B/C/D spare). Every "
+        "PC14/PC15, no USB_ID on PA10, remaining ports A/B/C/D spare; PC5 "
+        "is the safe-state heartbeat and is connected). Every "
         "power and ground pad is connected; only signal GPIOs are open.",
     ),
     "J3": (

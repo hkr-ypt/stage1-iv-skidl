@@ -75,7 +75,7 @@ protection resistors R12/R13, so protection acts ahead of the series element;
 at the +/-15.7 V clamp level U7 sees only k * 15.7 = 3.1 V.
 """
 
-from libraries.custom_symbols import INA128P, R, C, D, TestPoint
+from libraries.custom_symbols import INA128P, R, C, D, TestPoint, dnp
 from skidl import Net
 
 
@@ -85,16 +85,18 @@ def create_voltage_sense_block(n):
     # clamps). 0.1 % thin film: k's tolerance is the channel's gain tolerance.
     R12 = R()(ref="R12", tag="R12", value="40.2k 0.1%")
     R13 = R()(ref="R13", tag="R13", value="40.2k 0.1%")
-    R14 = R()(ref="R14", tag="R14", value="DNP (G=1)")
+    # A real DNP (KiCad dnp + excluded from the BOM), not just a value string.
+    R14 = dnp(R()(ref="R14", tag="R14", value="DNP (G=1)"))
     # Attenuator bottom arms to AGND: k = 10.0k / (40.2k + 10.0k) = 0.1992.
     R32 = R()(ref="R32", tag="R32", value="10.0k 0.1%")
     R33 = R()(ref="R33", tag="R33", value="10.0k 0.1%")
-    D1 = D()(ref="D1", tag="D1", value="1N4148")
-    D2 = D()(ref="D2", tag="D2", value="1N4148")
-    D3 = D()(ref="D3", tag="D3", value="1N4148")
-    D4 = D()(ref="D4", tag="D4", value="1N4148")
-    C22 = C()(ref="C22", tag="C22", value="100nF")
-    C23 = C()(ref="C23", tag="C23", value="100nF")
+    # 1N4148W: the SOD-123 version of the 1N4148 (the 1N4148 is DO-35).
+    D1 = D()(ref="D1", tag="D1", value="1N4148W")
+    D2 = D()(ref="D2", tag="D2", value="1N4148W")
+    D3 = D()(ref="D3", tag="D3", value="1N4148W")
+    D4 = D()(ref="D4", tag="D4", value="1N4148W")
+    C22 = C()(ref="C22", tag="C22", value="100nF 50V X7R")   # +15VA
+    C23 = C()(ref="C23", tag="C23", value="100nF 50V X7R")   # -15VA
     TP5 = TestPoint()(ref="TP5", tag="TP5", value="SENSE+")
     TP6 = TestPoint()(ref="TP6", tag="TP6", value="SENSE-")
     TP7 = TestPoint()(ref="TP7", tag="TP7", value="V_SENSE_OUT")

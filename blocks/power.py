@@ -25,8 +25,13 @@ def create_power_block(n):
     """Instantiate Sheet 1. Returns a dict of the parts for validation/manifest."""
 
     # ---- components ----
+    # The value used to read "+15V_RAW/-15V_RAW/+5V_RAW/GND", pin 1 first.
+    # J1 is rotated 180 on the board, so pin 1 is the RIGHT-most terminal and
+    # that text read backwards against the hardware. The value now names the
+    # part; which terminal is which is printed on the silkscreen next to each
+    # one (layout/audit_corrections.eco) and stated by pin number here.
     J1 = TerminalBlock_4()(ref="J1", tag="J1",
-                           value="+15V_RAW/-15V_RAW/+5V_RAW/GND")
+                           value="BENCH SUPPLY 1:+15V 2:-15V 3:+5V 4:GND")
     U1 = LD1117S33()(ref="U1", tag="U1", value="LD1117S33TR")
     U2 = REF5025()(ref="U2", tag="U2", value="REF5025AIDGKT")
     FB1 = L_FerriteBead()(ref="FB1", tag="FB1", value="BLM21PG221SN1D")
@@ -58,7 +63,10 @@ def create_power_block(n):
     # +3V3 rail: 10 V rated on 3.3 V working is 33% of rating.
     C8 = C_POL("Capacitor_SMD:CP_Elec_6.3x5.4")(
         ref="C8", tag="C8", value="100uF/10V")
-    C9 = C()(ref="C9", tag="C9", value="1uF")
+    # REF5025 output capacitor. SBOS410O: stable for CL = 1..100 uF (ESR
+    # <= 1.5 ohm). A 1 uF 0603 sat at the floor of that range before DC-bias
+    # loss; 4.7 uF X7R (~3 uF or more at 2.5 V) is inside it with margin.
+    C9 = C()(ref="C9", tag="C9", value="4.7uF 10V X7R")
     C10 = C()(ref="C10", tag="C10", value="100nF")
 
     # ---- raw supply inputs from bench supply (J1) ----

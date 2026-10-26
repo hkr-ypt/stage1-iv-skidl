@@ -19,6 +19,7 @@
       "Amplifier_Instrumentation:INA128",
       "Amplifier_Operational:OPA2277",
       "Analog_DAC:DAC8552",
+      "Analog_Switch:TMUX1101DBV",
       "Connector:Screw_Terminal_01x04",
       "Connector:TestPoint",
       "Connector:USB_C_Receptacle_USB2.0_16P",
@@ -33,6 +34,7 @@
       "Device:LED",
       "Device:Polyfuse",
       "Device:R",
+      "Diode:BAT54S",
       "MCU_ST_STM32F4:STM32F411RETx",
       "Power_Protection:USBLC6-2SC6",
       "Reference_Voltage:REF5025ADGK",
@@ -255,63 +257,79 @@
       ]
     },
     "stage1_iv:OPA548T": {
-      "provenance_class": "VERIFY-DATASHEET",
+      "provenance_class": "RESOLVED",
       "source_document": "Alternate KiCad Library (community), symbols/Amplifier_Operational_AKL.kicad_sym",
       "document_number": "n/a \u2014 third-party KiCad library, not a data sheet",
       "revision": "git cf93181d5934eca1b0560f66895f1b06958700f7",
       "table": "symbol OPA548T, pin definitions",
       "excerpt_file": "libraries/provenance/opa548t_akl_symbol.txt",
-      "excerpt_sha256": "fc6d33267077e788cfad18608862650fc5d22faa9a61798a4a42cb5ba148827f",
-      "limitation": "The TI OPA548 data sheet (SBOS070) could not be retrieved: www.ti.com and every datasheet mirror are refused by this environment's network egress policy. These pin numbers MUST be re-verified against SBOS070 before fabrication.",
+      "excerpt_sha256": "fd1d18d3e064f19b642d61bef2a58e8098599e1a5b257bed30981dae6396a321",
+      "verified_against": {
+        "source_document": "Texas Instruments OPA548 data sheet",
+        "document_number": "SBOS070D",
+        "revision": "D \u2014 OCTOBER 1997, revised DECEMBER 2019",
+        "table": "Pin Functions, page 3",
+        "excerpt_file": "libraries/provenance/opa548_sbos070d_pin_functions.txt",
+        "excerpt_sha256": "7b70338511c5157a50dc0663fb0e3e4030d39ae10b08ca9c31fa9708b1252574",
+        "pins": {
+          "1": "VIN+",
+          "2": "VIN-",
+          "3": "ILIM",
+          "4": "V-",
+          "5": "V+",
+          "6": "VO",
+          "7": "E/S"
+        }
+      },
       "pins": [
         {
           "number": "1",
           "name": "+",
           "etype": "input",
           "description": "",
-          "source": "libraries/provenance/opa548t_akl_symbol.txt:44"
+          "source": "libraries/provenance/opa548t_akl_symbol.txt:49"
         },
         {
           "number": "2",
           "name": "-",
           "etype": "input",
           "description": "",
-          "source": "libraries/provenance/opa548t_akl_symbol.txt:62"
+          "source": "libraries/provenance/opa548t_akl_symbol.txt:67"
         },
         {
           "number": "3",
           "name": "CS",
           "etype": "passive",
           "description": "",
-          "source": "libraries/provenance/opa548t_akl_symbol.txt:80"
+          "source": "libraries/provenance/opa548t_akl_symbol.txt:85"
         },
         {
           "number": "4",
           "name": "V-",
           "etype": "power_in",
           "description": "",
-          "source": "libraries/provenance/opa548t_akl_symbol.txt:98"
+          "source": "libraries/provenance/opa548t_akl_symbol.txt:103"
         },
         {
           "number": "5",
           "name": "V+",
           "etype": "power_in",
           "description": "",
-          "source": "libraries/provenance/opa548t_akl_symbol.txt:116"
+          "source": "libraries/provenance/opa548t_akl_symbol.txt:121"
         },
         {
           "number": "6",
           "name": "~",
           "etype": "output",
           "description": "",
-          "source": "libraries/provenance/opa548t_akl_symbol.txt:134"
+          "source": "libraries/provenance/opa548t_akl_symbol.txt:139"
         },
         {
           "number": "7",
           "name": "E/S",
           "etype": "passive",
           "description": "",
-          "source": "libraries/provenance/opa548t_akl_symbol.txt:152"
+          "source": "libraries/provenance/opa548t_akl_symbol.txt:157"
         }
       ]
     }
@@ -433,6 +451,25 @@
         {
           "number": "9",
           "name": "AIN3"
+        }
+      ]
+    },
+    "BAT54S": {
+      "upstream_lib_id": "Diode:BAT54S",
+      "symbol_source": "Diode.kicad_sym:5067",
+      "pins_verified": "RESOLVED",
+      "pins": [
+        {
+          "number": "1",
+          "name": "A"
+        },
+        {
+          "number": "2",
+          "name": "K"
+        },
+        {
+          "number": "3",
+          "name": "COM"
         }
       ]
     },
@@ -718,7 +755,7 @@
     "OPA548T": {
       "upstream_lib_id": "stage1_iv:OPA548T",
       "symbol_source": "opa548t_akl_symbol.txt:1",
-      "pins_verified": "VERIFY-DATASHEET",
+      "pins_verified": "RESOLVED",
       "pins": [
         {
           "number": "1",
@@ -1128,6 +1165,33 @@
         {
           "number": "4",
           "name": "Pin_4"
+        }
+      ]
+    },
+    "TMUX1101DBV": {
+      "upstream_lib_id": "Analog_Switch:TMUX1101DBV",
+      "symbol_source": "Analog_Switch.kicad_sym:73592",
+      "pins_verified": "RESOLVED",
+      "pins": [
+        {
+          "number": "1",
+          "name": "D"
+        },
+        {
+          "number": "2",
+          "name": "S"
+        },
+        {
+          "number": "3",
+          "name": "GND"
+        },
+        {
+          "number": "4",
+          "name": "SEL"
+        },
+        {
+          "number": "5",
+          "name": "VDD"
         }
       ]
     },

@@ -25,6 +25,17 @@ design decisions, and where a reviewer's attention is most useful.
   14 and the appendices describe the revised circuit. The reasoning, the
   options that were rejected and the routed-board change list are in
   [`docs/bipolar_measurement.md`](docs/bipolar_measurement.md).
+- **Revision: final hardware audit corrections.** The sweep midpoint now
+  comes from DAC channel B (`V_SWEEP = 8.0321·(V_A − V_B/2)`), the DAC
+  reference is gated by a software-heartbeat charge pump so that the output
+  returns to 0 V on MCU reset, halt or crash, R30 is a 2 W Vishay PR02, C43 is
+  4.7 µF, and the bench-supply and DUT connectors carry per-terminal labels.
+  Smaller part, rating and layout corrections were made too. The full list
+  and its validation record are in
+  [`docs/audit_corrections.md`](docs/audit_corrections.md). The firmware
+  obligations the hardware now creates are in
+  [`docs/firmware_handoff.md`](docs/firmware_handoff.md), and the first-power
+  procedure is in [`docs/bringup_checklist.md`](docs/bringup_checklist.md).
 
 > **Important context about the PCB.** The board in the repository root,
 > `stage1_iv.kicad_pcb`, is now the **human-placed, human-routed board**,
@@ -35,7 +46,9 @@ design decisions, and where a reviewer's attention is most useful.
 > U6/U7 REF and U8 AINCOM re-routed to VREF_2V5, three AGND stub segments
 > removed; no other part moved and no other track touched). It is fully
 > routed; KiCad 10 DRC reports 0 unconnected items and 0 errors under the
-> rules it was routed to — see `docs/physical_design.md`, which also records
+> rules it was routed to. A second ECO, `layout/audit_corrections.eco`,
+> places and routes the audit-correction parts and the new silkscreen labels
+> (see `docs/audit_corrections.md`). `docs/physical_design.md` also records
 > what is *not* clean (the repository's stricter netclass policy, which the
 > original human routing does not meet either). The schematic remains the
 > electrical source of truth. Where sections below describe the earlier
@@ -90,12 +103,13 @@ rationale written in the SKiDL source, `README.md` or `manifest.yaml`.
 
 | Goal | Where stated | How it is implemented |
 |---|---|---|
-| Bipolar sweep to ≈ ±10 V | `README.md`, `blocks/dac_sweep.py` | 16-bit DAC + difference amplifier with gain 8.03 → ±10.04 V |
+| Bipolar sweep to ≈ ±10 V | `README.md`, `blocks/dac_sweep.py` | 16-bit dual DAC + difference amplifier with gain 8.03 → ±10.04 V (channel A sweeps, channel B sets the midpoint) |
+| 0 V output whenever firmware is not running | `blocks/dac_sweep.py`, `blocks/mcu.py` | DAC reference gate U11, held on only by a software heartbeat through the D6 charge pump (§5.2) |
 | Measure DUT voltage without lead or shunt drops | `blocks/voltage_sense.py` | 4-wire Kelvin: separate SENSE± jacks into an INA128 |
 | Signed V and I over the whole sweep (hysteresis on a fixed DUT) | `blocks/current_sense.py`, `blocks/voltage_sense.py`, `blocks/adc.py` | INA128 REF pins and ADC AINCOM on VREF_2V5; Kelvin attenuator k = 0.1992; current gain sized to the physical current bound. Checked by `validation/measurement_range.py` |
 | Hardware current limit ≈ 50 mA | `blocks/output_buffer.py` | OPA548 programmable current limit, R7 = 1.43 MΩ → ≈ 49.35 mA |
-| Protection in depth for DUT and instrument | `blocks/protection.py` | OPA548 ILIM → PTC fuse F1 → 100 Ω R30 → TVS D5; rail clamps on the sense inputs |
-| Ratiometric accuracy | `blocks/power.py`, `blocks/adc.py` | One REF5025 (2.500 V) feeds the DAC reference, the sweep mid-point divider, the ADC reference, and the measurement zero (INA128 REF pins, ADC AINCOM) |
+| Protection in depth for DUT and instrument | `blocks/protection.py` | OPA548 ILIM (uncharacterized at this setting) → 100 Ω 2 W R30 (the bound that holds whatever ILIM does) → TVS D5. The PTC F1 is in series but is **not** a backstop at the fault current (§10). Rail clamps on the sense inputs |
+| Ratiometric accuracy | `blocks/power.py`, `blocks/adc.py` | One REF5025 (2.500 V) feeds the DAC reference (through U11), the ADC reference, and the measurement zero (INA128 REF pins, ADC AINCOM). The sweep midpoint is DAC channel B, so it shares the DAC's reference pin |
 | Keep analog and digital apart | `blocks/power.py`, `docs/pcb_generation.md` | Separate AGND/DGND nets and pours, joined only at R31 (0 Ω). Separate SPI buses for DAC and ADC |
 
 The repository states **no numerical accuracy, resolution, noise, speed or
@@ -109,12 +123,13 @@ document are therefore analysis only. They are not requirements.
 | Item | Implemented value | Reference |
 |---|---|---|
 | MCU | STM32F411RET6 (LQFP-64), 8 MHz HSE crystal | U9, Y2 |
-| DAC | DAC8552 16-bit, channel A used, VREF = 2.500 V, powered from +5VA | U4 |
-| Sweep amplifier | OPA2277: U3A buffers VREF/2, U3B is a difference amp with gain R4/R3 = 20.0k/2.49k = 8.032 | U3, R1–R6 (0.1 %) |
-| Sweep range (V_SWEEP) | −10.040 V … +10.040 V, ≈ 306 µV/LSB | TP1 |
+| DAC | DAC8552 16-bit; channel A sweeps, channel B sets the midpoint; VREF = 2.500 V through the U11 gate; powered from +5VA | U4 |
+| Sweep amplifier | OPA2277: U3A buffers V_B/2, U3B is a difference amp with gain R4/R3 = 20.0k/2.49k = 8.032 | U3, R1–R6 (0.1 %) |
+| Sweep range (V_SWEEP) | −10.040 V … +10.040 V, ≈ 306 µV/LSB. The negative limit is set by hardware; the positive limit holds only while firmware keeps channel B at full scale | TP1 |
+| Output safe state | U11 (TMUX1101) connects VREF_2V5 to the DAC only while the PC5 heartbeat keeps DAC_ARM high. Without the heartbeat both DAC outputs are 0 V and V_SWEEP ≈ 0, reached ≈ 50 ms after the heartbeat stops | U11, R35, D6, C47, C48, R36, R37 |
 | Output stage | OPA548T power op-amp, unity-gain follower, feedback taken after R9 (10 Ω) | U5, R9, C19 |
 | Current limit | R7 = 1.43 MΩ → **≈ 49.35 mA** (from the formula implied in the repository, [DS-check]) | R7, C14 |
-| Series elements outside the loop | F1 (PTC, 100 mA hold) + R30 100 Ω + R10 10 Ω | F1, R30, R10 |
+| Series elements outside the loop | F1 (PTC, 100 mA hold at 23 °C) + R30 100 Ω 2 W (PR02) + R10 10.0 Ω 0.1 % 25 ppm/°C | F1, R30, R10 |
 | DUT compliance | ±10.04 V at I → 0, about ±4.6 V at 49 mA (less by F1's resistance) | §5.4 |
 | Current sense | R10 = 10.0 Ω low-side shunt in FORCE−, INA128 G = 1 + 50k/35.7k = 2.4006 → **24.0 V/A**, REF on VREF_2V5: `I_SENSE_OUT = 2.500 V + 24.0 V/A·I` | R10, U6, R11 |
 | Voltage sense | Kelvin SENSE± → rail clamps → 40.2 kΩ/10.0 kΩ dividers to AGND (k = 0.1992) → INA128 **G = 1** (R14 **DNP**), REF on VREF_2V5: `V_SENSE_OUT = 2.500 V + 0.1992·V_K` | U7, R12–R14, R32, R33, D1–D4 |
@@ -124,7 +139,7 @@ document are therefore analysis only. They are not requirements.
 | Host interface | USB 2.0 full-speed through a USB-C receptacle (data only; VBUS is sensed but does not power the board). SWD header | J3, J2 |
 | DUT connection | Four 4 mm banana jacks: J4 FORCE+, J5 SENSE+, J6 SENSE−, J7 FORCE− | §5.4 |
 | Grounds | AGND and DGND joined only at R31 (0 Ω, 0805). U8 is the only IC with pins on both | §8.3 |
-| Part count | 113 physical parts (plus 8 schematic-only PWR_FLAGs, plus 4 board-only mounting holes on the generated board), 66 nets | `component_manifest.md` |
+| Part count | 126 board parts (123 fitted, 3 DNP: R14, R38, C49), plus 9 schematic-only PWR_FLAGs; 73 nets. The routed board has no mounting holes (§11, `docs/audit_corrections.md`) | `component_manifest.md` |
 | Firmware | **Not in this repository.** Only the MCU pin assignment is defined | §9 |
 
 ---
@@ -141,10 +156,11 @@ document are therefore analysis only. They are not requirements.
    AGND ══ R31 (0 Ω, the only AGND–DGND link) ══ DGND (J1 pin 4, USB ground)
 
  CONTROL / FORCE PATH
-   U9 STM32F411 ──SPI1 (PA4/5/7, write-only)──► U4 DAC8552 ch.A ──V_DAC──┐
-                                                  ▲ VREF = VREF_2V5       │
-   VREF_2V5 ─► R1/R2 (÷2) ─► U3A buffer ──VREF_HALF──────────────────────►├─► U3B diff-amp, G = 8.032
-                                                                          │     V_SWEEP (TP1), ±10.04 V
+   U9 STM32F411 ──SPI1 (PA4/5/7, write-only; R34 pulls /SYNC high)──► U4 DAC8552 ch.A ──V_DAC──┐
+   U9 PC5 heartbeat ─► R36/C47/D6 pump ─► DAC_ARM (C48, R37) ─► U11 SEL      │                   │
+   VREF_2V5 ─► U11 TMUX1101 ─► DAC_VREF (R35 1 MΩ to AGND) ─► U4 VREF        │                   │
+                                     U4 DAC8552 ch.B ─V_DACB─► R1/R2 (÷2) ─► U3A buffer ─VREF_HALF─►├─► U3B diff-amp, G = 8.032
+                                                                                                │     V_SWEEP (TP1), ±10.04 V
                                                                           ▼
    U5 OPA548 follower (+IN = V_SWEEP) ─OUT─► R9 10 Ω ─► VO_SENSE (TP2) ──┬──► back to U5 −IN (loop closes here)
      ILIM: R7 1.43 MΩ → ≈49 mA; E/S: R8 → +15VA (always on)              │
@@ -164,7 +180,7 @@ document are therefore analysis only. They are not requirements.
 
  HOST
    U9 ──USB FS (PA11/PA12, 22 Ω)──► U10 USBLC6 ESD ──► J3 USB-C (data only; VBUS sensed on PA0)
-   U9 ──SWD──► J2;  PC13 ──► LED1;  SW1 reset;  Y2 8 MHz HSE
+   U9 ──SWD──► J2;  LED1 (sunk by PC13 through R23 1 kΩ);  SW1 reset;  Y2 8 MHz HSE
 ```
 
 ### 3.2 Hierarchical sheets
@@ -176,9 +192,9 @@ generated from one SKiDL block file.
 |---|---|---|---|
 | Top | `stage1_iv.kicad_sch` | `generators/schematic.py` | Sheet symbols and the cross-sheet nets |
 | 1 Power | `power.kicad_sch` | `blocks/power.py` | J1, U1 LDO, FB1, U2 REF5025, bulk caps, **R31 star link** |
-| 2 MCU | `mcu.kicad_sch` | `blocks/mcu.py` | U9, Y2, reset/boot, SWD J2, USB-C J3 + U10, LED1 |
-| 3 DAC/Sweep | `dac_sweep.kicad_sch` | `blocks/dac_sweep.py` | U4 DAC8552, U3 OPA2277, R1–R6 |
-| 4 Power buffer | `output_buffer.kicad_sch` | `blocks/output_buffer.py` | U5 OPA548, R7 ILIM, R8 E/S, R9/C19 isolation |
+| 2 MCU | `mcu.kicad_sch` | `blocks/mcu.py` | U9, Y2, reset/boot, SWD J2, USB-C J3 + U10, LED1, the heartbeat charge pump (R36, C47, D6, C48, R37) |
+| 3 DAC/Sweep | `dac_sweep.kicad_sch` | `blocks/dac_sweep.py` | U4 DAC8552, U3 OPA2277, R1–R6, the reference gate U11 + R35 + C46, the /SYNC pull-up R34 |
+| 4 Power buffer | `output_buffer.kicad_sch` | `blocks/output_buffer.py` | U5 OPA548, R7 ILIM, R8 E/S, R9/C19 isolation, R38/C49 output snubber (DNP) |
 | 5 Current sense | `current_sense.kicad_sch` | `blocks/current_sense.py` | R10 shunt, U6 INA128, R11 |
 | 6 Voltage sense | `voltage_sense.kicad_sch` | `blocks/voltage_sense.py` | U7 INA128, R12/R13, R14 (DNP), D1–D4 |
 | 7 ADC | `adc.kicad_sch` | `blocks/adc.py` | U8 ADS1256, Y1, input RC filters, pull-ups |
@@ -198,7 +214,7 @@ important nets with every node on them.
 |---|---|---|
 | Analog precision | **AGND** | U2 REF5025, U3, U4 DAC, U6/U7 INA128 decoupling (their REF pins are on VREF_2V5), U6 −IN (shunt low side), the R32/R33 attenuator returns, ADS1256 analog side (AGND, VREFN, AIN1/AIN3 returns; AINCOM is on VREF_2V5), crystal load caps C26/C27, R10 shunt return, D5 TVS, ±15 V bulk and decoupling caps, C7 (+5VA bulk), C44 |
 | Analog power | ±15VA (bench), +5VA (after FB1) | U3, U5, U6, U7 on ±15VA. U2, U4, U8 AVDD on +5VA |
-| Digital | **DGND** | U9, U1 LDO, C1–C4/C8, U10, J3 (GND and shield), J2, SW1, LED1, U8 DGND pin, J1 pin 4 (supply return) |
+| Digital | **DGND** | U9, U1 LDO, C1–C4/C8, U10, J3 (GND and shield), J2, SW1, U8 DGND pin, the heartbeat pump (D6 anode, C48, R37), J1 pin 4 (supply return). LED1 is now between +3V3D and PC13, with no DGND pin |
 | Bridge | R31 (0 Ω) | The only AGND↔DGND connection. `validation/assertions.py` checks this |
 
 ---
@@ -208,10 +224,17 @@ important nets with every node on them.
 **Inference:** there is no firmware in the repository. The sequence below is
 what the hardware allows and requires. It is not taken from existing code.
 
+0. **Arm the output (once per boot).** The MCU loads channel B with full
+   scale (V_B = 2.500 V, so VREF_HALF = 1.250 V) and channel A with
+   mid-scale, then starts the PC5 software heartbeat. The charge pump raises
+   DAC_ARM, U11 closes, and the DAC reference comes up with V_SWEEP ≈ 0. If
+   the heartbeat ever stops (reset, debugger halt, crash), U11 opens and
+   V_SWEEP returns to ≈ 0 V within about 50 ms. The firmware rules are in
+   `docs/firmware_handoff.md`.
 1. **Set the sweep point.** The MCU writes a 16-bit code to DAC8552 channel A
    over SPI1, which is write-only. U3B converts the code to
-   `V_SWEEP = 8.032·(V_DAC − 1.250 V)`. U5 forces V_SWEEP at node VO_SENSE,
-   after R9.
+   `V_SWEEP = 8.032·(V_A − V_B/2) = 8.032·(V_DAC − 1.250 V)` with channel B at
+   full scale. U5 forces V_SWEEP at node VO_SENSE, after R9.
 2. **Current flows through the DUT.** It goes FORCE+ (J4) → DUT → FORCE− (J7)
    → R10 → AGND. Between VO_SENSE and the DUT the current passes F1 and R30,
    which are outside the regulation loop. The voltage actually across the DUT
@@ -236,11 +259,13 @@ what the hardware allows and requires. It is not taken from existing code.
    current limit and behaves as a current source. The Kelvin and shunt
    measurements stay valid in that state. **Inference.**
 
-Things the hardware does **not** provide (by design or deferral): a
-software-controlled output disable (the OPA548 E/S pin is tied permanently
-enabled, and MCU control is "deferred" per `manifest.yaml`), an output
-relay/disconnect, and range switching (the ADC's PGA provides digital
-ranging for small signals, §6).
+Things the hardware does **not** provide (by design or deferral): an output
+*disconnect* (the OPA548 E/S pin is tied permanently enabled, MCU control is
+"deferred" per `manifest.yaml`, and there is no relay), and range switching
+(the ADC's PGA provides digital ranging for small signals, §6). What it does
+provide since the audit corrections is a forced **0 V setpoint**: with the
+heartbeat stopped, U5 still drives the DUT, but at ≈ 0 V and from a
+low-impedance source. It is not an open circuit.
 
 ---
 
@@ -252,7 +277,7 @@ ranging for small signals, §6).
 |---|---|---|---|
 | SCLK | PA5 (U9.21) | SCLK (U4.6) | SCK1 |
 | DIN | PA7 (U9.23) | DIN (U4.7) | MOSI1 |
-| /SYNC | PA4 (U9.20) | /SYNC (U4.5) | CS_DAC |
+| /SYNC | PA4 (U9.20) | /SYNC (U4.5) | CS_DAC, R34 100 kΩ pull-up to +5VA at the DAC |
 
 - The DAC is on its own SPI bus. The ADC uses SPI2. `validation/assertions.py`
   enforces that the two buses stay separate. The repository records this as a
@@ -262,6 +287,11 @@ ranging for small signals, §6).
 - **Logic levels.** U4 runs from **+5VA** and its digital inputs are driven by
   a 3.3 V MCU. The DAC's V_IH at V_DD = 5 V must be met by 3.3 V CMOS
   outputs **[DS-check]** → **R7** in §14.
+- **/SYNC pull-up (audit F2).** R34 holds /SYNC high while the MCU's pins
+  float (reset, boot, MCU unpowered), so no frame can be clocked into the DAC
+  while the reference gate is disarming. It goes to +5VA, the DAC's own rail,
+  and is 100 kΩ, so the current into PA4 is ≤ 17 µA whether PA4 is an input
+  or driven high at 3.3 V.
 - **Ground boundary.** U4 is referenced to AGND, while its SPI drivers are on
   DGND. The SPI1 return current must therefore cross the split through R31.
   This is a layout question → **R20**.
@@ -270,10 +300,12 @@ ranging for small signals, §6).
 
 **Topology (design fact):**
 
-- U4 (DAC8552) VREF = VREF_2V5, VOUTA drives net V_DAC. VOUTB is not connected
-  (channel B is reserved).
-- R1 = R2 = 10.0 kΩ 0.1 % divide VREF_2V5 to VREF_HALF_RAW ≈ 1.250 V.
-  **U3A** buffers it to a low-impedance **VREF_HALF**.
+- U4 (DAC8552) VREF is net **DAC_VREF**: VREF_2V5 through the U11 gate, with
+  R35 1 MΩ to AGND. VOUTA drives net V_DAC. **VOUTB drives net V_DACB**, the
+  top of the midpoint divider.
+- R1 = R2 = 10.0 kΩ 0.1 % divide V_DACB to VREF_HALF_RAW = V_B/2 (1.250 V with
+  channel B at full scale). **U3A** buffers it to a low-impedance
+  **VREF_HALF**.
 - **U3B** is a 4-resistor difference amplifier:
   - R3 (2.49 kΩ) from V_DAC to the + input, R4 (20.0 kΩ) from the + input to AGND.
   - R5 (2.49 kΩ) from VREF_HALF to the − input, R6 (20.0 kΩ) from the − input to the output.
@@ -282,17 +314,83 @@ ranging for small signals, §6).
 **Transfer function.** With R4/R3 = R6/R5 = 20.0k/2.49k = 8.0321:
 
 ```
-V_SWEEP = 8.0321 · (V_DAC − VREF_HALF),   V_DAC = VREF · code / 65536,   VREF_HALF = VREF/2
-        = 8.0321 · VREF · (code/65536 − 0.5)
+V_SWEEP = 8.0321 · (V_A − V_B/2),   V_A = VREF_DAC · code_A / 65536,   V_B = VREF_DAC · code_B / 65536
+        = 8.0321 · VREF_DAC · (code_A − code_B/2) / 65536
+VREF_DAC = 2.500 V while U11 is on (DAC_ARM high), 0 V while it is off
 ```
 
-| DAC code | V_DAC | V_SWEEP |
+With channel B at full scale (code_B = 65535, the firmware contract), V_B/2 =
+1.24998 V:
+
+| Code A | V_A | V_SWEEP |
 |---:|---:|---:|
 | 0 | 0.000 V | −10.040 V |
 | 131 | 0.0050 V | −10.000 V |
-| 32768 | 1.2500 V | 0.000 V |
-| 65405 | 2.4950 V | +10.000 V |
+| 32767 | 1.24996 V | −0.15 mV |
+| 32768 | 1.25000 V | +0.15 mV |
+| 65404 | 2.49497 V | +10.000 V |
 | 65535 | 2.49996 V | +10.040 V |
+
+The zero falls between codes 32767 and 32768, because full scale on channel B
+is 65535/65536 of VREF. The ±0.15 mV is half an LSB and calibrates out with the
+other offsets.
+
+**What bounds the range.**
+
+| Bound | Mechanism | Class |
+|---|---|---|
+| −10.04 V | V_A ≥ 0 and V_B ≤ VREF, so no pair of codes can go lower | hardware |
+| +10.04 V | Only while channel B is at full scale. With B lower the ceiling rises: B = 0 and A = full scale commands +20.1 V. U3B then saturates somewhere between its guaranteed (V+) − 1.2 V = +13.8 V (SBOS079C) and the +15 V rail, past U5's specified input range of (V+) − 3 V = +12 V (SBOS070D) | **firmware contract** (`docs/firmware_handoff.md`) |
+
+**Why the midpoint comes from channel B (audit F2).** With R1 on VREF_2V5 the
+midpoint was a fixed 1.25 V. The DAC8552's guaranteed power-on state is zero
+scale (SLAS430A), so from power-up until firmware first wrote the DAC the
+output was `8.03·(0 − 1.25 V) = −10.04 V`: full negative drive into the DUT.
+With the midpoint on VOUTB, both channels power up at zero scale and
+`V_SWEEP = 8.03·(0 − 0) = 0`, apart from residual offsets.
+
+**The reference gate: reset, halt and crash (audit F2).** The DAC8552 has no
+reset or clear pin, and it **keeps its codes** through an MCU reset, a
+debugger halt or a firmware crash. Its zero-scale state is guaranteed only at
+DAC power-up, so a safe power-up does not make a reset safe. The hardware
+therefore forces zero another way. The DAC8552 is a resistor-string DAC, so
+both outputs are `VREF·code/65536`, and both channels share one VREF pin
+(SLAS430A, "Theory of operation").
+
+- **U11** (TMUX1101, SPST, on while SEL = 1) connects VREF_2V5 to that pin only
+  while **DAC_ARM** is high. Otherwise the pin is open and **R35** (1 MΩ) pulls
+  it to AGND. With VREF = 0 both outputs are 0 V **whatever codes the DAC
+  holds**, so V_SWEEP = 0. The midpoint follows the same pin, so the zero
+  needs no matching.
+- **DAC_ARM is not a GPIO level.** It is the rectified output of a diode charge
+  pump on Sheet 2: PC5 → R36 1 kΩ → C47 100 nF → D6 BAT54S → DAC_ARM, which
+  holds C48 470 nF and R37 100 kΩ to DGND. PC5 must be **toggled by software**
+  (the heartbeat). No DC path exists from any supply to DAC_ARM, so only edges
+  transfer charge.
+- **Simulated behaviour** (transient model of this circuit, scratch
+  simulation; to be measured at bring-up, `docs/bringup_checklist.md`):
+
+  | Condition | DAC_ARM | Against U11 at VDD = 5 V |
+  |---|---|---|
+  | 1 kHz heartbeat, nominal | 2.42 … 2.46 V | VIH = 1.49 V |
+  | 1 kHz, worst case (VOH 3.0 V, diode Vf 0.4 V, 10 µA leakage) | 1.87 V | VIH = 1.49 V |
+  | 500 Hz, worst case (half the required rate) | 1.61 V | VIH = 1.49 V |
+  | One GPIO edge (a stuck pin) | ≈ 0.53 V | VIL = 0.87 V |
+  | Heartbeat stops | falls below 0.87 V within ≈ 52 ms (C48·R37 = 47 ms) | off |
+
+- **PC5 has no timer output** on the STM32F411 (only EVENTOUT and an ADC
+  input), so no peripheral can keep toggling it once the CPU stops. That is
+  why it was chosen. The heartbeat must come from the main loop, never from a
+  timer, ISR or DMA (`docs/firmware_handoff.md`).
+- **U11 Ron** (1.8 Ω typ, 4.9 Ω max at 125 °C, SCDS410D) in series with the
+  DAC's ≈ 62 kΩ reference input scales both channels by the same 30 … 80 ppm.
+  The A/B ratio, and so the zero, is unaffected. The full-scale error
+  calibrates out with the rest of the source gain. The TS5A3159A was rejected
+  for this position because its VIH (2.4 V at 5 V) is above what the pump can
+  guarantee.
+- **What the gate does not do.** It forces the **setpoint** to 0 V. U5 stays
+  enabled and drives the DUT at ≈ 0 V from a low impedance. It is not a
+  disconnect.
 
 - 1 LSB at V_SWEEP = 2.5 V / 65536 × 8.0321 ≈ **306 µV**.
 - **Why 20.0 kΩ.** From the source comments: an exact ±10.000 V would need
@@ -300,16 +398,21 @@ V_SWEEP = 8.0321 · (V_DAC − VREF_HALF),   V_DAC = VREF · code / 65536,   VRE
   ±9.94 V. So 20.0 kΩ (E96, same 0.1 % grade as R3/R5) was chosen to *bracket*
   ±10 V, and firmware is expected to leave the end codes unused. The source
   says "the top 0.40 %". In fact about 0.2 % of the codes at *each* end exceed
-  ±10.000 V (see the table).
+  ±10.000 V (see the table). Firmware clamps the command to ±10.0 V
+  (`docs/firmware_handoff.md`).
 - **History (from git).** The earlier design used R4 = R6 = 10.0 kΩ (gain 4.016,
   ±5.02 V). Commit `66bdab9` changed them to 20.0 kΩ for ±10 V without changing
   any connectivity.
-- **Ratiometric zero.** VREF_HALF comes from the same reference as the DAC. So
-  mid-scale (code 32768) gives 0 V whatever the exact VREF value, apart from
-  resistor and op-amp errors. The span scales with VREF.
+- **Ratiometric zero.** VREF_HALF is DAC channel B halved, and both DAC
+  channels use the same (gated) reference pin. So code_A = code_B/2 gives 0 V
+  whatever the exact VREF value, apart from resistor, DAC and op-amp errors.
+  The span scales with VREF.
 - **Set-point error sources (analysis).**
   - R1/R2 ratio tolerance (0.1 % each) moves VREF_HALF by up to about ±0.6 mV,
     which is about ±5 mV at V_SWEEP.
+  - Channel B's own offset and gain error now enter the midpoint, halved
+    **[DS-check SLAS430A]**. Channel B is static, so this is a fixed offset
+    that the zero calibration removes.
   - The 0.1 % difference-amplifier resistors give up to about ±0.2 % gain error
     and a common-mode error of a few mV at V_CM ≈ 1.25 V.
   - DAC8552 offset and gain errors add to these **[DS-check]**.
@@ -326,16 +429,23 @@ V_SWEEP = 8.0321 · (V_DAC − VREF_HALF),   V_DAC = VREF · code / 65536,   VRE
 | 1 +IN | V_SWEEP | From U3B |
 | 2 −IN | VO_SENSE | Feedback from the **far side of R9** |
 | 3 ILIM | OPA548_ILIM | R7 1.43 MΩ (1206) ‖ C14 10 nF to −15VA |
-| 4 V− | −15VA | C16 100 nF + C18 10 µF/35 V tantalum to AGND |
-| 5 V+ | +15VA | C15 100 nF + C17 10 µF/35 V tantalum to AGND |
-| 6 OUT | VO_RAW | R9 10 Ω (1206) to VO_SENSE, C19 100 pF across R9 |
+| 4 V− | −15VA | C16 100 nF 50 V X7R + C18 10 µF/35 V tantalum to AGND |
+| 5 V+ | +15VA | C15 100 nF 50 V X7R + C17 10 µF/35 V tantalum to AGND |
+| 6 OUT | VO_RAW | R9 10 Ω 1 % 0.25 W (1206) to VO_SENSE, C19 100 pF across R9; R38 10 Ω + C49 10 nF snubber to AGND (**DNP**) |
 | 7 E/S | OPA548_ES | R8 10 kΩ to +15VA (always enabled) |
 
-- **Pin numbering is unverified.** The U5 pin numbers and the TO-220-7 lead
-  stagger (footprint `TO-220-7_P2.54x3.7mm_StaggerOdd_Lead3.8mm_Vertical`) come
-  from a third-party KiCad library (Alternate KiCad Library at a pinned commit),
-  not from the TI data sheet SBOS070. The repository flags U5 as
-  `VERIFY-DATASHEET`, and it is the only part so flagged → **R1**.
+- **Pin numbering is verified.** The U5 symbol still comes from a
+  third-party KiCad library (Alternate KiCad Library at a pinned commit), but
+  `tools/author_project_symbols.py` now cross-checks every pin against the TI
+  SBOS070D "Pin Functions" table, kept verbatim in
+  `libraries/provenance/opa548_sbos070d_pin_functions.txt`, and stops the
+  build on any mismatch. All seven pins agree, and U5 is flagged `RESOLVED`.
+  No part is flagged `VERIFY-DATASHEET` any more.
+- **Footprint.** `stage1_iv:TO-220-7_P2.54x3.7mm_StaggerOdd_Lead3.8mm_Vertical_Drill1.2mm`
+  is KiCad's TO-220-7 staggered footprint with the drill widened from 1.1 to
+  1.2 mm, generated by `tools/vendor_footprints.py`. That gives more lead
+  clearance for the OPA548T's formed leads [DS-check: lead width against
+  SBOS070D's package drawing].
 - **Loop.** U5 is a unity-gain follower of V_SWEEP. The feedback is taken after
   R9, so the loop corrects R9's drop. With C19 across R9 this is the usual
   "isolation resistor inside the loop, with a high-frequency feedback path"
@@ -360,7 +470,10 @@ V_SWEEP = 8.0321 · (V_DAC − VREF_HALF),   V_DAC = VREF · code / 65536,   VRE
   - The worst margin is about 2 V. This holds with the ±15 V rails at nominal.
     It shrinks if the bench supply is set lower **[DS-check]**.
 - **E/S pin.** R8 ties it to +15VA through 10 kΩ. The manifest says MCU control
-  of E/S is deferred because it "needs level shifting".
+  of E/S is deferred because it "needs level shifting". E/S is **not** the safe
+  state: a disabled OPA548 output still leaks a few mA (SBOS070D Fig. 16,
+  typical), which into an open or high-impedance DUT is not "off". The safe
+  state is the DAC reference gate (§5.2).
   **Inference:** that implies E/S is referenced to V−. Check the pin's allowed
   voltage range with a 10 kΩ pull-up to V+, and check whether its thermal-flag
   output function is affected **[DS-check]** → **R5**.
@@ -369,17 +482,25 @@ V_SWEEP = 8.0321 · (V_DAC − VREF_HALF),   V_DAC = VREF · code / 65536,   VRE
   So the output-stage dissipation is at most about
   (15 − 5.7) V × 49 mA ≈ 0.46 W. Quiescent dissipation, 30 V × I_Q, comes on
   top of that **[DS-check I_Q]**. There is **no heatsink in the BOM**, and U5
-  is a vertical TO-220-7 → **R6**. **[DS-check]:** the OPA548 tab is
-  electrically connected to V−, so any heatsink or metal enclosure contact is
-  at −15 V.
+  is a vertical TO-220-7 → **R6**. The OPA548 tab is electrically connected to
+  V− (SBOS070D), so any heatsink or metal enclosure contact is at −15 V. Fit an
+  insulating pad and shoulder washer if a heatsink is added, and keep the tab
+  clear of the enclosure (`docs/bringup_checklist.md`).
+- **Snubber (audit V1).** SBOS070D §9.1 recommends an output R-C snubber when
+  the OPA548 runs in current limit, with 10 Ω + 0.01 µF as the example. This
+  design sits in current limit by intent, so R38/C49 have pads from VO_RAW to
+  AGND and are **DNP**. They are fitted if bring-up sees oscillation on the
+  current-limit plateau with a capacitive load.
 
 ### 5.4 Force path, DUT terminals, compliance (Sheet 8)
 
 **Topology (design fact):**
-`VO_SENSE → F1 (PTC, 0ZRM0010FF1E) → F1_MID → R30 100 Ω "1/4 W" (1206) → FORCE+ → J4`.
+`VO_SENSE → F1 (PTC, 0ZRM0010FF1E) → F1_MID → R30 100 Ω 1 % 2 W (Vishay PR02, PR02000201000FB100, axial DIN0411) → FORCE+ → J4`.
 D5 (SMBJ15CA, bidirectional TVS) is connected from FORCE+ to AGND.
 J5 SENSE+, J6 SENSE− and J7 FORCE− are wired straight through to Sheets 6 and 5.
-The four jacks are separate 1-pin 4 mm banana footprints (`Connector:Banana_Jack_1Pin`).
+The four jacks are separate 1-pin 4 mm banana footprints (`Connector:Banana_Jack_1Pin`),
+and each has its function (FORCE+, FORCE−, SENSE+, SENSE−) printed beside it on
+the front silkscreen.
 FORCE and SENSE therefore meet **only at the DUT**, which is the point of a
 Kelvin connection.
 
@@ -399,19 +520,42 @@ F1's resistance is not recorded in the repository **[DS-check]**.
 limiter, one of four protection layers (§10). It costs compliance at high
 current, and the repository says so explicitly.
 
-**Power in R30.** At the current limit (for example a shorted DUT) R30
-dissipates 0.049² × 100 ≈ **0.24 W**. That is about 97 % of the stated 1/4 W
-rating, continuously, for as long as the short lasts → **R3**.
+**Power in R30 (audit F3).** At the nominal current limit (for example a
+shorted DUT) R30 dissipates 0.049² × 100 ≈ 0.24 W. The ILIM setting is not
+characterised (§5.3), so R30 is sized for the worst credible fault instead: U5's
+output driven into a rail with the current set only by R9 + F1 + R30 + R10.
+
+```
+I = 15.5 V / (9.9 + 3.0 + 99 + 9.9) Ω = 127 mA
+P(R30) ≈ 1.6 W (1.63 W worst-case tolerance combination)   rating 2 W at 70 °C
+P(R9) = P(R10) ≈ 0.16 W                                    ratings 0.25 W / 0.5 W
+```
+
+`validation/measurement_range.py` checks this envelope against the ratings on
+every build. The PR02's own hot-spot rise at 1.6 W is about 120 K (Rth
+75 K/W), so it is mounted axially with its body raised about 3 mm off the
+board. It lies along the board's Y axis at (87.75, 75.7) mm, 7 mm (courtyards)
+from the precision divider (R12/R13/R32/R33). It is **not** well separated from
+F1: R30 sits electrically between F1 and D5/J4, and the only room within reach
+is the strip beside F1, so the courtyards are 2.1 mm apart (the old 1206 was
+2.5 mm away). R30's heat lowers F1's hold current. In a fault that makes F1 trip
+sooner; on the normal plateau (0.24 W in R30) it reduces the hold margin. Bring-up
+measures this (`docs/bringup_checklist.md`); real separation needs the
+protection area re-laid out. The original 1206 part (1/4 W) would have been overloaded more than
+six times in this fault.
 
 ### 5.5 Current sense (Sheet 5)
 
 **Topology (design fact):**
 
-- R10 is a 10.0 Ω, 1 W axial resistor (DIN0207, 10.16 mm pitch). It sits in
-  the **low side**, between FORCE− (J7) and AGND.
+- R10 is a 10.0 Ω 0.1 % 25 ppm/°C, 0.5 W metal-film axial resistor (DIN0207,
+  10.16 mm pitch). It sits in the **low side**, between FORCE− (J7) and AGND.
+  Its fault dissipation is ≈ 0.16 W (§5.4). The precision grade was set by the
+  audit: R10 is the current-scale element and enters every current reading
+  directly.
 - U6 (INA128P, DIP-8): +IN = FORCE− (the shunt high side, also TP3
   "ISENSE_HI"). −IN = AGND. **REF = VREF_2V5.** R11 = 35.7 kΩ 0.1 % across
-  RG1/RG2. Supplies are ±15VA with 100 nF each.
+  RG1/RG2. Supplies are ±15VA with 100 nF 50 V X7R each.
 - The output I_SENSE_OUT (TP4) goes to ADS1256 AIN0 through R15 100 Ω and is
   converted against AINCOM (VREF_2V5). C24 1 nF runs from AIN0 to AIN1, which
   R16 100 Ω ties to AGND; AIN1 is no longer part of the measurement.
@@ -445,9 +589,9 @@ ADC reads AIN0 − AINCOM = 24.006 V/A · I     → ±1.185 V at ±49.35 mA, ±2
   currents". Whether the current channel really resolves the currents involved
   should be checked → **R9**.
 - **Accuracy contributors.**
-  - The tolerance and TCR of R10 and R11 are not specified in their values
-    ("10.0R 1W", "13.0k").
-  - The INA128 gain-equation error at G ≈ 4.85 comes on top of that
+  - R10 is now 0.1 %, 25 ppm/°C. R11 is 35.7 kΩ 0.1 %; its TCR is not
+    specified in its value.
+  - The INA128 gain-equation error at G ≈ 2.40 comes on top of that
     **[DS-check]**.
   - Self-heating of R10 is small: 24 mW at ILIM.
   - These go into **R10**.
@@ -464,13 +608,15 @@ ADC reads AIN0 − AINCOM = 24.006 V/A · I     → ±1.185 V at ±49.35 mA, ±2
   AGND. SENSE− (J6, TP6) → R13 40.2 kΩ → U7 −IN, with R33 10.0 kΩ to AGND.
   Two matched single-ended dividers, k = 10.0k/50.2k = 0.1992 (all four 0.1 %).
 - **Clamps on the jack side of R12/R13:**
-  - D1 (1N4148) from SENSE+ to +15VA and D2 from −15VA to SENSE+.
+  - D1 (1N4148W, SOD-123) from SENSE+ to +15VA and D2 from −15VA to SENSE+.
   - D3 and D4 do the same on SENSE−.
   - The clamps go to the amplifier rails, **not** to AGND. That way legitimate
     signals within the INA128 common-mode range are never clipped
     (`voltage_sense.py`).
 - U7 (INA128P): **REF = VREF_2V5.** **R14 across RG1/RG2 is DNP**, so RG is
-  open and **G = 1**. The output `V_SENSE_OUT = 2.500 V + 0.1992·V_K` (TP7)
+  open and **G = 1**. DNP is now a real attribute: R14 carries `dnp` and
+  `exclude_from_bom` in the schematic and on the board, so it no longer
+  appears in a fitted BOM. U7's supplies are ±15VA with 100 nF 50 V X7R each. The output `V_SENSE_OUT = 2.500 V + 0.1992·V_K` (TP7)
   goes through R17 100 Ω to ADS1256 AIN2 and is converted against AINCOM
   (VREF_2V5). C25 1 nF runs from AIN2 to AIN3, which R18 ties to AGND.
 
@@ -565,7 +711,11 @@ This is the most important system-level property for a reviewer to understand.
 
 **The sweep hardware is bipolar (±10.04 V, up to ±91.3 mA into any passive
 DUT), and so is the measurement chain: every operating point the source can
-reach is measured, with its sign.**
+reach is measured, with its sign.** The +10.04 V end assumes firmware keeps
+DAC channel B at full scale (§5.2). If that contract is broken, the positive
+output can rise toward the +15 V rail, which is outside this table.
+`validation/measurement_range.py` reports it as unmeasurable rather than
+including it.
 
 The ADS1256 runs from a single +5 V analog supply, so each input pin must stay
 inside AGND − 0.1 V … AVDD + 0.1 V with the input buffer off, or AGND …
@@ -578,7 +728,7 @@ and each channel is converted as AINx − AINCOM.
 |---|---|---|---|
 | DUT voltage V_K | −10.04 … +10.04 V | 0.50 … 4.50 V; 0.1992·V_K = ±2.000 V | **±11.8 V guaranteed** at AVDD = 4.75 V; ±12.55 V at nominal full scale |
 | DUT current I | −91.3 … +91.3 mA (any passive DUT, any ILIM) | 0.31 … 4.69 V; 24.0 V/A·I = ±2.19 V | **±97.8 mA guaranteed**; ±104.1 mA at nominal full scale |
-| Worst-case tolerances stacked | V_SWEEP +0.5 %, R30/R10 ±1 %, INA128 gain ±0.5 %, VREF ±0.1 %, INA128 offset | AIN span V 0.48…4.52 V, I 0.25…4.75 V | headroom to the pin limit: V 334 mV, I 97 mV |
+| Worst-case tolerances stacked | V_SWEEP +0.5 %, R30 ±1 %, R10 ±0.1 %, INA128 gain ±0.5 %, VREF ±0.1 %, INA128 offset | AIN span V 0.484…4.516 V, I 0.265…4.735 V | headroom to the pin limit: V 334 mV, I 115 mV |
 
 ADC codes (PGA 2, full scale 2²³ = 8 388 608): V_K = −10.04 / 0 / +10.04 V →
 −6 710 886 / 0 / +6 710 886; I = −91.3 / 0 / +91.3 mA → −7 354 163 / 0 /
@@ -615,13 +765,16 @@ The derivation, the rejected alternatives and the hysteresis argument are in
 ## 7. Shared voltage reference and the ratiometric scheme
 
 - U2 is a REF5025AIDGKT (VSSOP-8).
-  - VIN = +5VA (C10 100 nF). VOUT → **VREF_2V5** with C9 1 µF.
+  - VIN = +5VA (C10 100 nF). VOUT → **VREF_2V5** with C9 4.7 µF 10 V X7R.
+    SBOS410O specifies stability for 1 … 100 µF with ESR ≤ 1.5 Ω. The
+    original 1 µF sat on the minimum, so tolerance and DC-bias loss could take
+    a real MLCC below it (audit).
   - TRIM/NR, TEMP and the NC/DNC pins are not connected. So there is **no
     noise-reduction capacitor on TRIM/NR**. That is optional per the data
     sheet **[DS-check]** → **R12**.
 - Loads on VREF_2V5:
-  - the U4 DAC reference input (code-dependent),
-  - the R1 + R2 divider (20 kΩ, about 125 µA),
+  - the U4 DAC reference input (code-dependent), through U11 while armed;
+    R35 (1 MΩ, 2.5 µA) sits on the DAC side of U11,
   - the U8 VREFP switched-capacitor input,
   - the U6 and U7 REF pins, 4…56 µA each (`(VREF − A2out)/80 kΩ`), far below
     the REF5025's ±10 mA; the INA128 needs REF driven from a low impedance
@@ -630,8 +783,9 @@ The derivation, the rejected alternatives and the hysteresis argument are in
   - the U8 AINCOM input (the negative input of both conversions), bypassed
     locally by C44 100 nF.
 - **What sharing the reference buys (analysis).**
-  - V_SWEEP is fully ratiometric: its zero sits at VREF/2 and its span is
-    proportional to VREF.
+  - V_SWEEP is fully ratiometric: its zero sits at code_A = code_B/2 (both
+    channels share the DAC reference pin) and its span is proportional to
+    VREF.
   - Both ADC readings are proportional to 1/VREF, so V and I carry the
     **same** scale error. The measurement zero is VREF_2V5 itself on both
     sides of the conversion (INA128 REF and AINCOM), so VREF's absolute
@@ -641,7 +795,7 @@ The derivation, the rejected alternatives and the hysteresis argument are in
     **[DS-check grade A specs]**.
 - **Coupling risk (Inference).** The ADC's sampled reference input, its
   AINCOM input, the two INA128 REF pins and the DAC's code-dependent reference
-  current share one node. C9 (1 µF) sits at U2 and C44 (100 nF) at U8. The
+  current share one node. C9 (4.7 µF) sits at U2 and C44 (100 nF) at U8. The
   REF-pin traces carry only µA, so their DC drop is µV and calibrates out, but
   they should be routed away from digital and FORCE copper → **R12, R18**.
 
@@ -656,17 +810,23 @@ The derivation, the rejected alternatives and the hysteresis argument are in
 | +15VA | Bench supply via J1 pin 1, **unregulated on board** | U3, U5, U6, U7, D1/D3 clamps, R8 | C5 100 µF/25 V (to AGND). C11, C15, C17, C20, C22 |
 | −15VA | Bench supply via J1 pin 2, unregulated | U3, U5 (and R7 ILIM), U6, U7, D2/D4 | C6 100 µF/25 V. C12, C16, C18, C21, C23, C14 |
 | +5V_RAW | Bench supply via J1 pin 3 | U1 input, FB1 | C1 10 µF, C3 100 nF (to DGND) |
-| +5VA | +5V_RAW through FB1 (BLM21PG221SN1D) | U2, U4, U8 AVDD | C7 100 µF (AGND), C10, C13, C28, C29 |
-| +3V3D | U1 LD1117S33 from +5V_RAW | U9, U8 DVDD, SYNC/PDWN, pull-ups, J2 pin 4 | C2 10 µF, C4, C8 100 µF, C34–C37, C39, C30 |
+| +5VA | +5V_RAW through FB1 (BLM21PG221SN1D) | U2, U4, U8 AVDD, U11, R34 (/SYNC pull-up) | C7 100 µF (AGND), C10, C13, C28, C29, C46 |
+| +3V3D | U1 LD1117S33 from +5V_RAW | U9, U8 DVDD, SYNC/PDWN, pull-ups, LED1 anode, J2 pin 4 | C2 10 µF, C4, C8 100 µF, C34–C37, C39, C30 |
 | VDDA | +3V3D through FB2 | U9 VDDA | C38 100 nF, C40 1 µF |
-| VREF_2V5 | U2 | U4, R1/R2, U8 | C9 1 µF |
+| VREF_2V5 | U2 | U11 → DAC_VREF → U4; U8 VREFP and AINCOM; U6/U7 REF | C9 4.7 µF (REF5025 needs 1 … 100 µF, SBOS410O) |
+| DAC_VREF | VREF_2V5 through U11, only while DAC_ARM is high | U4 VREF | R35 1 MΩ to AGND (pulls it to 0 V when U11 is off) |
 | VBUS | USB host via J3 | **Sensing only:** U10 VBUS pin, R28/R29 divider to PA0, C42 | — |
 
 Observations (design facts, with consequences as inference):
 
 - **The board is powered only by the bench supply.** VBUS powers nothing. The
-  `mcu.py` comment on the USB shield describes the board as "bus-powered",
-  which is inconsistent with the circuit (§13.2).
+  `mcu.py` comment on the USB shield used to call the board "bus-powered"; it
+  has been corrected (§13.2).
+- **J1 is labelled per terminal.** The front silkscreen carries a "BENCH
+  SUPPLY" heading and +15V / −15V / +5V / GND at the four pins, and J1's value
+  reads `BENCH SUPPLY 1:+15V 2:-15V 3:+5V 4:GND`. There is still no
+  reverse-polarity or mis-connection protection (below), so the labels are the
+  only guard.
 - There is **no on-board regulation, input fuse, reverse-polarity protection
   or sequencing** on ±15 V or +5 V. Analog performance (INA128 and OPA548
   PSRR) depends directly on the quality of the bench supply → **R11**.
@@ -677,17 +837,25 @@ Observations (design facts, with consequences as inference):
   - 25 V parts on the 15 V rails,
   - 35 V tantalums at U5,
   - C1 is 10 µF/25 V on 5 V.
-- The "PWR_FLAG" symbols (#FLG1–#FLG8) are ERC annotations only. They mark
-  rails that enter from off-board. They do not appear on the PCB.
+- The "PWR_FLAG" symbols (#FLG1–#FLG9) are ERC annotations only. They mark
+  rails that enter from off-board, plus DAC_VREF, which is fed through U11's
+  passive switch pins. They do not appear on the PCB.
 
 ### 8.2 Power sequencing and abnormal states (Inference; review)
 
-- **Power-up output state.** The DAC8552 powers up at a defined reset code.
-  The author understands this to be zero-scale **[DS-check]**. Once VREF is up,
-  zero-scale means V_SWEEP ≈ **−10.04 V**, and U5 is always enabled. So until
-  firmware writes mid-scale, the DUT could see the full negative sweep voltage
-  through 110 Ω. The same applies during an MCU reset or a firmware hang →
-  **R8**.
+- **Power-up, reset, halt and crash output state (resolved, audit F2).**
+  The DAC8552 powers up at zero scale (SLAS430A). With the original fixed
+  1.25 V midpoint that meant V_SWEEP ≈ −10.04 V into the DUT until firmware
+  wrote mid-scale, and the DAC kept whatever code it held through an MCU
+  reset, halt or hang. Now:
+  - at power-up both channels are at zero scale and the midpoint follows
+    channel B, so V_SWEEP ≈ 0;
+  - and, independently of the codes, the DAC reference is connected only
+    while the software heartbeat runs. Reset, halt, crash, a stuck PC5 or an
+    unpowered MCU opens U11 within ≈ 50 ms, and V_SWEEP returns to ≈ 0 V.
+  The residual window is the ≈ 50 ms disarm time, during which the last
+  commanded voltage decays to zero. U5 stays enabled, so the DUT sees ≈ 0 V
+  from a low impedance, not an open circuit.
 - **Partial supply states.** For example, ±15 V present without +5 V: the
   INA128 outputs then drive an unpowered ADC through 100 Ω. The reverse case
   leaves the DAC and ADC powered with the amplifiers unpowered. Neither case is
@@ -724,12 +892,13 @@ Observations (design facts, with consequences as inference):
 | ADC /RESET | PA9 | RESET_ADC | 10 kΩ pull-up R20. See the note below |
 | USB D− / D+ | PA11 / PA12 | USB_DM / USB_DP | 22 Ω series R26/R27 → U10 → J3 |
 | VBUS sense | PA0 | VBUS_SENSE | R28/R29 100k/100k → 2.5 V when VBUS = 5 V |
-| Status LED | PC13 | LED_STATUS | R23 330 Ω → LED1 (green) → DGND |
+| Status LED | PC13 | LED_STATUS | **Sunk:** +3V3D → LED1 (green) → R23 1 kΩ → PC13. PC13 low = on, ≈ 1.3 mA |
+| Safe-state heartbeat | PC5 | SAFE_HB | Software-toggled square wave, ≥ 1 kHz, into the R36/C47/D6 charge pump → DAC_ARM → U11 SEL. Must come from the main loop, never a timer (`docs/firmware_handoff.md`) |
 | SWD | PA13 / PA14, NRST | SWDIO / SWCLK | J2: 1 SWDIO, 2 SWCLK, 3 GND, 4 +3V3D, 5 NRST |
 | HSE | PH0 / PH1 | OSC_IN / OSC_OUT | Y2 8 MHz, C32/C33 20 pF |
 | Reset / boot | NRST, BOOT0 | | R21 10k pull-up + C41 100 nF + SW1. BOOT0 has a 10k pull-down (R22) |
-| Core | VCAP1 → C43 2.2 µF. VBAT tied to +3V3D. VSSA on DGND | | |
-| Unused | 33 GPIOs declared not connected | | Listed in `blocks/mcu.py` |
+| Core | VCAP1 → C43 4.7 µF 10 V X5R. VBAT tied to +3V3D. VSSA on DGND | | |
+| Unused | 32 GPIOs declared not connected | | Listed in `blocks/mcu.py` |
 
 Notes and review points:
 
@@ -737,13 +906,15 @@ Notes and review points:
   pin **[DS-check]**. This design uses PA9 as an ADC reset output and senses
   VBUS on PA0 through a divider. **Inference:** firmware must disable the USB
   peripheral's hardware VBUS sensing and handle VBUS detection itself.
-- **PC13 LED drive.** ST documents that PC13–PC15 have very limited current
-  capability and must not be used as a current source, for example to drive an
-  LED **[DS-check]**. This design sources about 4 mA from PC13 into LED1 →
-  **R13**.
-- **C43 (VCAP1) = 2.2 µF.** `manifest.yaml` records C43 as an addition that was
-  not in the source BOM. Confirm the value the STM32F411 data sheet requires
-  for the single-VCAP package **[DS-check]** → **R13**.
+- **PC13 LED drive (resolved).** DS10314 says PC13–PC15 can sink only 3 mA
+  and "must not be used as a current source (e.g. to drive an LED)". LED1 is
+  now sunk by PC13 through R23 = 1 kΩ, about 1.3 mA (green V_F ≈ 2 V): visible,
+  and well inside the 3 mA sink limit. Firmware drives PC13 low to light it.
+- **C43 (VCAP1) = 4.7 µF (resolved, audit F4).** The LQFP64 has a single VCAP
+  pin (VCAP_1, pin 30), and DS10314 Table 16 asks for 4.7 µF with ESR < 1 Ω on
+  a single VCAP pin (2 × 2.2 µF is the two-pin case). C43 was 2.2 µF.
+- **/SYNC pull-up.** R34 (100 kΩ to +5VA) holds the DAC's /SYNC high while
+  PA4 floats; see §5.1.
 - **Firmware loading.** BOOT0 is hard-wired low (no jumper). Firmware is
   therefore loaded over SWD (J2). The ROM USB DFU bootloader is not reachable
   without rework. **Inference.**
@@ -765,35 +936,37 @@ Notes and review points:
 
 | Layer | Part | Intended role (repository) | Observations (analysis) |
 |---|---|---|---|
-| 1 | U5 ILIM (R7) | Fast, primary current limit (≈ 49 mA) | Accuracy at a low setting **[DS-check]** (R4). U5 also has internal thermal shutdown **[DS-check]** |
-| 2 | F1 PTC 0ZRM0010FF1E (100 mA hold per `libraries/netclasses.py`) | Slow backstop if ILIM fails | See the fault scenarios below |
-| 3 | R30 100 Ω, 1/4 W, 1206 | Passive dead-short limiter | At ILIM it runs at about 97 % of rating (R3) |
+| 1 | U5 ILIM (R7) | Normal current plateau (≈ 49 mA nominal) | **Not characterised** at this setting: SBOS070D specifies ILIM accuracy only at 2.5 A. Nothing else relies on its value. U5 also has internal thermal shutdown |
+| 2 | F1 PTC 0ZRM0010FF1E | Series PTC. **Not a backstop** | Holds 100 mA and trips at 200 mA at 23 °C. The whole fault envelope (≤ 127 mA) lies between the two, where the data sheet promises neither. Hold current derates to 68 mA at 50 °C, 56 mA at 60 °C and 45 mA at 70 °C, so above about 65 °C ambient it can trip on the **normal** 49 mA plateau. Contingency if bench tests show nuisance trips: 0ZRM0017FF1E (170 mA hold, same body and footprint), as a conditional swap only |
+| 3 | R30 100 Ω 1 % 2 W, Vishay PR02 | **The current bound**, passive | Bounds a rail-to-DUT fault to 127 mA and carries the resulting ≈ 1.6 W continuously (§5.4) |
 | 4 | D5 SMBJ15CA to AGND | Absorbs transients. The 15 V stand-off clears the ±10.04 V sweep | Its leakage returns to AGND without passing through the DUT or R10, so it does **not** corrupt the current reading. **Inference** |
 
 **Fault scenarios (analysis, for review):**
 
 | Scenario | Expected behavior | Point to check |
 |---|---|---|
-| DUT short, ILIM working | I ≈ 49 mA. R30 about 0.24 W, U5 about 0.46 W plus quiescent | R30 rating and U5 temperature (R3, R6) |
-| DUT short, ILIM failed or set wrong | Current is limited only by R9 + F1 + R30 + R10 ≈ 120 Ω+, about 100 mA at 12.6 V swing. R30 would see about 1 W, and F1 is near its **hold** current, so it may not trip | Whether R30 fails before F1 trips, i.e. whether the layer ordering actually works (R3) |
+| DUT short, ILIM working | I ≈ 49 mA. R30 about 0.24 W, U5 about 0.46 W plus quiescent | U5 temperature (R6) |
+| DUT short, ILIM failed or set wrong, or U5 driven into a rail | Current is limited only by R9 + F1 + R30 + R10: 15.5 V / 121.8 Ω = 127 mA. R30 ≈ 1.6 W (rated 2 W), R9 and R10 ≈ 0.16 W each. F1 may or may not trip | Checked on every build by `validation/measurement_range.py`. The PR02 runs hot (≈ 120 K rise), so it is mounted raised and 7 mm from the divider. It is only 2.1 mm from F1 (§5.4) |
 | External voltage applied to FORCE+ (charged capacitor, powered DUT) | D5 clamps and F1 limits sustained current | D5 energy rating against realistic sources. U5 output back-driven through R30/F1 |
 | External voltage applied to FORCE− | **No dedicated protection.** R10 (1 W) goes straight to AGND, and U6 +IN is directly on FORCE−. `protection.py` says FORCE− protection "lives on" Sheet 5, but Sheet 5 has none | The INA128 input overvoltage rating **[DS-check]** and R10 (R15) |
-| Overvoltage on SENSE± | D1–D4 clamp the jack-side node to ±15VA. R12/R13 (40.2 kΩ) and R32/R33 then divide it: U7 sees at most ≈3.1 V | The clamps sit **before** the series resistors, so fault current goes straight into the ±15 V rails through the 1N4148s. The bench supply may not sink that current (R15) |
+| Overvoltage on SENSE± | D1–D4 clamp the jack-side node to ±15VA. R12/R13 (40.2 kΩ) and R32/R33 then divide it: U7 sees at most ≈3.1 V | The clamps sit **before** the series resistors, so fault current goes straight into the ±15 V rails through the 1N4148Ws. The bench supply may not sink that current (R15) |
 | Board unpowered, DUT connected | The sense clamps are referenced to 0 V rails. The U5 output state is undefined | — |
-| Power-up / MCU reset | V_SWEEP can reach −10.04 V until firmware writes mid-scale (§8.2) | R8 |
+| Power-up / MCU reset / halt / crash | V_SWEEP ≈ 0 at power-up (midpoint from channel B). On reset, halt or crash the heartbeat stops and U11 removes the DAC reference within ≈ 50 ms (§5.2, §8.2) | Measured at bring-up (`docs/bringup_checklist.md`) |
+| Firmware loads channel B below full scale while armed | The positive ceiling rises above +10.04 V, up to U3B's saturation (+13.8 V … +15 V) | Firmware contract, not hardware protection (`docs/firmware_handoff.md`) |
 
 ### 10.2 DNP and configuration options
 
 | Ref | Fitted state | Effect | Notes |
 |---|---|---|---|
-| **R14** (0603 across U7 RG) | **DNP**. Value text is "DNP (G=1)" | U7 G = 1; with the k = 0.1992 attenuator the Kelvin range is ±11.8 V | DNP is expressed **only in the Value field**. The KiCad symbol has `(dnp no)` and `(in_bom yes)`, and the footprint is not marked DNP. A BOM or pick-and-place export will list R14 as a part unless someone intervenes → **R17**. If fitted, G = 1 + 50k/R14 and the measurable range shrinks to ±11.8/G V (useful only if the sweep is restricted to match). The pads connect to the high-impedance RG nodes, so contamination across the empty pads adds a leakage term to RG. For example, 100 MΩ of leakage gives a +0.05 % gain error |
+| **R14** (0603 across U7 RG) | **DNP**. Value text is "DNP (G=1)" | U7 G = 1; with the k = 0.1992 attenuator the Kelvin range is ±11.8 V | DNP is a real attribute now: the symbol has `(dnp yes)` and `(in_bom no)`, and the footprint carries `dnp` and `exclude_from_bom`, so BOM and pick-and-place exports leave it out. If fitted, G = 1 + 50k/R14 and the measurable range shrinks to ±11.8/G V (useful only if the sweep is restricted to match). The pads connect to the high-impedance RG nodes, so contamination across the empty pads adds a leakage term to RG. For example, 100 MΩ of leakage gives a +0.05 % gain error |
 | R11 35.7 kΩ 0.1 % | Fitted | U6 G = 2.4006, 24.0 V/A | Sized so ±91.3 mA (the physical current bound) stays on-scale; `validation/measurement_range.py` fails the build if it is raised past what the ADC window allows. There is no range switching |
 | R12/R13 40.2 kΩ, R32/R33 10.0 kΩ, all 0.1 % | Fitted | Kelvin attenuator k = 0.1992 | The two legs must stay equal (checked by the build); k's tolerance is the voltage channel's gain tolerance |
 | R4/R6 20.0 kΩ | Fitted | ±10.04 V sweep | 10.0 kΩ gives ±5.02 V, the previous configuration |
 | R7 1.43 MΩ | Fitted | ILIM ≈ 49 mA | Sets the protection threshold |
-| DAC channel B (U4 VOUTB) | Not connected | Reserved | — |
+| DAC channel B (U4 VOUTB) | Fitted, drives V_DACB | Sets the sweep midpoint (V_B/2) | Must be loaded to full scale while armed (firmware contract) |
+| **R38 / C49** (0805, U5 OUT to AGND) | **DNP** | Output snubber, 10 Ω + 10 nF (SBOS070D §9.1) | Fit only if bring-up sees oscillation on the current-limit plateau |
 | ADS1256 AIN4–AIN7, D0–D3 | Not connected | Spare | These could only be used after rework, because the pads are not connected |
-| U5 E/S | Tied enabled through R8 | No software shutdown | "Deferred extension point" (`output_buffer.py`) |
+| U5 E/S | Tied enabled through R8 | No software shutdown | "Deferred extension point" (`output_buffer.py`). Not a safe state anyway: a disabled OPA548 still leaks a few mA |
 
 There are no jumpers or solder-bridge options in the design.
 
@@ -807,16 +980,18 @@ There are no jumpers or solder-bridge options in the design.
 > produced by `python3 main.py --autoplace`) with the human board. The board
 > of record, `stage1_iv.kicad_pcb`, is now the human board regenerated from
 > `layout/` with the bipolar ECO applied (`docs/physical_design.md`): the
-> right-hand column, plus R32/R33 and the three REF/AINCOM routes.
+> right-hand column, plus R32/R33 and the three REF/AINCOM routes. The audit
+> corrections ECO (`layout/audit_corrections.eco`) is applied on top; see
+> `docs/audit_corrections.md`.
 
 | Aspect | Auto-placed board (`--autoplace`, bootstrap only) | Routed board (human; now the board of record) |
 |---|---|---|
-| Routing | **None** (0 tracks, 253 unrouted connections) | Fully routed: 861 tracks, 95 vias with the bipolar ECO (849/94 on the unipolar original) |
+| Routing | **None** (0 tracks, 253 unrouted connections) | Fully routed: 889 tracks, 107 vias with both ECOs (849/94 on the unipolar original) |
 | Placement | Automatic shelf-packing by sheet. Not optimized | Significantly re-placed |
 | Outline | 132.2 × 117.8 mm rectangle, 4 × M3 holes inset 5.5 mm | 107.3 × 62.3 mm (`unipolar-routed/diodes.kicad_pcb` Edge.Cuts) |
 | Layers | 2-layer, 1 oz, 1.6 mm FR-4 (assumed fab, `docs/FAB_CONSTRAINTS.md`) | Check |
 | Ground pours | AGND zone (left) and DGND zone (right), **both layers**, 2 mm gap at x ≈ 52.2–54.2 mm. R31 and U8 straddle the gap | Check whether the routed board kept this strategy |
-| Netclasses / rules | In `stage1_iv.kicad_pro` and `stage1_iv.kicad_dru` (generated from `libraries/netclasses.py`) | Not inherited: one `Default` class, 0.20 mm, and clearance checking switched off in its project. Clean at 0.20 mm with it on; 116 clearance errors under the repository policy (`docs/physical_design.md`) |
+| Netclasses / rules | In `stage1_iv.kicad_pro` and `stage1_iv.kicad_dru` (generated from `libraries/netclasses.py`) | Not inherited: one `Default` class, 0.20 mm, and clearance checking switched off in its project. Clean at 0.20 mm with it on; 109 clearance errors under the repository policy, all pre-existing on the original (116 there) (`docs/physical_design.md`, `docs/audit_corrections.md`) |
 | KiCad version | Board schema 20241229, which carries a `(units …)` block; the repository says **KiCad 10** is required | — |
 
 Because placement changed, ignore the repository board's physical
@@ -832,9 +1007,9 @@ intent** are the parts that carry over.
 | POWER_HV | +15VA, −15VA | 0.30 / 0.50 | 2× the fab minimum, for the 30 V rail-to-rail |
 | POWER_LV | +5V_RAW, +5VA, +3V3D, VDDA, VBUS | 0.20 / 0.40 | Covers U1's 800 mA rating |
 | GROUND | AGND, DGND | 0.20 / 0.40 | Poured. Width applies to stitching and the R31 link |
-| FORCE | FORCE+, FORCE−, VO_RAW, VO_SENSE, F1_MID | 0.25 / 0.50 | Sized for the fault case (F1 100 mA hold) |
-| SENSE | SENSE±, VREF_2V5, V_DAC, VREF_HALF, V_SWEEP, I_SENSE_OUT, V_SENSE_OUT | 0.25 / 0.25 | High-impedance precision. Extra clearance for surface leakage |
-| DIGITAL | SPI1/SPI2, DRDY, RESET_ADC, SWD, NRST, BOOT0, LED, VBUS_SENSE | 0.20 / 0.25 | Density compromise around the LQFP-64 and SSOP-28 |
+| FORCE | FORCE+, FORCE−, VO_RAW, VO_SENSE, F1_MID, VO_SNUB | 0.25 / 0.50 | Sized for the fault case (127 mA envelope) |
+| SENSE | SENSE±, VREF_2V5, DAC_VREF, V_DAC, V_DACB, VREF_HALF, V_SWEEP, I_SENSE_OUT, V_SENSE_OUT | 0.25 / 0.25 | High-impedance precision. Extra clearance for surface leakage |
+| DIGITAL | SPI1/SPI2, DRDY, RESET_ADC, SWD, NRST, BOOT0, LED, VBUS_SENSE, SAFE_HB*, DAC_ARM | 0.20 / 0.25 | Density compromise around the LQFP-64 and SSOP-28 |
 | USB | USB_DM/DP and their _ESD/_CONN segments | 0.20 / 0.38, pair gap 0.20 | About 100–110 Ω on 2 layers. A **stated compromise** for full speed |
 | LOCAL_ANALOG | 23 block-local analog nodes (RG, filter, crystal, ILIM …) | 0.25 / 0.25 | Same character as SENSE |
 
@@ -867,19 +1042,26 @@ reviewer should look at.
    R12/R13 and U7, away from FORCE traces and digital lines. FORCE+ and SENSE+
    must not connect anywhere on the board, and neither must FORCE− and SENSE−.
 5. **Reference distribution.** VREF_2V5 should run as short, quiet traces from
-   U2 to U4, R1, U8 VREFP/AINCOM (C44 at U8) and the U6/U7 REF pins. The REF
+   U2 to U11 (then DAC_VREF to U4), U8 VREFP/AINCOM (C44 at U8) and the U6/U7
+   REF pins. The REF
    traces are best tapped near U2/C9 or U8, paired with I_SENSE_OUT and
    V_SENSE_OUT respectively. Keep VREF_HALF, V_DAC and the U3B summing nodes
    compact.
 6. **High-impedance nodes.** U7's RG pins and the empty R14 pads, the U6 RG
-   pins, and the U7 input nodes (8 kΩ Thevenin behind the attenuator): check
-   clearance and freedom from flux contamination. R32/R33 should return to
+   pins, the U7 input nodes (8 kΩ Thevenin behind the attenuator), the
+   R7 ILIM node (1.43 MΩ) and DAC_VREF (R35, 1 MΩ): check clearance and
+   freedom from flux contamination. The bring-up checklist requires a
+   flux-removal wash and a dry bake for these. R32/R33 should return to
    AGND at one point, beside U7, so AGND noise is common-mode to U7.
 7. **U5 thermal and mechanics.**
    - Copper area and heatsink provision for the TO-220-7.
-   - Clearance for the tab at −15 V **[DS-check]**.
-   - The lead stagger matching the purchased part (R1).
+   - Clearance for the tab at −15 V (insulate it from any heatsink or
+     enclosure).
+   - The lead stagger matching the purchased part (R1, now verified against
+     SBOS070D), and the widened 1.2 mm drills.
    - R30, R9 and R10 kept clear of heat-sensitive precision parts (U2, U3, R1–R6).
+     R30 (PR02, ≈ 1.6 W in the fault case) is mounted raised, away from the
+     Kelvin divider and F1.
 8. **Decoupling proximity.** Check that these sit at their pins with short
    ground returns to the correct pour: C15/C16 at U5, C20–C23 at U6/U7,
    C11/C12 at U3, C13 at U4, C28/C30 at U8, and C34–C38/C43 at U9.
@@ -892,19 +1074,19 @@ reviewer should look at.
     - J3 USB pair routed as a pair over unbroken DGND.
     - Panel-mount banana jacks and the vertical TO-220 need mechanical fit
       with the enclosure. No enclosure is defined in the repository.
-11. **Silkscreen for J1: known error in the repository board.** The generated
-    silkscreen legend reads
-    `J1 (bench supply), pin 1 -> 4:  1 +15V  |  2 GND  |  3 -15V  |  4 +5V`, on
-    F.SilkS (`stage1_iv.kicad_pcb` `gr_text`, generated by
-    `generators/pcb.py` lines ~1088–1100). The schematic and netlist instead
-    have **J1.1 = +15VA, J1.2 = −15VA, J1.3 = +5V_RAW, J1.4 = DGND**, and the
-    J1 symbol value is "+15V_RAW/−15V_RAW/+5V_RAW/GND". Only pin 1 agrees.
-    Wiring the supply to follow this silkscreen would put −15 V on +5V_RAW and
-    +5 V on ground. Check whether the routed board kept this text → **R0**.
+11. **Silkscreen for J1 (resolved, audit F1).** The board of record now has a
+    "BENCH SUPPLY" heading and a label at each J1 pin, matching the netlist:
+    **J1.1 = +15V, J1.2 = −15V, J1.3 = +5V, J1.4 = GND**. J1's value reads
+    `BENCH SUPPLY 1:+15V 2:-15V 3:+5V 4:GND`. The original routed board had no
+    J1 labels at all. The `--autoplace` bootstrap board used to print a
+    hand-written legend, `1 +15V | 2 GND | 3 -15V | 4 +5V`, that disagreed with
+    the circuit. `generators/pcb.py` now reads those labels from J1's pad nets
+    and stops if a net has no label.
 12. **Designators and polarity.** The repository board places some reference
     designators on F.Fab rather than silkscreen. For the routed board, confirm
     that assembly-critical markings are present: tantalum and electrolytic
-    polarity, diode cathodes, U5/U6/U7 pin 1, and the DUT jack labels.
+    polarity, diode cathodes, U5/U6/U7 pin 1, and the DUT jack labels (now
+    FORCE+, FORCE−, SENSE+, SENSE− on the front silkscreen beside J4–J7).
 13. **Synchronization.** Run *Update PCB from Schematic* on the routed board.
     The repository treats "no changes" as a contract. Any change reported
     would mean the routed board no longer matches the schematic under review.
@@ -921,7 +1103,8 @@ blocks/*.py  +  libraries/custom_symbols.py  (SKiDL, the electrical source)
      main.py ──► stage1_iv.net            (flat netlist: documentation and validation only)
              ──► stage1_iv.kicad_sch + 8 sheets   (generated schematic = KiCad source of truth)
              ──► stage1_iv.kicad_pcb      (generated from the circuit + layout/stage1_iv.layout
-                                           + layout/bipolar.eco: placed and fully routed)
+                                           + layout/bipolar.eco + layout/audit_corrections.eco:
+                                           placed and fully routed)
              ──► component_manifest.md
 tools/gen_project_config.py ──► stage1_iv.kicad_pro (netclasses), stage1_iv.kicad_dru, sym/fp-lib-table
 ```
@@ -934,8 +1117,10 @@ tools/gen_project_config.py ──► stage1_iv.kicad_pro (netclasses), stage1_i
   (`docs/library_strategy.md`, `manifest.yaml`).
 - The project **owns its symbols**. Every schematic symbol is embedded in its
   sheet, and `libraries/stage1_iv.kicad_sym` holds them all, so the project
-  opens without external libraries. The footprints used (31 files, including
-  the mounting hole) are vendored in `libraries/footprints/`.
+  opens without external libraries. The footprints used (35 library files,
+  including the mounting hole, plus one project footprint generated by
+  `tools/vendor_footprints.py`: the OPA548's TO-220-7 with 1.2 mm drills) are
+  vendored in `libraries/footprints/`.
 - The schematic uses the KiCad 7 format (version 20230121). Newer KiCad
   versions migrate it on load.
 - **Human edits.** The routed PCB (`unipolar-routed/diodes.kicad_pcb`, KiCad 10.0)
@@ -946,7 +1131,8 @@ tools/gen_project_config.py ──► stage1_iv.kicad_pro (netclasses), stage1_i
   applied); `unipolar-routed/` itself is never touched and is the reference
   `tools/reproduce_reference.py` proves the capture against.
   `tools/compare_routed_board.py` lists what separates the original routed
-  board from the SKiDL design (today: the bipolar-measurement change).
+  board from the SKiDL design (today: the bipolar-measurement change and the
+  audit corrections).
 - **Re-run check (bipolar-measurement revision).**
   - `python3 main.py` with the pinned KiCad 9.0.9.1 libraries: structural
     check PASS (113 parts, 362 pads, 313 netted), SKiDL ERC 0 errors / 0
@@ -954,6 +1140,13 @@ tools/gen_project_config.py ──► stage1_iv.kicad_pro (netclasses), stage1_i
     Update PCB from Schematic a no-op on the generated board.
   - `tools/kicad_roundtrip.py` (kicad-cli 7.0.11) reads 313 connections in
     66 nets across 113 components, matching the netlist.
+- **Re-run check (audit corrections, 2026-10-26).** With the pinned 9.0.9.1
+  libraries and kicad-cli 10.0.7: structural check PASS (135 symbols, 126
+  footprints), SKiDL ERC 0 errors / 0 warnings, 15/15 connectivity assertions,
+  measurement-range and fault-envelope check PASS, KiCad schematic ERC 0
+  errors / 0 warnings, KiCad round-trip PASS, routed-board check 16/16 PASS,
+  Update PCB a no-op. The full record, including DRC, is in
+  `docs/audit_corrections.md`.
 
 ---
 
@@ -963,16 +1156,17 @@ tools/gen_project_config.py ──► stage1_iv.kicad_pro (netclasses), stage1_i
 
 | Evidence | Status in the repository |
 |---|---|
-| SKiDL ERC, 11 custom connectivity assertions, measurement-range check, schematic ↔ netlist equivalence | Pass, reproduced for this revision (§12) |
+| SKiDL ERC, 15 custom connectivity assertions, measurement-range and fault-envelope check, schematic ↔ netlist equivalence | Pass, reproduced for this revision (§12) |
 | Symbol and footprint identifiers resolve. Pin numbers are real pads. No stray pads | Reported pass when KiCad libraries are present (CI). Not reproduced here, because no KiCad libraries were available |
 | KiCad netlist export from the schematic matches | Reported pass (KiCad 7.0.11 `kicad-cli`) |
-| KiCad **ERC dialog** | **Not run** (`manifest.yaml` → `unresolved_items`). Only re-implementations of some rules were run |
-| KiCad **DRC** on the routed board | KiCad 10.0.6 on every build where it is installed (CI installs it): 0 unconnected, 0 parity, 0 errors under the as-built rules; 114 clearance errors under the repository's netclass policy, all pre-existing on the original human routing (`docs/physical_design.md`) |
-| U5 OPA548 pinout and lead stagger | **Unverified against the data sheet** (`VERIFY-DATASHEET`) |
+| KiCad **schematic ERC** | `kicad-cli sch erc` (10.0.7), run in CI: **0 errors, 0 warnings** on the audit-corrections revision (`docs/audit_corrections.md`) |
+| KiCad **DRC** on the routed board | KiCad 10.0.7 on every build where it is installed (CI installs it): 0 unconnected, 0 parity, 0 errors under the as-built rules (2 pre-existing silk-to-edge warnings at J3); 109 clearance errors under the repository's netclass policy, all pre-existing on the original human routing, none new. **Not DRC-clean under the policy** (`docs/physical_design.md`, `docs/audit_corrections.md`) |
+| U5 OPA548 pinout and lead stagger | **Verified**: every pin is cross-checked against TI SBOS070D on every symbol build (`RESOLVED`) |
 | Circuit simulation (SPICE), thermal analysis | **None in the repository** |
 | Measurement-range arithmetic (worst-case ADC pin voltages, full scale) | `validation/measurement_range.py`, on every build |
 | Routed board vs the SKiDL design | The board of record carries the bipolar change (`layout/bipolar.eco`); `validation/routed_board_check.py` proves it matches the circuit and Update PCB is a no-op. `unipolar-routed/` (the unipolar original) still differs by exactly the bipolar change, as `tools/compare_routed_board.py` reports |
-| Bench testing, prototype measurements, calibration data | **None in the repository** |
+| Bench testing, prototype measurements, calibration data | **None in the repository.** The plan is `docs/bringup_checklist.md` |
+| Reference-gate charge pump margins | Transient simulation only (scratch model, not in the repository); measured at bring-up |
 | Firmware | **None in the repository** |
 
 So the evidence establishes **netlist and identifier consistency**. It says
@@ -983,12 +1177,12 @@ statement in this document comes from calculation.
 
 | Where | Statement | Actual design |
 |---|---|---|
-| `generators/pcb.py` / board silkscreen | J1 legend "1 +15V, 2 GND, 3 -15V, 4 +5V" | J1: 1 +15V, 2 −15V, 3 +5V, 4 GND (**safety-relevant**, R0) |
+| `generators/pcb.py` / bootstrap silkscreen | J1 legend "1 +15V, 2 GND, 3 -15V, 4 +5V" | **Fixed**: now read from J1's pad nets (1 +15V, 2 −15V, 3 +5V, 4 GND) |
 | `blocks/protection.py` | FORCE− protection "lives on" Sheet 5 | Sheet 5 has no protection on FORCE− |
-| `blocks/mcu.py` (shield comment) | "The board is bus-powered" | Powered only from J1. VBUS is only sensed |
+| `blocks/mcu.py` (shield comment) | "The board is bus-powered" | **Fixed**: powered only from J1. VBUS is only sensed |
 | `blocks/output_buffer.py` | "R9's drop is NOT corrected downstream" | R9 is inside the loop. The drops *after* VO_SENSE are the ones not corrected |
 | `README.md` / `dac_sweep.py` | "Top 0.40 % of DAC codes unused" | About 0.2 % at each end exceeds ±10.000 V |
-| `docs/pcb_generation.md` | "247 connections", "28 footprints" | The generated board now has 253 unrouted connections and 113 footprints. 31 vendored footprint files |
+| `docs/pcb_generation.md` | "247 connections", "28 footprints" | The `--autoplace` board now has 126 footprints and is unrouted. 35 vendored library footprint files plus one project footprint |
 | `docs/pcb_generation.md` | Board 129 × 108 mm, split at x = 38.02 mm | Generated board 132.2 × 117.8 mm, pours split at x ≈ 52.2 / 54.2 mm |
 | `docs/silkscreen_and_packages.md` | Says both "all designators on F.Fab" and "all on F.SilkS" | Generated board: `PROMOTE_DESIGNATORS_TO_SILK = True`, a mix of both |
 | `docs/FAB_CONSTRAINTS.md` | "Everything else ≤ 5 V" | SENSE±, V_SWEEP, V_SENSE_OUT and VO_* reach about ±10–13 V |
@@ -1004,15 +1198,16 @@ a list of confirmed defects. Items are ordered roughly by consequence.
 
 ### A. Safety and possible functional blockers
 
-- **R0 — J1 supply silkscreen.**
-  - Fact: the generated board's J1 legend does not match the schematic pinout
-    (§11.3 item 11).
-  - Check: the routed board's J1 markings, and any wiring or harness
-    documentation.
-- **R1 — OPA548 (U5) pinout and footprint.**
-  - Fact: the pin numbers (1 +IN, 2 −IN, 3 ILIM, 4 V−, 5 V+, 6 OUT, 7 E/S) and
-    the StaggerOdd footprint come from a third-party library.
-  - Check: both against TI SBOS070 and the purchased package variant.
+- **R0 — J1 supply silkscreen. Resolved (audit F1).**
+  - Fact: the board of record now labels each J1 pin, under a BENCH SUPPLY
+    heading, matching the netlist (§11.3 item 11).
+  - Check: any wiring or harness documentation agrees with it.
+- **R1 — OPA548 (U5) pinout and footprint. Pinout resolved.**
+  - Fact: the pin numbers (1 +IN, 2 −IN, 3 ILIM, 4 V−, 5 V+, 6 OUT, 7 E/S) are
+    cross-checked against TI SBOS070D on every symbol build. The footprint's
+    drills were widened to 1.2 mm.
+  - Check: the purchased package variant's lead form against the staggered
+    footprint.
 - **R2 — Bipolar measurement (§6). Addressed in the schematic; not yet on the
   routed board.**
   - Fact: the measurement is now bipolar over the whole source span, and no
@@ -1021,14 +1216,18 @@ a list of confirmed defects. Items are ordered roughly by consequence.
     (`docs/bipolar_measurement.md` §5, `tools/compare_routed_board.py`), and
     on the bench that a −V → +V → −V sweep of a resistor reads a straight
     line through the origin with no step at 0 V.
-- **R3 — R30 rating and protection ordering.**
-  - Fact: R30 dissipates about 0.24 W at ILIM on a 1/4 W 1206.
-  - Check: the continuous short-circuit case, and the failed-ILIM case, where
-    R30 may overheat before the 100 mA-hold PTC trips.
-- **R8 — Output state at power-up, reset and firmware fault.**
-  - Check: the DAC8552 power-on code, and the resulting V_SWEEP (possibly
-    −10.04 V) applied to the DUT before firmware runs.
-  - Check: whether this is acceptable without an output disable or relay.
+- **R3 — R30 rating and protection ordering. Resolved (audit F3).**
+  - Fact: R30 is a 2 W PR02, sized for the 127 mA rail fault (≈ 1.6 W). F1 is
+    no longer described as a backstop.
+  - Check: R30's body temperature and its effect on neighbours at bring-up.
+- **R8 — Output state at power-up, reset and firmware fault. Resolved in
+  hardware (audit F2).**
+  - Fact: the midpoint now follows DAC channel B, so power-up gives ≈ 0 V, and
+    the U11 reference gate forces V_SWEEP to ≈ 0 V within ≈ 50 ms of the
+    software heartbeat stopping (§5.2, §8.2).
+  - Check: the bring-up measurements of the pump voltage, the disarm time and
+    the reset, halt and crash behaviour (`docs/bringup_checklist.md`).
+  - Still not provided: an output *disconnect* or relay.
 
 ### B. Component and data sheet checks
 
@@ -1044,21 +1243,23 @@ a list of confirmed defects. Items are ordered roughly by consequence.
   and its drift 0.10 µA/°C typ, before calibration. The ADC's PGA (up to 64)
   adds resolution but not accuracy. Compare with the currents the application
   needs, such as diode leakage.
-- **R10 — Accuracy of the scaling parts.** The tolerance and TCR of R10 are
-  not specified (R11, R12/R13 and R32/R33 are now 0.1 %; their TCR tracking
-  sets the drift of k). Also the INA128 gain error and the REF5025 grade.
+- **R10 — Accuracy of the scaling parts.** R10 is now 0.1 %, 25 ppm/°C
+  (R11, R12/R13 and R32/R33 are 0.1 %; their TCR tracking sets the drift of k).
+  Also the INA128 gain error and the REF5025 grade.
 - **R11 — Supply assumptions.**
   - No on-board regulation of ±15 V.
   - No reverse-polarity protection, fusing or sequencing.
   - The ground connection through USB to the host and earth.
-- **R12 — Reference decoupling.** C44 (100 nF) now bypasses VREFP/AINCOM at
-  the ADS1256 (it was already on the routed board). Still no NR capacitor on
-  the REF5025, and one reference node shared by the DAC, the ADC reference,
-  the ADC's negative input and both INA128 REF pins.
+- **R12 — Reference decoupling.** C9 is now 4.7 µF (REF5025 needs 1 … 100 µF,
+  SBOS410O). C44 (100 nF) bypasses VREFP/AINCOM at the ADS1256 (it was already
+  on the routed board). Still no NR capacitor on the REF5025, and one reference
+  node shared by the DAC (through U11), the ADC reference, the ADC's negative
+  input and both INA128 REF pins.
 - **R13 — MCU details.**
-  - PC13 sourcing LED current.
-  - The C43 VCAP1 value.
-  - PA9 being the OTG VBUS-sense pin.
+  - PC13 now sinks the LED current (resolved).
+  - C43 VCAP1 is now 4.7 µF (resolved, audit F4).
+  - PA9 being the OTG VBUS-sense pin (firmware handles it,
+    `docs/firmware_handoff.md`).
   - BOOT0 hard-tied.
 - **R14 — ADS1256 crystal.** C26/C27 return to AGND while the crystal pins are
   on the DGND side of the split.
@@ -1068,9 +1269,9 @@ a list of confirmed defects. Items are ordered roughly by consequence.
     into the ±15 V rails.
   - The INA128 input overvoltage ratings.
   - The D5 energy rating against realistic DUT stored energy.
-- **R17 — R14 DNP representation.** DNP is shown only in the Value field. The
-  KiCad DNP and BOM-exclusion attributes are not set. Also mark TP1–TP8 for
-  BOM exclusion if wanted (`docs/pcb_generation.md`).
+- **R17 — R14 DNP representation. Resolved.** R14, R38 and C49 carry the
+  KiCad DNP and BOM-exclusion attributes in the schematic and on the board.
+  Mark TP1–TP8 for BOM exclusion too, if wanted (`docs/pcb_generation.md`).
 - F1 footprint: `Fuse_Bourns_MF-RG300` is used for a Bel Fuse
   `0ZRM0010FF1E`. Confirm the lead spacing and body size.
 
@@ -1088,17 +1289,25 @@ a list of confirmed defects. Items are ordered roughly by consequence.
 - **R21 — U5 thermal copper and mechanics.** Heat placement relative to the
   precision parts.
 - **R22 — Synchronization.** Update PCB from Schematic reports no changes.
-  DRC runs clean on the routed board with the project netclasses.
+  DRC is clean on the routed board under its as-built rules, and **not** clean
+  under the project netclasses: 109 pre-existing clearance errors remain
+  (`docs/audit_corrections.md`).
 
 ### D. Firmware assumptions implied by the hardware (no firmware in the repository)
 
-- Initialize the DAC to mid-scale (code 32768) as early as possible.
-- Clamp DAC codes to about 131…65405 for ±10.00 V. The measurement covers the
-  full code range, so no further clamp is needed for it.
+- The full list is in `docs/firmware_handoff.md`. In short:
+- Load channel B to full scale (0xFFFF) and channel A to mid-scale before
+  starting the PC5 heartbeat, and keep B at full scale while armed. Use the
+  simultaneous-load sequence (0x00 then 0x34) when both channels change.
+- Generate the heartbeat (≥ 1 kHz) from the main loop only, never from a
+  timer, ISR or DMA, so that a stall or halt disarms the output.
+- Clamp channel A codes to about 131…65404 for ±10.00 V. The measurement
+  covers the full code range, so no further clamp is needed for it.
 - ADS1256: MUX AIN2/AINCOM (voltage) and AIN0/AINCOM (current), PGA 2 for
   both, input buffer off; higher PGA only for small signals. Convert with
   V_K = code·2.5 V/(2²³·0.199203) and I = code·2.5 V/(2²³·24.0056 V/A).
-  Keep SCLK within the ADS1256 limit.
+  Keep SCLK ≤ f_CLKIN/4 = 1.92 MHz. After reset, set ADCON CLK = 00 (CLKOUT
+  off) and drive D1–D3 as outputs low, because those pins are not connected.
 - Disable hardware VBUS sensing on the USB OTG peripheral (PA9 is used as
   RESET_ADC).
 - Calibrate offset and gain for both channels, including a zero point at the
@@ -1114,19 +1323,20 @@ a list of confirmed defects. Items are ordered roughly by consequence.
 |---|---|---|
 | **KiCad project** | `stage1_iv.kicad_pro` | Netclasses and board setup (generated by `tools/gen_project_config.py`) |
 | **Schematic (source of truth for KiCad)** | `stage1_iv.kicad_sch` (top) + `power`, `mcu`, `dac_sweep`, `output_buffer`, `current_sense`, `voltage_sense`, `adc`, `protection` `.kicad_sch` | Generated from SKiDL. Label-based connectivity. Keep all nine files together |
-| **PCB (board of record)** | `stage1_iv.kicad_pcb` | Generated from the circuit + `layout/stage1_iv.layout` + `layout/bipolar.eco`: the human placement and routing with the bipolar ECO, **fully routed** (`docs/physical_design.md`). The unipolar original is `unipolar-routed/diodes.kicad_pcb` |
+| **PCB (board of record)** | `stage1_iv.kicad_pcb` | Generated from the circuit + `layout/stage1_iv.layout` + `layout/bipolar.eco` + `layout/audit_corrections.eco`: the human placement and routing with both ECOs, **fully routed** (`docs/physical_design.md`). The unipolar original is `unipolar-routed/diodes.kicad_pcb` |
 | Custom DRC rules | `stage1_iv.kicad_dru` | Intra-footprint clearance only |
 | Symbols / footprints | `libraries/stage1_iv.kicad_sym`, `libraries/footprints/*.pretty`, `sym-lib-table`, `fp-lib-table` | Project-owned copies |
 | **SKiDL design source** | `blocks/*.py` (one file per sheet), `blocks/nets.py` (global nets), `main.py` (build entry) | The best place to read design intent. Docstrings carry the rationale |
 | Part factories and pin aliases | `libraries/custom_symbols.py` | Maps design pin names to symbol pins |
-| Pin provenance | `libraries/provenance/` (ADS1256 from SBAS288K; OPA548T from a third-party library) | See R1 |
+| Pin provenance | `libraries/provenance/` (ADS1256 from SBAS288K; OPA548T from a third-party library, cross-checked against SBOS070D) | See R1 |
 | Netclasses and derivations | `libraries/netclasses.py`, `docs/FAB_CONSTRAINTS.md` | Assumed fab capability (no fab chosen) |
 | Netlist | `stage1_iv.net` | Flat. For documentation and validation, not for PCB import |
 | BOM-like table | `component_manifest.md` (generated), `manifest.yaml` | `manifest.yaml` also lists assumptions and unresolved items |
 | PCB generation notes | `docs/pcb_generation.md`, `docs/silkscreen_and_packages.md` | Describe the generated board. Parts are stale (§13.2) |
 | Identifier and library notes | `docs/identifier_resolution.md`, `docs/library_strategy.md`, `docs/LIBRARY_DEPENDENCIES.md`, `docs/power_flags_and_erc.md` | Toolchain history. Low review priority |
 | Validation scripts | `validation/assertions.py` (topology checks), `validation/erc.py`, `validation/footprint_check.py`, `validation/schematic_check.py`, `validation/drc_check.py`, `validation/routed_board_check.py`, `validation/update_pcb_noop.py`, `tools/reproduce_reference.py` | Structural and connectivity checks, and KiCad 10 DRC of the routed board where KiCad 10 is installed |
-| Generators and tools | `generators/schematic.py`, `generators/pcb.py`, `tools/*` | `pcb.py` ~L1088 is the source of the J1 silkscreen error |
+| Generators and tools | `generators/schematic.py`, `generators/pcb.py`, `generators/routed_pcb.py`, `tools/*` | `pcb.py` builds only the `--autoplace` bootstrap board |
+| Audit corrections, firmware handoff, bring-up | `docs/audit_corrections.md`, `docs/firmware_handoff.md`, `docs/bringup_checklist.md` | What changed and why, what firmware must do, and how to bring up the first board |
 | CI | `.github/workflows/build.yml` | Runs the build and checks |
 | Firmware, simulations, test data, design spec | **Not present** | `Stage1_IV_System_Design.md` is referenced but absent |
 
@@ -1148,12 +1358,18 @@ Taken from `stage1_iv.net` (ref.pin).
 
 | Net | Nodes |
 |---|---|
-| VREF_2V5 | U2.6 (VOUT), C9.1, R1.1, U4.2 (VREF), U8.4 (VREFP), **U8.5 (AINCOM)**, **U6.5 (REF)**, **U7.5 (REF)**, C44.1, TP8 |
+| VREF_2V5 | U2.6 (VOUT), C9.1, U11.2 (S), U8.4 (VREFP), **U8.5 (AINCOM)**, **U6.5 (REF)**, **U7.5 (REF)**, C44.1, TP8 |
+| DAC_VREF | U11.1 (D), U4.2 (VREF), R35.1, #FLG9 |
+| DAC_ARM | D6.2 (K), C48.2, R37.2, U11.4 (SEL) |
+| SAFE_HB → SAFE_HB_R → SAFE_HB_AC | U9.25 (PC5), R36.2 → R36.1, C47.2 → C47.1, D6.3 (COM) |
+| CS_DAC | U9.20 (PA4), U4.5 (/SYNC), R34.2 (R34.1 on +5VA) |
+| LED_STATUS / LED_K | U9.2 (PC13), R23.1 / R23.2, LED1.1 (K); LED1.2 (A) on +3V3D |
+| V_DACB | U4.3 (VOUTB), R1.1 |
 | VREF_HALF_RAW / VREF_HALF | R1.2, R2.1, U3.3 / U3.1, U3.2, R5.1 |
 | V_DAC | U4.4 (VOUTA), R3.1 |
 | DIFF_P / DIFF_N | R3.2, R4.1, U3.5 / R5.2, R6.1, U3.6 |
 | V_SWEEP | U3.7, R6.2, U5.1 (+IN), TP1 |
-| VO_RAW | U5.6 (OUT), R9.1, C19.1 |
+| VO_RAW | U5.6 (OUT), R9.1, C19.1, R38.1 (DNP) |
 | VO_SENSE | R9.2, C19.2, U5.2 (−IN), F1.1, TP2 |
 | OPA548_ILIM / OPA548_ES | U5.3, R7.1, C14.1 / U5.7, R8.1 |
 | F1_MID | F1.2, R30.1 |
@@ -1166,24 +1382,29 @@ Taken from `stage1_iv.net` (ref.pin).
 | I_SENSE_OUT | U6.6, R15.1, TP4 — 2.500 V + 24.0 V/A·I |
 | V_SENSE_OUT | U7.6, R17.1, TP7 — 2.500 V + 0.1992·V_K |
 | ADC_AIN0…3 | R15.2/U8.6/C24.1, R16.2/U8.7/C24.2, R17.2/U8.8/C25.1, R18.2/U8.9/C25.2 |
-| AGND (selected) | R10.2, U6.2 (−IN), R32.2, R33.2, R16.1, R18.1, U8.2/.3, C44.2, U2.4, U4.8, R2.2, R4.2, D5.2, C26.2, C27.2, **R31.1** |
-| DGND (selected) | J1.4, U1.1, U8.17, U9 VSS/VSSA, U10.2, J3 GND/S1, J2.3, **R31.2** |
+| AGND (selected) | R10.2, U6.2 (−IN), R32.2, R33.2, R16.1, R18.1, U8.2/.3, C44.2, U2.4, U4.8, R2.2, R4.2, R35.2, U11.3, D5.2, C26.2, C27.2, **R31.1** |
+| DGND (selected) | J1.4, U1.1, U8.17, U9 VSS/VSSA, U10.2, J3 GND/S1, J2.3, D6.1 (A), C48.1, R37.1, **R31.2** |
 | +15VA / −15VA | J1.1 / J1.2, plus the U3/U5/U6/U7 supplies, the D1/D3 cathodes / the D2/D4 anodes, R8 / R7, C14 |
-| +5V_RAW / +5VA | J1.3, U1.3, FB1.1, C1, C3 / FB1.2, U2.2, U4.1, U8.1, C7, C10, C13, C28, C29 |
+| +5V_RAW / +5VA | J1.3, U1.3, FB1.1, C1, C3 / FB1.2, U2.2, U4.1, U8.1, U11.5, R34.1, C7, C10, C13, C28, C29, C46 |
 
 ## Appendix B — Calculations
 
 | Quantity | Expression | Value |
 |---|---|---|
 | Sweep gain | R4/R3 = 20.0k/2.49k | 8.0321 |
-| Sweep span | ±8.0321 × 1.250 V | ±10.040 V |
+| Sweep transfer | 8.0321 × (V_A − V_B/2), V_B at full scale | |
+| Sweep span | ±8.0321 × 1.24998 V | ±10.040 V |
 | Sweep LSB | 2.5 V / 65536 × 8.0321 | 306.4 µV |
-| Codes for ±10.000 V | 65536 × (1.25 ∓ 10/8.0321)/2.5 | ≈ 131 … 65405 |
+| Codes for ±10.000 V (channel A) | 65536 × (1.24998 ∓ 10/8.0321)/2.5 | ≈ 131 … 65404 |
+| Zero | code_A = code_B/2 = 32767.5 | ±0.15 mV at 32767/32768 |
 | OPA548 ILIM | 15 kΩ × 4.75 V / (13.75 kΩ + 1.43 MΩ) [DS-check] | 49.35 mA |
 | U5 output required | 10.04 V + 49.35 mA × 10 Ω | 10.53 V |
 | Out-of-loop resistance | R30 + R10 (+ R_F1) | 110 Ω + R_F1 |
 | DUT voltage at ILIM | 10.04 − 0.04935 × 110 | ≈ 4.61 V (− I·R_F1) |
-| R30 power at ILIM | 0.04935² × 100 | 0.244 W (1/4 W part) |
+| R30 power at ILIM | 0.04935² × 100 | 0.244 W |
+| Rail fault current (U5 driven into a rail) | 15.5 V / (9.9 + 3.0 + 99 + 9.9) Ω | 127 mA |
+| R30 power, rail fault | 0.127² × 99 … worst tolerance | 1.60 … 1.63 W (2 W PR02) |
+| R9, R10 power, rail fault | 0.127² × 10 | ≈ 0.16 W each (0.25 W / 0.5 W parts) |
 | R9, R10 power at ILIM | 0.04935² × 10 | 24 mW each |
 | U5 output-stage power, shorted DUT | (15 − 0.04935 × ~115) × 0.04935 | ≈ 0.46 W (+ quiescent) |
 | Physical current bound, any passive DUT | 10.04 V / (R30 + R10) | 91.3 mA (92.5 mA worst tolerance) |
@@ -1198,7 +1419,9 @@ Taken from `stage1_iv.net` (ref.pin).
 | ADC pin window, buffer off | AGND − 0.1 … AVDD + 0.1 (AVDD ≥ 4.75 V) | −0.10 … 4.85 V |
 | ADC input RC corner | 1 / (2π × 200 Ω × 1 nF) | ≈ 796 kHz |
 | INA REF current | (2.5 V − A2out) / 80 kΩ | 4 … 56 µA per INA128 |
-| VREF divider current | 2.5 V / 20 kΩ | 125 µA |
+| Midpoint divider current (from DAC channel B) | 2.5 V / 20 kΩ | 125 µA |
+| Reference gate pull-down | 2.5 V / 1 MΩ (R35) | 2.5 µA |
+| Heartbeat pump (simulated) | 1 kHz into R36/C47/D6/C48/R37 | DAC_ARM 2.42 … 2.46 V nominal, 1.87 V worst case; < 0.87 V within ≈ 52 ms of stopping |
 | VBUS sense | 5 V × 100k / 200k | 2.5 V at PA0 |
-| LED current (V_F ≈ 2 V assumed) | (3.3 − 2.0) / 330 Ω | ≈ 4 mA from PC13 |
+| LED current (V_F ≈ 2 V assumed) | (3.3 − 2.0) / 1 kΩ | ≈ 1.3 mA, sunk by PC13 (limit 3 mA) |
 | USB-C Rd | R24, R25 | 5.1 kΩ each (UFP) |

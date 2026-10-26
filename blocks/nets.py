@@ -42,6 +42,8 @@ _SIMPLE = [
     "SWDIO", "SWCLK", "NRST", "BOOT0",
     "USB_DM", "USB_DP", "VBUS", "VBUS_SENSE", "LED_STATUS",
     "VDDA",
+    # charge-pump output (Sheet 2) -> DAC reference gate SEL (Sheet 3)
+    "DAC_ARM",
     # ---- analog signal chain ----
     "V_DAC", "VREF_HALF", "V_SWEEP",
     "VO_RAW", "VO_SENSE",
@@ -89,6 +91,9 @@ EXTERNALLY_SOURCED_RAILS = {
     "P5VA": "+5VA",         # +5V_RAW through ferrite bead FB1
     "VBUS": "VBUS",         # USB host, via J3
     "VDDA": "VDDA",         # +3V3D through ferrite bead FB2
+    # VREF_2V5 through the DAC reference gate U11 (passive switch pins), to
+    # U4's power_in VREF pin. Local to Sheet 3, so its key is the bare name.
+    "DAC_VREF": "DAC_VREF",
 }
 
 

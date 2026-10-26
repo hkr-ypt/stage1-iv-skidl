@@ -15,6 +15,19 @@ netlist or the routed board file; **[calc]** arithmetic from part values;
 OPA548, SBOS410H REF50xx, all read for this change); **[judgement]** an
 engineering choice that could be argued.
 
+> **Later revision (final hardware audit corrections).** This note is the
+> record of the bipolar change and its numbers are as of that revision. Since
+> then the sweep midpoint comes from DAC channel B
+> (`V_SWEEP = 8.0321·(V_A − V_B/2)`), the DAC reference is gated for
+> reset/halt/crash safety, and R30 is a 2 W PR02. The measurement chain itself
+> is unchanged. Two of the statements below now hold under a condition:
+> the ±10.04 V span, and so the 91.3 mA passive-DUT bound, assume firmware
+> keeps channel B at full scale (`docs/firmware_handoff.md`). If that contract
+> is broken the positive output can rise toward the +15 V rail, which is
+> outside the measurable range; the hardware bound in that case is R30's
+> 127 mA rail-fault envelope. Current counts (15/15 assertions, 109 policy
+> clearance errors) are in `docs/audit_corrections.md`.
+
 ---
 
 ## 1. Why the measurement was unipolar
