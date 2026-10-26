@@ -64,7 +64,12 @@ an error, so an ECO cannot silently stop applying. ::
       (add (via "VREF_2V5" 117.1 55.9 0.6 0.3 "F.Cu" "B.Cu")
            (reason "..."))
       (add (footprint "R32" F 98.6 80.95 0) (reason "..."))
+      (add (graphic (gr_text "FORCE+" (at 86 50 0) (layer "F.SilkS") ...))
+           (reason "..."))
     )
+
+``(graphic ...)`` carries a board graphic verbatim, exactly as the layout's
+own ``(graphic ...)`` lines do — free silkscreen text and the like.
 """
 
 from __future__ import annotations
@@ -227,6 +232,26 @@ class TextOverride:
         return ("text", self.ref, self.kind, self.name)
 
 
+class Graphic:
+    """A board graphic (``gr_text``, ``gr_line`` ...) added or removed by an ECO.
+
+    Held verbatim, like the layout's own ``(graphic ...)`` lines; identity is
+    the whole node, formatting-independent.
+    """
+    __slots__ = ("body",)
+
+    def __init__(self, body):
+        if head(body) not in GRAPHIC_KINDS:
+            raise LayoutError(f"not a board graphic: {one_line(body)[:80]}")
+        self.body = strip(body)
+
+    def node(self):
+        return L(A("graphic"), self.body)
+
+    def key(self):
+        return ("graphic", canon(self.body))
+
+
 class Layout:
     """The physical design: everything except connectivity and geometry."""
 
@@ -319,6 +344,8 @@ def parse_item(node):
         return Via(node[1], node[2], node[3], node[4], node[5], layers)
     if h == "text":
         return TextOverride(node[1], node[2], node[3], node[4:])
+    if h == "graphic":
+        return Graphic(node[1])
     raise LayoutError(f"not a layout item: {one_line(node)[:80]}")
 
 
@@ -386,6 +413,11 @@ def _add(lay, item, where):
         lay.segments.append(item)
     elif isinstance(item, Via):
         lay.vias.append(item)
+    elif isinstance(item, Graphic):
+        if any(canon(g) == item.key()[1] for g in lay.graphics):
+            raise LayoutError(f"{where}: graphic given twice: "
+                              f"{one_line(item.body)[:80]}")
+        lay.graphics.append(item.body)
     else:                                              # pragma: no cover
         raise LayoutError(f"{where}: cannot add {item!r}")
 
@@ -402,6 +434,15 @@ def _remove(lay, item, where):
             raise LayoutError(stale)
         del lay.placements[item.ref]
         return
+    if isinstance(item, Graphic):
+        for i, g in enumerate(lay.graphics):
+            if canon(g) == key[1]:
+                del lay.graphics[i]
+                return
+        raise LayoutError(f"{where}: remove graphic "
+                          f"{one_line(item.body)[:90]}: not in the base "
+                          f"layout. The ECO no longer matches the board it "
+                          f"was written against.")
     if isinstance(item, TextOverride):
         if key not in lay.texts:
             raise LayoutError(f"{where}: remove text {key}: not present")

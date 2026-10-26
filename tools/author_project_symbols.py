@@ -22,9 +22,10 @@ schematic instantiates**. Two kinds of symbol live in it:
                   "TERMINAL NO. / ADS1256" column is the pin number.
        OPA548T <- opa548t_akl_symbol.txt
                   verbatim excerpt of the OPA548T symbol in the Alternate
-                  KiCad Library. The TI data sheet is unreachable from this
-                  environment, so these numbers carry weaker provenance and
-                  the part is flagged ``VERIFY-DATASHEET``.
+                  KiCad Library, CROSS-CHECKED against
+                  opa548_sbos070d_pin_functions.txt, the verbatim "Pin
+                  Functions" table of TI SBOS070D (page 3). The build stops
+                  if the two disagree about any pin's function.
 
 2. **Upstream-derived** — every other part. Pin numbers, names and electrical
    types are read from the installed KiCad libraries by
@@ -64,6 +65,12 @@ OUT_JSON = os.path.join(PROV_DIR, "stage1_iv_pin_provenance.json")
 
 ADS_SRC = os.path.join(PROV_DIR, "ads1256_sbas288k_terminal_functions.txt")
 OPA_SRC = os.path.join(PROV_DIR, "opa548t_akl_symbol.txt")
+OPA_DS_SRC = os.path.join(PROV_DIR, "opa548_sbos070d_pin_functions.txt")
+
+# AKL symbol pin name -> the TI SBOS070D "Pin Functions" NAME on the same pin.
+# This is the claim the cross-check tests; it is not a pin-number table.
+_OPA548_AKL_TO_TI = {"+": "VIN+", "-": "VIN-", "CS": "ILIM", "V-": "V-",
+                     "V+": "V+", "~": "VO", "E/S": "E/S"}
 
 
 # =====================================================================
@@ -143,8 +150,29 @@ _PIN_BLOCK_RE = re.compile(
     re.S)
 
 
+def parse_opa548_datasheet(path=OPA_DS_SRC):
+    """{pin number: TI pin name} from the SBOS070D "Pin Functions" excerpt."""
+    with open(path, encoding="utf-8") as fh:
+        body = fh.read().split("BEGIN VERBATIM EXCERPT", 1)[-1]
+    out = {}
+    for line in body.splitlines():
+        m = re.match(r"^(\d)\s+(\S+)\s+(I/O|I|O)\s{2,}\S", line)
+        if m:
+            # The data sheet prints the minus sign as U+2013 (en dash).
+            out[m.group(1)] = m.group(2).replace("\u2013", "-")
+    if sorted(out) != [str(n) for n in range(1, 8)]:
+        raise SystemExit(f"{path}: expected OPA548 pins 1..7, parsed "
+                         f"{sorted(out)}")
+    return out
+
+
 def parse_opa548t(path=OPA_SRC):
-    """Read (number, name, etype) for every OPA548T pin out of the excerpt."""
+    """Read (number, name, etype) for every OPA548T pin out of the excerpt.
+
+    Each pin is then checked against the TI data sheet's own pin table
+    (:func:`parse_opa548_datasheet`): a pin whose AKL name does not map to
+    the function TI assigns that number stops the build.
+    """
     with open(path, encoding="utf-8") as fh:
         text = fh.read()
     body = text.split("BEGIN VERBATIM EXCERPT", 1)[-1]
@@ -163,6 +191,14 @@ def parse_opa548t(path=OPA_SRC):
     numbers = sorted(int(p["number"]) for p in pins)
     if numbers != list(range(1, 8)):
         raise SystemExit(f"{path}: OPA548T pin numbers are not 1..7: {numbers}")
+    ti = parse_opa548_datasheet()
+    for p in pins:
+        want = _OPA548_AKL_TO_TI.get(p["name"])
+        if want != ti[p["number"]]:
+            raise SystemExit(
+                f"OPA548T pin {p['number']}: the AKL symbol calls it "
+                f"{p['name']!r} ({want}), TI SBOS070D says {ti[p['number']]}. "
+                f"The symbol does not match the data sheet.")
     return pins
 
 
@@ -273,7 +309,7 @@ def provenance_record(model, circuit):
                 "pins": parse_ads1256(),
             },
             "stage1_iv:OPA548T": {
-                "provenance_class": "VERIFY-DATASHEET",
+                "provenance_class": "RESOLVED",
                 "source_document": "Alternate KiCad Library (community), "
                                    "symbols/Amplifier_Operational_AKL.kicad_sym",
                 "document_number": "n/a — third-party KiCad library, not a data sheet",
@@ -281,11 +317,15 @@ def provenance_record(model, circuit):
                 "table": "symbol OPA548T, pin definitions",
                 "excerpt_file": os.path.relpath(OPA_SRC, REPO_ROOT),
                 "excerpt_sha256": digest(OPA_SRC),
-                "limitation": "The TI OPA548 data sheet (SBOS070) could not be "
-                              "retrieved: www.ti.com and every datasheet mirror "
-                              "are refused by this environment's network egress "
-                              "policy. These pin numbers MUST be re-verified "
-                              "against SBOS070 before fabrication.",
+                "verified_against": {
+                    "source_document": "Texas Instruments OPA548 data sheet",
+                    "document_number": "SBOS070D",
+                    "revision": "D — OCTOBER 1997, revised DECEMBER 2019",
+                    "table": "Pin Functions, page 3",
+                    "excerpt_file": os.path.relpath(OPA_DS_SRC, REPO_ROOT),
+                    "excerpt_sha256": digest(OPA_DS_SRC),
+                    "pins": parse_opa548_datasheet(),
+                },
                 "pins": parse_opa548t(),
             },
         },

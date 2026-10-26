@@ -101,6 +101,7 @@
         "nets": [
           "/CS_ADC",
           "/CS_DAC",
+          "/DAC_ARM",
           "/DRDY",
           "/MISO2",
           "/MOSI1",
@@ -111,6 +112,9 @@
           "/mcu/BOOT0",
           "/mcu/LED_STATUS",
           "/mcu/NRST",
+          "/mcu/SAFE_HB",
+          "/mcu/SAFE_HB_AC",
+          "/mcu/SAFE_HB_R",
           "/mcu/SWCLK",
           "/mcu/SWDIO",
           "/mcu/VBUS_SENSE"
@@ -137,6 +141,7 @@
           "/FORCE-",
           "/VO_SENSE",
           "/output_buffer/VO_RAW",
+          "/output_buffer/VO_SNUB",
           "/protection/F1_MID",
           "/protection/FORCE+"
         ],
@@ -195,6 +200,7 @@
           "/mcu/CC1",
           "/mcu/CC2",
           "/mcu/LED_A",
+          "/mcu/LED_K",
           "/mcu/OSC_IN",
           "/mcu/OSC_OUT",
           "/mcu/VCAP1",
@@ -278,6 +284,8 @@
           "/V_SWEEP",
           "/dac_sweep/VREF_HALF",
           "/dac_sweep/V_DAC",
+          "/dac_sweep/V_DACB",
+          "DAC_VREF",
           "VREF_2V5"
         ],
         "pcb_color": "rgba(0, 0, 0, 0.000)",
@@ -329,6 +337,10 @@
       },
       {
         "netclass": "DIGITAL",
+        "pattern": "/DAC_ARM"
+      },
+      {
+        "netclass": "DIGITAL",
         "pattern": "/DRDY"
       },
       {
@@ -369,6 +381,18 @@
       },
       {
         "netclass": "DIGITAL",
+        "pattern": "/mcu/SAFE_HB"
+      },
+      {
+        "netclass": "DIGITAL",
+        "pattern": "/mcu/SAFE_HB_AC"
+      },
+      {
+        "netclass": "DIGITAL",
+        "pattern": "/mcu/SAFE_HB_R"
+      },
+      {
+        "netclass": "DIGITAL",
         "pattern": "/mcu/SWCLK"
       },
       {
@@ -390,6 +414,10 @@
       {
         "netclass": "FORCE",
         "pattern": "/output_buffer/VO_RAW"
+      },
+      {
+        "netclass": "FORCE",
+        "pattern": "/output_buffer/VO_SNUB"
       },
       {
         "netclass": "FORCE",
@@ -462,6 +490,10 @@
       {
         "netclass": "LOCAL_ANALOG",
         "pattern": "/mcu/LED_A"
+      },
+      {
+        "netclass": "LOCAL_ANALOG",
+        "pattern": "/mcu/LED_K"
       },
       {
         "netclass": "LOCAL_ANALOG",
@@ -554,6 +586,14 @@
       {
         "netclass": "SENSE",
         "pattern": "/dac_sweep/V_DAC"
+      },
+      {
+        "netclass": "SENSE",
+        "pattern": "/dac_sweep/V_DACB"
+      },
+      {
+        "netclass": "SENSE",
+        "pattern": "DAC_VREF"
       },
       {
         "netclass": "SENSE",

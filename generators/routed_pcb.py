@@ -298,7 +298,8 @@ def emit_board(nodes, net_names, codes, layout):
 
 LAYOUT_DIR = os.path.join(_REPO_ROOT, "layout")
 BASE_LAYOUT = os.path.join(LAYOUT_DIR, "stage1_iv.layout")
-ECOS = [os.path.join(LAYOUT_DIR, "bipolar.eco")]
+ECOS = [os.path.join(LAYOUT_DIR, "bipolar.eco"),
+        os.path.join(LAYOUT_DIR, "audit_corrections.eco")]
 
 
 def composed_layout(base=BASE_LAYOUT, ecos=None):

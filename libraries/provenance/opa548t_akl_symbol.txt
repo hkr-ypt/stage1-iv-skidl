@@ -12,6 +12,11 @@ IMPORTANT   : This is NOT the manufacturer data sheet. The TI OPA548 data
               These pin numbers are therefore READ from a published,
               version-pinned third-party KiCad library and MUST be
               re-verified against SBOS070 before fabrication.
+UPDATE      : Done. The pins below are now checked, pin by pin, against the
+              TI SBOS070D "Pin Functions" table in
+              opa548_sbos070d_pin_functions.txt by
+              tools/author_project_symbols.py, which refuses to build on any
+              mismatch. They agree on all seven pins.
 ---------------- BEGIN VERBATIM EXCERPT ----------------
 	(symbol "OPA548T"
 		(pin_names

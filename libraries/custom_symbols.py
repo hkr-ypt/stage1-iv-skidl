@@ -305,6 +305,25 @@ def is_virtual(part):
     return bool(part.fields.get("Symbol_Class"))
 
 
+def dnp(part):
+    """Mark a part Do-Not-Populate: footprint on the board, part not fitted.
+
+    A plain Python attribute, like ``skidl_block``: it never enters
+    ``part.fields``, so the netlist is unaffected. The generators turn it into
+    KiCad's own DNP mechanism — ``(dnp yes) (in_bom no)`` on the schematic
+    symbol (generators/schematic.py) and ``(attr ... exclude_from_bom dnp)``
+    on the footprint (generators/pcb.py) — so a KiCad BOM leaves the part out
+    and the fab/assembly outputs mark it, instead of a value string that only
+    a person reading it would understand.
+    """
+    part.dnp = True
+    return part
+
+
+def is_dnp(part):
+    return bool(getattr(part, "dnp", False))
+
+
 # =====================================================================
 #  POWER FLAG  (virtual — schematic only, never on the board)
 # =====================================================================
@@ -374,8 +393,20 @@ def L_FerriteBead():
 
 
 def D():
+    # 1N4148W, not 1N4148: the 1N4148 is the DO-35 axial part. The SOD-123
+    # package this footprint describes is sold as the 1N4148W (same die and
+    # ratings), so that is the orderable MPN for this land pattern.
     return _part("Device:D", "D", "Diode_SMD:D_SOD-123",
-                 "1N4148", "RESOLVED", "Diode (cathode = pin K)")
+                 "1N4148W", "RESOLVED", "Diode (cathode = pin K)")
+
+
+def BAT54S():
+    # Dual series Schottky, SOT-23. Pin 1 = anode of the lower diode, pin 3 =
+    # the common node (its cathode, the upper diode's anode), pin 2 = cathode
+    # of the upper diode — read from Diode.kicad_sym like every other pin.
+    return _part("Diode:BAT54S", "D", "Package_TO_SOT_SMD:SOT-23",
+                 "BAT54S", "RESOLVED",
+                 "Dual series Schottky diode (heartbeat charge pump)")
 
 
 def D_TVS():
@@ -508,6 +539,20 @@ def OPA2277():
                  keywords="opamp precision dual")
 
 
+def TMUX1101():
+    # SPST, ON when SEL = 1, OFF (Hi-Z) when SEL = 0 (TI SCDS410D Table 8-1).
+    # 1.8 V-compatible SEL thresholds at VDD = 5 V: VIH >= 1.49 V, VIL <= 0.87 V
+    # (-40..125 C), and fail-safe logic, so SEL may be driven before VDD is up.
+    # The upstream symbol leaves D, S and SEL unnamed ("~"); the aliases name
+    # them by pin NUMBER, which still comes from the symbol file.
+    return _part("Analog_Switch:TMUX1101DBV", "U",
+                 "Package_TO_SOT_SMD:SOT-23-5",
+                 "TMUX1101DBVR", "RESOLVED",
+                 "SPST analog switch, normally off (DAC reference gate)",
+                 aliases={"D": 1, "S": 2, "SEL": 4, "VDD": 5},
+                 keywords="analog switch SPST")
+
+
 # =====================================================================
 #  POWER BUFFER
 # =====================================================================
@@ -515,13 +560,21 @@ def OPA2277():
 def OPA548():
     # No OPA548 symbol exists in the official KiCad libraries, so this is the
     # project-local symbol in libraries/stage1_iv.kicad_sym. Its pin numbers
-    # come from a published third-party KiCad library, NOT from TI SBOS070,
-    # which is unreachable from this environment — hence VERIFY-DATASHEET.
-    # See libraries/provenance/opa548t_akl_symbol.txt.
+    # are read from a published third-party KiCad library
+    # (libraries/provenance/opa548t_akl_symbol.txt) and are now CHECKED against
+    # the manufacturer's own pin table, TI SBOS070D "Pin Functions"
+    # (libraries/provenance/opa548_sbos070d_pin_functions.txt):
+    # tools/author_project_symbols.py refuses to build if the two disagree on
+    # any pin. Hence RESOLVED.
+    #
+    # Footprint: the upstream TO-220-7 footprint with its holes opened from
+    # 1.1 to 1.2 mm (tools/vendor_footprints.py, PROJECT_FOOTPRINTS). At the
+    # KVT drawing's maximum lead section (0.91 x 0.56 mm, diagonal 1.07 mm) a
+    # 1.1 mm finished hole leaves 0.03 mm, which plating tolerance can close.
     return _part("stage1_iv:OPA548T", "U",
-                 "Package_TO_SOT_THT:TO-220-7_P2.54x3.7mm"
-                 "_StaggerOdd_Lead3.8mm_Vertical",
-                 "OPA548T", "VERIFY-DATASHEET",
+                 "stage1_iv:TO-220-7_P2.54x3.7mm"
+                 "_StaggerOdd_Lead3.8mm_Vertical_Drill1.2mm",
+                 "OPA548T", "RESOLVED",
                  "High-current power op-amp with current limit",
                  aliases={"+IN": 1, "-IN": 2, "ILIM": 3, "OUT": 6},
                  keywords="power opamp current limit")
@@ -628,6 +681,10 @@ ALIAS_DOCUMENTATION = {
     "OPA2277 / Amplifier_Operational:OPA2277": {
         "OUTA": (1, "~"), "-INA": (2, "-"), "+INA": (3, "+"),
         "+INB": (5, "+"), "-INB": (6, "-"), "OUTB": (7, "~"),
+    },
+    "TMUX1101 / Analog_Switch:TMUX1101DBV": {
+        "D": (1, "~ (drain)"), "S": (2, "~ (source)"),
+        "SEL": (4, "~ (logic control)"), "VDD": (5, "V_{DD}"),
     },
     "OPA548 / stage1_iv:OPA548T": {
         "+IN": (1, "+"), "-IN": (2, "-"),

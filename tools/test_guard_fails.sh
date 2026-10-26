@@ -31,6 +31,7 @@ reset_copy() {
 #   gate = erc        : validation/erc.py must fail
 #   gate = board      : validation/routed_board_check.py must fail
 #   gate = range      : validation/measurement_range.py must fail
+#   gate = assert     : validation/assertions.py must fail
 # main.py must fail in EVERY case — it is the thing a user actually runs.
 #
 # `board` injections run against the board that main.py already emitted, so the
@@ -53,6 +54,7 @@ expect_fail() {
         erc)        checker="validation/erc.py" ;;
         board)      checker="validation/routed_board_check.py" ;;
         range)      checker="validation/measurement_range.py" ;;
+        assert)     checker="validation/assertions.py" ;;
         *) echo "  [BUG] unknown gate $gate"; FAILURES=$((FAILURES + 1)); return ;;
     esac
 
@@ -72,7 +74,8 @@ expect_fail() {
         echo "  [CAUGHT] $name"
         echo "           $checker=$gate_rc, main.py=$main_rc"
         grep -m2 -E "\[ERROR\]|\[ERC WARNING\]|ERC FAILED|PWR_FLAG invariant|\
-board defect|finding|netclass|straddle|overlap|MEASUREMENT RANGE|channel:" \
+board defect|finding|netclass|straddle|overlap|MEASUREMENT RANGE|channel:|\
+ASSERTIONS: FAIL|\[FAIL\]" \
             "$WORK/gate.log" | sed 's/^/            /' || true
     else
         echo "  [MISSED] $name  ($checker=$gate_rc, main.py=$main_rc)"
@@ -322,6 +325,49 @@ p = pathlib.Path("layout/bipolar.eco"); s = p.read_text()
 old = "(remove (segment \"AGND\" \"F.Cu\" 0.2 125.09 49.493456 125.09 48.09)"
 assert old in s
 p.write_text(s.replace(old, "(remove (segment \"AGND\" \"F.Cu\" 0.2 125.09 49.493456 125.09 48.1)"))
+'
+
+# --- the final hardware audit corrections ---------------------------------------
+
+# 24. the sweep midpoint back on the fixed reference (audit F2): with the DAC at
+#     its zero-scale power-on state the output is -10.04 V until firmware runs
+expect_fail assert "sweep midpoint back on VREF_2V5 (power-up drives -10 V)" '
+import pathlib
+p = pathlib.Path("blocks/dac_sweep.py"); s = p.read_text()
+old = "v_dacb = Net(\"V_DACB\"); v_dacb += U4[\"VOUTB\"], R1[1]"
+assert old in s
+p.write_text(s.replace(old, "n.VREF_2V5 += R1[1]; "
+                            "U4[\"VOUTB\"] += U4[\"VOUTB\"].circuit.NC"))
+'
+
+# 25. the DAC reference wired around the gate (audit F2): the DAC would keep
+#     its codes, and the output its voltage, through a reset, halt or crash
+expect_fail assert "DAC VREF wired straight to VREF_2V5, bypassing U11" '
+import pathlib
+p = pathlib.Path("blocks/dac_sweep.py"); s = p.read_text()
+old = "dac_vref += U4[\"VREF\"], U11[\"D\"], R35[1]"
+assert old in s
+p.write_text(s.replace(old, "dac_vref += U11[\"D\"], R35[1]; "
+                            "n.VREF_2V5 += U4[\"VREF\"]"))
+'
+
+# 26. a DC path onto DAC_ARM (audit F2): a static level - a held reset, a
+#     halted CPU - could then keep the output armed
+expect_fail assert "DAC_ARM bleed resistor returned to +3V3D (DC arming path)" '
+import pathlib
+p = pathlib.Path("blocks/mcu.py"); s = p.read_text()
+old = "n.DGND += C48[1], R37[1]"
+assert old in s
+p.write_text(s.replace(old, "n.DGND += C48[1]; n.P3V3D += R37[1]"))
+'
+
+# 27. R30 back to a quarter watt (audit F3): the 127 mA rail fault puts 1.6 W
+#     into it
+expect_fail range "R30 rated 1/4 W against the 1.6 W rail-fault envelope" '
+import pathlib
+p = pathlib.Path("blocks/protection.py"); s = p.read_text()
+assert "value=\"100R 1% 2W\"" in s
+p.write_text(s.replace("value=\"100R 1% 2W\"", "value=\"100R 1% 1/4W\""))
 '
 
 echo "----------------------------------------------------------------------"

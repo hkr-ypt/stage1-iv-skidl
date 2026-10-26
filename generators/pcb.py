@@ -389,6 +389,22 @@ def add_unit_info(node, units):
     node.append(SexpList(body))
 
 
+# What a DNP symbol (schematic ``(dnp yes) (in_bom no)``) makes KiCad's Update
+# PCB from Schematic set on its footprint.
+DNP_FP_ATTRS = ("exclude_from_bom", "dnp")
+
+
+def add_attrs(node, wanted):
+    """Add fabrication attributes to a footprint's (attr ...) node."""
+    for i, child in enumerate(node):
+        if isinstance(child, list) and child and str(child[0]) == "attr":
+            have = [str(c) for c in child[1:]]
+            node[i] = SexpList(list(child) + [A(w) for w in wanted
+                                              if w not in have])
+            return
+    node.append(L(A("attr"), *[A(w) for w in wanted]))
+
+
 def strip_attrs(node, unwanted):
     """Drop fabrication attributes the schematic does not ask for."""
     for i, child in enumerate(node):
@@ -1084,9 +1100,29 @@ def board_silkscreen(x0, y0, x1, y1, boundary, items, circuit, ref_boxes=()):
 
 
     # J1 is the bench supply input. Every pin named: getting +15 V onto the
-    # -15 V terminal destroys the analog front end.
-    j1_pins = (("1", "+15V IN"), ("2", "GND IN"),
-               ("3", "-15V IN"), ("4", "+5V IN"))
+    # -15 V terminal destroys the analog front end. The names are read from
+    # the nets on J1's pads, never written by hand: a hand-written table here
+    # once read "2 GND, 3 -15V, 4 +5V" against a circuit with 2 = -15 V,
+    # 3 = +5 V, 4 = GND (audit F1).
+    def pad_net(ref, pad_name):
+        item = by_ref.get(ref)
+        for child in (item.node if item is not None else ()):
+            if (isinstance(child, list) and str(child[0]) == "pad"
+                    and str(child[1]) == pad_name):
+                for c in child:
+                    if isinstance(c, list) and str(c[0]) == "net":
+                        return str(c[2])
+        return None
+
+    j1_names = {"+15VA": "+15V IN", "-15VA": "-15V IN",
+                "+5V_RAW": "+5V IN", "DGND": "GND IN"}
+    j1_pins = []
+    for pad in ("1", "2", "3", "4"):
+        net = pad_net("J1", pad)
+        if net not in j1_names:
+            raise ValueError(f"J1 pad {pad} is on net {net!r}, which has no "
+                             f"bench-supply label; update j1_names")
+        j1_pins.append((pad, j1_names[net]))
     j1_placed = all(label("J1", pad, text) for pad, text in j1_pins)
 
     # J1 carries the bench supply. Putting +15 V on the -15 V terminal destroys
@@ -1216,6 +1252,8 @@ def prepare_footprints(circuit, libs):
             add_field(node, part.ref, fname, fvalue)
         add_unit_info(node, unit_info(model.part_sym[part.ref]))
         strip_attrs(node, SYMBOL_DRIVEN_FP_ATTRS)
+        if getattr(part, "dnp", False):
+            add_attrs(node, DNP_FP_ATTRS)
         nodes[part.ref] = node
         blocks[part.ref] = block
     return {"nodes": nodes, "net_names": net_names, "codes": codes,

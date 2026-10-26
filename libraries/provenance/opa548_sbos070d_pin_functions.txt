@@ -1,0 +1,28 @@
+SOURCE      : Texas Instruments, OPA548 High-Voltage, High-Current Operational
+              Amplifier, data sheet SBOS070D (October 1997, revised December
+              2019), 41 pages, section 5 "Pin Configuration and Functions",
+              page 3.
+URL         : https://www.ti.com/lit/ds/symlink/opa548.pdf
+FILE SHA256 : f6e9034778addcd8dffdf7bcd719f2f9698770b01c1783dc737063914d77adbe
+EXTRACT     : pdftotext -layout (poppler), lines of the "Pin Functions" table
+              copied verbatim below. The package drawings on the same page
+              are images and do not survive text extraction.
+USE         : tools/author_project_symbols.py reads this table and requires
+              the OPA548T symbol's pin numbers (opa548t_akl_symbol.txt) to
+              carry the same function on every pin. That check is what makes
+              the part RESOLVED rather than VERIFY-DATASHEET.
+---------------- BEGIN VERBATIM EXCERPT ----------------
+
+
+                                                                    Pin Functions
+             PIN
+                                    I/O                                                       DESCRIPTION
+NO.                NAME
+1                  VIN+               I        Noninverting input
+2                  VIN–               I        Inverting input
+3                   ILIM              I        Current limit set
+4                   V–                I        Negative power supply
+5                   V+                I        Positive power supply
+6                   VO               O         Output
+7                   E/S             I/O        Enable or disable control input, thermal shutdown status output
+---------------- END VERBATIM EXCERPT ----------------

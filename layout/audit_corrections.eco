@@ -1,0 +1,426 @@
+# audit_corrections.eco — the final hardware-audit corrections, applied after
+# layout/bipolar.eco to layout/stage1_iv.layout.
+#
+# Electrical changes (SKiDL, blocks/*.py; reasons there and in
+# docs/audit_corrections.md):
+#   F1  J1 and DUT jack labels on the silkscreen
+#   F2  DAC channel B is the sweep midpoint (R1 pin 1 on VOUTB); the DAC's
+#       VREF pin is gated by U11 (TMUX1101), armed by the PC5 heartbeat charge
+#       pump D6/C47/C48/R36/R37
+#   F3  R30 becomes a 2 W PR02 axial (DIN 0411), 7 mm from the precision
+#       divider; only 2.1 mm from the PTC (no room further away, see below)
+#   V1  R38/C49 output snubber footprints (DNP) at U5 OUT
+#       LED1 sunk by PC13: LED1 stays in place; its cathode pad (1) takes the
+#       R23 copper as LED_K, its anode pad (2) moves from LED_A to +3V3D
+#
+# Routing rules are bipolar.eco's: new tracks are drawn at their netclass
+# width where the board has room (0.25 mm SENSE/DIGITAL/LOCAL_ANALOG,
+# 0.50 mm FORCE) and keep the repository's netclass clearances, not just
+# the 0.20 mm the board was routed to. Paths were found with
+# tools/eco_route.py and checked with KiCad DRC
+# (validation/routed_board_check.py).
+(stage1_iv_eco (version 1) (name "audit_corrections") (base "stage1_iv.layout")
+  # =====================================================================
+  # F2 — the DAC midpoint from channel B, and the DAC reference gate
+  # =====================================================================
+  # U4's left side is a closed pocket: the +5VA feed (pin 1, C13) above, the
+  # AGND return loop C13 -> U4 pin 8 around it. Inside sat the VREF_2V5 feed:
+  # B.Cu trunk -> via (117.96, 70.46) -> F.Cu diagonal -> U4 pin 2 (VREF) and
+  # R1 pin 1. Pin 2 now carries DAC_VREF (the gate's output) and R1 pin 1 is
+  # fed from pin 3 (VOUTB), so all of that copper goes.
+  (remove (segment "VREF_2V5" "F.Cu" 0.2 116.575 72.75 116.575 72.275)
+          (reason "R1 pin 1 leaves VREF_2V5 for V_DACB (audit F2)"))
+  (remove (segment "VREF_2V5" "F.Cu" 0.2 116.575 72.275 118.925 69.925)
+          (reason "R1 pin 1 and U4 pin 2 leave VREF_2V5 (audit F2)"))
+  (remove (segment "VREF_2V5" "F.Cu" 0.2 118.925 69.925 119.7125 69.925)
+          (reason "U4 pin 2 (VREF) becomes DAC_VREF, the gate output"))
+  (remove (segment "VREF_2V5" "F.Cu" 0.2 117.961765 70.461765 118.175 70.675)
+          (reason "the pocket via no longer feeds U4 pin 2"))
+  (remove (via "VREF_2V5" 117.961765 70.461765 0.6 0.3 "F.Cu" "B.Cu")
+          (reason "the pocket via no longer feeds U4 pin 2"))
+  (remove (segment "VREF_2V5" "B.Cu" 0.2 117.75 70.25 117.961765 70.461765)
+          (reason "the B.Cu trunk now ends at the U7 REF branch corner"))
+
+  # --- U11 (TMUX1101) and its parts, below U4, outside the AGND loop -------
+  # D (pin 1) and S (pin 2) face west, where DAC_VREF and VREF_2V5 arrive;
+  # VDD (pin 5) faces C46; SEL (pin 4) faces south-east, where DAC_ARM
+  # arrives from the charge pump on the DGND side.
+  (add (footprint "U11" F 120.5 76.1 0)
+       (reason "U11 TMUX1101, DAC VREF gate (audit F2)"))
+  (add (footprint "C46" F 124.3 75.15 0)
+       (reason "C46 100 nF, U11 VDD decoupling"))
+  (add (footprint "R35" F 120.5 79.4 -90)
+       (reason "R35 1M, holds DAC_VREF at 0 V while U11 is off"))
+  (add (text "U11" property "Reference" (at 0 -2.8 0) (layer "F.SilkS")
+             (effects (font (size 1 1) (thickness 0.15))))
+       (reason "designator above the part"))
+  # No clear silk spot for C46/R35 between U11, the AGND loop and the
+  # DAC_VREF/VREF_2V5 feeds: their designators go on F.Fab at the part
+  # centre, as R32/R33 and C23 already do.
+  (add (text "C46" property "Reference" (at 0 0 0) (layer "F.Fab")
+             (effects (font (size 1 1) (thickness 0.15))))
+       (reason "C46's designator on F.Fab: no clear spot on silk"))
+  (add (text "R35" property "Reference" (at 0 0 0) (layer "F.Fab")
+             (effects (font (size 1 1) (thickness 0.15))))
+       (reason "R35's designator on F.Fab: no clear spot on silk"))
+
+  # --- V_DACB: U4 pin 3 (VOUTB) -> R1 pin 1, inside the pocket ------------
+  # Leaves pin 3 west, steps down past pin 4's end and along the pocket floor
+  # to R1 pin 1, where the VREF_2V5 diagonal used to land.
+  (add (segment "/dac_sweep/V_DACB" "F.Cu" 0.25 119.7125 70.575 118.5 70.575)
+       (reason "V_DACB: U4 pin 3 (VOUTB) -> R1 pin 1"))
+  (add (segment "/dac_sweep/V_DACB" "F.Cu" 0.25 118.5 70.575 118.5 72)
+       (reason "V_DACB: U4 pin 3 (VOUTB) -> R1 pin 1, past pin 4's end"))
+  (add (segment "/dac_sweep/V_DACB" "F.Cu" 0.25 118.5 72 117.75 72.75)
+       (reason "V_DACB: U4 pin 3 (VOUTB) -> R1 pin 1"))
+  (add (segment "/dac_sweep/V_DACB" "F.Cu" 0.25 117.75 72.75 116.575 72.75)
+       (reason "V_DACB: U4 pin 3 (VOUTB) -> R1 pin 1"))
+
+  # --- DAC_VREF: U4 pin 2 -> U11 D (pin 1) -> R35 ---------------------------
+  # Out of the pocket the only way there is: a via between the +5VA feed and
+  # C13 pin 1, B.Cu down the corridor between the U7-REF (VREF_2V5) and
+  # V_SENSE_OUT diagonals, a via clear of the AGND loop, F.Cu east to U11.
+  (add (segment "DAC_VREF" "F.Cu" 0.25 119.7125 69.925 118.375 69.925)
+       (reason "DAC_VREF: U4 pin 2 out of the pocket"))
+  (add (segment "DAC_VREF" "F.Cu" 0.25 118.375 69.925 117.65 70.65)
+       (reason "DAC_VREF: U4 pin 2 out of the pocket, between +5VA and V_DACB"))
+  (add (segment "DAC_VREF" "F.Cu" 0.25 117.65 70.65 117.65 71.4)
+       (reason "DAC_VREF: U4 pin 2 out of the pocket"))
+  (add (via "DAC_VREF" 117.65 71.4 0.6 0.3 "F.Cu" "B.Cu")
+       (reason "DAC_VREF: down to B.Cu inside the pocket"))
+  (add (segment "DAC_VREF" "B.Cu" 0.25 117.65 71.4 114.6 74.45)
+       (reason "DAC_VREF: B.Cu corridor between VREF_2V5 and V_SENSE_OUT"))
+  (add (via "DAC_VREF" 114.6 74.45 0.6 0.3 "F.Cu" "B.Cu")
+       (reason "DAC_VREF: back to F.Cu outside the AGND loop"))
+  (add (segment "DAC_VREF" "F.Cu" 0.25 114.6 74.45 115.3 75.15)
+       (reason "DAC_VREF: to U11 pin 1 (D)"))
+  (add (segment "DAC_VREF" "F.Cu" 0.25 115.3 75.15 119.3625 75.15)
+       (reason "DAC_VREF: to U11 pin 1 (D)"))
+  (add (segment "DAC_VREF" "F.Cu" 0.25 119.3625 75.15 120.025 75.15)
+       (reason "DAC_VREF: U11 pin 1 to R35, between U11's pad rows"))
+  (add (segment "DAC_VREF" "F.Cu" 0.25 120.025 75.15 120.5 75.625)
+       (reason "DAC_VREF: U11 pin 1 to R35, between U11's pad rows"))
+  (add (segment "DAC_VREF" "F.Cu" 0.25 120.5 75.625 120.5 78.575)
+       (reason "DAC_VREF: U11 pin 1 to R35 pin 1"))
+
+  # --- VREF_2V5 to U11 S (pin 2): a via on the U7-REF diagonal --------------
+  (add (via "VREF_2V5" 113 75 0.6 0.3 "F.Cu" "B.Cu")
+       (reason "VREF_2V5 for U11, tapped off the B.Cu U7 REF track"))
+  (add (segment "VREF_2V5" "F.Cu" 0.25 113 75 114.1 76.1)
+       (reason "VREF_2V5 to U11 pin 2 (S)"))
+  (add (segment "VREF_2V5" "F.Cu" 0.25 114.1 76.1 119.3625 76.1)
+       (reason "VREF_2V5 to U11 pin 2 (S)"))
+
+  # --- +5VA to U11 VDD and C46: off U4's pin-1 feed, B.Cu east of the
+  # V_SENSE_OUT/VREF_2V5 verticals, under U4, up beside U11 -----------------
+  (add (segment "+5VA" "F.Cu" 0.25 119.85 65.6 122.6 65.6)
+       (reason "+5VA for U11, off the U4 pin-1 feed"))
+  (add (via "+5VA" 122.6 65.6 0.6 0.3 "F.Cu" "B.Cu")
+       (reason "+5VA for U11"))
+  (add (segment "+5VA" "B.Cu" 0.25 122.6 65.6 122.6 74.4)
+       (reason "+5VA for U11, under U4"))
+  (add (via "+5VA" 122.6 74.4 0.6 0.3 "F.Cu" "B.Cu")
+       (reason "+5VA for U11"))
+  (add (segment "+5VA" "F.Cu" 0.25 122.6 74.4 122.6 75.15)
+       (reason "+5VA to U11 pin 5 (VDD) and C46"))
+  (add (segment "+5VA" "F.Cu" 0.25 121.6375 75.15 123.475 75.15)
+       (reason "+5VA: U11 pin 5 (VDD) to C46"))
+
+  # --- R34, the CS_DAC (SYNC) pull-up to +5VA, under C46 (B.Cu side) -----
+  # The only place on the DAC's side of the split with both nets in reach:
+  # +5VA continues down from U11's via; CS_DAC drops from its F.Cu diagonal
+  # through a via in the moat. Designator on B.Fab (no clear silk spot).
+  (add (footprint "R34" B 124.5 78.2 0)
+       (reason "R34 100k, CS_DAC pull-up (audit F2)"))
+  (add (text "R34" property "Reference" (at 0 0 0) (layer "B.Fab")
+             (effects (font (size 1 1) (thickness 0.15)) (justify mirror)))
+       (reason "R34's designator on B.Fab"))
+  (add (segment "+5VA" "B.Cu" 0.25 122.6 74.4 122.6 77.125)
+       (reason "+5VA to R34"))
+  (add (segment "+5VA" "B.Cu" 0.25 122.6 77.125 123.675 78.2)
+       (reason "+5VA to R34 pad 1"))
+  (add (via "/CS_DAC" 127 74.287 0.6 0.3 "F.Cu" "B.Cu")
+       (reason "CS_DAC down to R34, on the existing F.Cu diagonal"))
+  (add (segment "/CS_DAC" "B.Cu" 0.25 127 74.287 125.325 75.962)
+       (reason "CS_DAC to R34 pad 2"))
+  (add (segment "/CS_DAC" "B.Cu" 0.25 125.325 75.962 125.325 78.2)
+       (reason "CS_DAC to R34 pad 2"))
+
+  # --- AGND stitching for the U4/C13 ground ------------------------------
+  # The F.Cu AGND fill around U4, C13, C9 and the R31 star point reached the
+  # rest of AGND only through the F.Cu gap below U4 that the DAC_VREF,
+  # VREF_2V5 and DAC_ARM tracks above now cross. Two vias tie that fill to
+  # the B.Cu AGND plane directly, which is also the shorter return for the
+  # DAC and C13.
+  (add (via "AGND" 124.6 66.5 0.6 0.3 "F.Cu" "B.Cu")
+       (reason "AGND stitch: U4/C13 F.Cu fill to the B.Cu plane"))
+  (add (via "AGND" 124.6 73.6 0.6 0.3 "F.Cu" "B.Cu")
+       (reason "AGND stitch: U4/C46 F.Cu fill to the B.Cu plane"))
+  # Those two land in a B.Cu pocket that the +5VA and CS_DAC runs to R34
+  # close off; this one, inside U4's AGND return loop, lands on the main
+  # B.Cu AGND plane (found by filling the zones and intersecting the
+  # islands).
+  (add (via "AGND" 120.5 72.5 0.6 0.3 "F.Cu" "B.Cu")
+       (reason "AGND stitch: U4's return loop to the main B.Cu AGND plane"))
+
+  # =====================================================================
+  # F2 — the safe-state heartbeat charge pump, DGND side below U9
+  # =====================================================================
+  # One row, east -> west in signal order, in the empty area below U9;
+  # R37 sits above C48. Designators on the silkscreen, clear of the pads.
+  (add (footprint "R36" F 143 86.4 0)
+       (reason "R36 1k, PC5 heartbeat series resistor"))
+  (add (footprint "C47" F 138.6 86.4 0)
+       (reason "C47 100 nF, charge-pump coupling capacitor"))
+  (add (footprint "D6" F 134.4 86.4 0)
+       (reason "D6 BAT54S, charge-pump clamp and rectifier"))
+  (add (footprint "C48" F 130.6 87.35 0)
+       (reason "C48 470 nF, DAC_ARM hold capacitor"))
+  (add (footprint "R37" F 130.6 85.2 0)
+       (reason "R37 100k, DAC_ARM bleed: sets the ~50 ms disarm time"))
+  (add (segment "/mcu/SAFE_HB_R" "F.Cu" 0.25 142.175 86.4 139.425 86.4)
+       (reason "SAFE_HB_R: R36 to C47"))
+  (add (segment "/mcu/SAFE_HB_AC" "F.Cu" 0.25 137.775 86.4 135.3375 86.4)
+       (reason "SAFE_HB_AC: C47 to D6 pin 3 (common)"))
+  (add (segment "/DAC_ARM" "F.Cu" 0.25 133.4625 87.35 131.425 87.35)
+       (reason "DAC_ARM: D6 pin 2 (K) to C48"))
+  (add (segment "/DAC_ARM" "F.Cu" 0.25 131.425 87.35 131.425 85.2)
+       (reason "DAC_ARM: C48 to R37"))
+  # --- SAFE_HB: U9 pin 25 (PC5) -> R36, B.Cu under U9's bottom pads ------
+  (add (segment "/mcu/SAFE_HB" "F.Cu" 0.25 143.25 74.425 143.25 76.05)
+       (reason "SAFE_HB: PC5 (U9 pin 25) out of the LQFP"))
+  (add (via "/mcu/SAFE_HB" 143.25 76.05 0.6 0.3 "F.Cu" "B.Cu")
+       (reason "SAFE_HB: past MOSI1/C43 to B.Cu"))
+  (add (segment "/mcu/SAFE_HB" "B.Cu" 0.25 143.25 76.05 143.25 85.2)
+       (reason "SAFE_HB: under the +3V3D/NRST/DGND F.Cu runs"))
+  (add (via "/mcu/SAFE_HB" 143.25 85.2 0.6 0.3 "F.Cu" "B.Cu")
+       (reason "SAFE_HB: up to R36"))
+  (add (segment "/mcu/SAFE_HB" "F.Cu" 0.25 143.25 85.2 143.825 85.775)
+       (reason "SAFE_HB to R36 pin 2"))
+  (add (segment "/mcu/SAFE_HB" "F.Cu" 0.25 143.825 85.775 143.825 86.4)
+       (reason "SAFE_HB to R36 pin 2"))
+
+  # --- DAC_ARM: R37 -> U11 SEL (pin 4), across the AGND/DGND moat ---------
+  # A slow, DC control line (it is the pump's filtered output), so crossing
+  # the split here costs nothing; the kHz heartbeat stays on DGND.
+  (add (segment "/DAC_ARM" "F.Cu" 0.25 131.425 85.2 131.425 84.2)
+       (reason "DAC_ARM: from R37/C48 towards U11"))
+  (add (segment "/DAC_ARM" "F.Cu" 0.25 131.425 84.2 124.275 77.05)
+       (reason "DAC_ARM: across the moat"))
+  (add (segment "/DAC_ARM" "F.Cu" 0.25 124.275 77.05 121.6375 77.05)
+       (reason "DAC_ARM: to U11 pin 4 (SEL)"))
+
+  (add (text "R36" property "Reference" (at 0 2.1 0) (layer "F.SilkS")
+             (effects (font (size 1 1) (thickness 0.15))))
+       (reason "designator below the part (FB2's is above)"))
+  (add (text "C47" property "Reference" (at 0 -2.1 0) (layer "F.SilkS")
+             (effects (font (size 1 1) (thickness 0.15))))
+       (reason "designator above the part"))
+  (add (text "D6" property "Reference" (at 0 2.7 0) (layer "F.SilkS")
+             (effects (font (size 1 1) (thickness 0.15))))
+       (reason "designator below the part"))
+  (add (text "C48" property "Reference" (at 0 1.9 0) (layer "F.SilkS")
+             (effects (font (size 1 1) (thickness 0.15))))
+       (reason "designator below the part"))
+  (add (text "R37" property "Reference" (at 0 -1.9 0) (layer "F.SilkS")
+             (effects (font (size 1 1) (thickness 0.15))))
+       (reason "designator above the part"))
+
+  # =====================================================================
+  # F3 — R30 as a 2 W PR02 (DIN 0411), along Y, between the jacks and F1
+  # =====================================================================
+  # Was a 1206 at (91.75, 77.5): 2.8 mm (courtyards) from R32/R33 and 2.5 mm
+  # below F1. Now its courtyard is 7 mm from the precision divider's nearest
+  # part (R33) and 2.1 mm from F1's, as far west as the strip between F1
+  # and the J6 jack allows; pad 2 (FORCE+) sits straight below D5 pin 1,
+  # pad 1 (F1_MID) at the bottom. Full separation from F1 needs the
+  # protection area re-laid out (docs/audit_corrections.md). The FORCE+ and
+  # F1_MID copper that served the old site goes.
+  (move (footprint "R30" F 87.75 75.7 90)
+        (reason "R30 PR02 2 W, clear of R12/R32/R33, as far from F1 as fits (audit F3)"))
+  (remove (text "R30" property "Reference" (at -0.25 -2.75 0) (layer "F.SilkS")
+                (effects (font (size 1 1) (thickness 0.15))))
+          (reason "R30's designator moves with the new body"))
+  (add (text "R30" property "Reference" (at 6.35 0 90) (layer "F.SilkS")
+             (effects (font (size 1 1) (thickness 0.15))))
+       (reason "R30's designator inside the body outline"))
+  (remove (segment "/protection/F1_MID" "F.Cu" 0.2 93.15 72.55 93.15 77.4375)
+          (reason "F1 -> R30 now runs to R30's new pad 1"))
+  (remove (segment "/protection/F1_MID" "F.Cu" 0.2 93.15 77.4375 93.2125 77.5)
+          (reason "F1 -> R30 now runs to R30's new pad 1"))
+  (remove (segment "/protection/FORCE+" "F.Cu" 0.2 77.75 55.5 87.75 65.5)
+          (reason "FORCE+ rerouted from R30's new pad 2"))
+  (remove (segment "/protection/FORCE+" "F.Cu" 0.2 87.75 61.25 87.75 59.5)
+          (reason "FORCE+ rerouted from R30's new pad 2"))
+  (remove (segment "/protection/FORCE+" "F.Cu" 0.2 90.25 63.75 87.75 61.25)
+          (reason "FORCE+ rerouted from R30's new pad 2"))
+  (remove (segment "/protection/FORCE+" "F.Cu" 0.2 87.75 65.5 87.75 71.25)
+          (reason "FORCE+ rerouted from R30's new pad 2"))
+  (remove (segment "/protection/FORCE+" "F.Cu" 0.2 87.75 71.25 90.25 73.75)
+          (reason "FORCE+ rerouted from R30's new pad 2"))
+  (remove (segment "/protection/FORCE+" "F.Cu" 0.2 90.25 73.75 90.25 63.75)
+          (reason "FORCE+ rerouted from R30's new pad 2"))
+  (remove (segment "/protection/FORCE+" "F.Cu" 0.2 90.25 73.75 90.2875 73.7875)
+          (reason "FORCE+ rerouted from R30's new pad 2"))
+  (remove (segment "/protection/FORCE+" "F.Cu" 0.2 90.2875 73.7875 90.2875 77.5)
+          (reason "FORCE+ rerouted from R30's new pad 2"))
+
+  # New FORCE path copper, at the FORCE netclass width (0.50 mm).
+  (add (segment "/protection/FORCE+" "F.Cu" 0.5 77.75 55.5 81.75 59.5)
+       (reason "FORCE+: J4 to D5"))
+  (add (segment "/protection/FORCE+" "F.Cu" 0.5 81.75 59.5 87.75 59.5)
+       (reason "FORCE+: J4 to D5 pin 1"))
+  (add (segment "/protection/FORCE+" "F.Cu" 0.5 87.75 59.5 87.75 63)
+       (reason "FORCE+: D5 pin 1 straight down to R30 pin 2"))
+  (add (segment "/protection/F1_MID" "F.Cu" 0.5 93.15 72.55 93.15 74.2)
+       (reason "F1_MID: F1 pin 2 to R30 pin 1"))
+  (add (segment "/protection/F1_MID" "F.Cu" 0.5 93.15 74.2 91.65 75.7)
+       (reason "F1_MID: F1 pin 2 to R30 pin 1"))
+  (add (segment "/protection/F1_MID" "F.Cu" 0.5 91.65 75.7 87.75 75.7)
+       (reason "F1_MID: F1 pin 2 to R30 pin 1"))
+
+  # =====================================================================
+  # V1 — U5 output snubber footprints (DNP), east of U5 pin 6
+  # =====================================================================
+  (add (footprint "R38" F 107.6 61.05 90)
+       (reason "R38 10R snubber resistor, DNP (audit V1)"))
+  (add (footprint "C49" F 109.7 61.05 -90)
+       (reason "C49 10 nF 50 V snubber capacitor, DNP (audit V1)"))
+  (add (text "R38" property "Reference" (at 0 0 0) (layer "F.Fab")
+             (effects (font (size 1 1) (thickness 0.15))))
+       (reason "R38's designator on F.Fab: no clear spot on silk beside U5"))
+  (add (text "C49" property "Reference" (at 0 0 0) (layer "F.Fab")
+             (effects (font (size 1 1) (thickness 0.15))))
+       (reason "C49's designator on F.Fab: no clear spot on silk beside U5"))
+
+  (add (segment "/output_buffer/VO_RAW" "F.Cu" 0.5 103.825 63.75 105.6125 61.9625)
+       (reason "VO_RAW: U5 pin 6 (OUT) to the snubber"))
+  (add (segment "/output_buffer/VO_RAW" "F.Cu" 0.5 105.6125 61.9625 107.6 61.9625)
+       (reason "VO_RAW: U5 pin 6 (OUT) to R38"))
+  (add (segment "/output_buffer/VO_SNUB" "F.Cu" 0.5 107.6 60.1375 109.7 60.1375)
+       (reason "VO_SNUB: R38 to C49; C49's other pad is on the AGND pour"))
+
+  # =====================================================================
+  # F1 — silkscreen: J1 terminals, the bench-supply heading, the DUT jacks
+  # =====================================================================
+  # J1 is rotated 180: pin 1 is the RIGHT-most terminal (x 168.87), then
+  # 163.79, 158.71, 153.63. Each label sits above its own terminal.
+  (add (graphic (gr_text "BENCH SUPPLY" (at 161.25 34.35 0) (layer "F.SilkS")
+                         (effects (font (size 1 1) (thickness 0.15)))))
+       (reason "J1 heading: what this connector is for (audit F1)"))
+  (add (graphic (gr_text "+15V" (at 168.87 36.45 0) (layer "F.SilkS")
+                         (effects (font (size 0.9 0.9) (thickness 0.15)))))
+       (reason "J1 pin 1 label (audit F1)"))
+  (add (graphic (gr_text "-15V" (at 163.79 36.45 0) (layer "F.SilkS")
+                         (effects (font (size 0.9 0.9) (thickness 0.15)))))
+       (reason "J1 pin 2 label (audit F1)"))
+  (add (graphic (gr_text "+5V" (at 158.71 36.45 0) (layer "F.SilkS")
+                         (effects (font (size 0.9 0.9) (thickness 0.15)))))
+       (reason "J1 pin 3 label (audit F1)"))
+  (add (graphic (gr_text "GND" (at 153.63 36.45 0) (layer "F.SilkS")
+                         (effects (font (size 0.9 0.9) (thickness 0.15)))))
+       (reason "J1 pin 4 label (audit F1)"))
+  # J1's designator was printed in that same strip, between pins 2 and 3; it
+  # moves to the free gap left of J1 (between J1 and U1).
+  (remove (text "J1" property "Reference" (at 8.12 6.8275 0) (layer "F.SilkS")
+                (effects (font (size 1 1) (thickness 0.15))))
+          (reason "the J1 strip now carries the terminal labels"))
+  (add (text "J1" property "Reference" (at 19.77 0 0) (layer "F.SilkS")
+             (effects (font (size 1 1) (thickness 0.15))))
+       (reason "J1's designator, left of the block"))
+  # The four DUT jacks: one label each, standing up beside its own jack
+  # (there is no room for horizontal text between the jacks and D5/R30).
+  (add (graphic (gr_text "FORCE-" (at 84.4 40.1 90) (layer "F.SilkS")
+                         (effects (font (size 0.8 0.8) (thickness 0.15)))))
+       (reason "J7 label (audit F1)"))
+  (add (graphic (gr_text "FORCE+" (at 84.97 52.08 90) (layer "F.SilkS")
+                         (effects (font (size 0.8 0.8) (thickness 0.15)))))
+       (reason "J4 label (audit F1)"))
+  (add (graphic (gr_text "SENSE-" (at 84.4 72.75 90) (layer "F.SilkS")
+                         (effects (font (size 0.8 0.8) (thickness 0.15)))))
+       (reason "J6 label (audit F1)"))
+  (add (graphic (gr_text "SENSE+" (at 84.4 86.5 90) (layer "F.SilkS")
+                         (effects (font (size 0.8 0.8) (thickness 0.15)))))
+       (reason "J5 label (audit F1)"))
+
+  # =====================================================================
+  # LED1 sunk by PC13 (DS10314: PC13 must not source an LED)
+  # =====================================================================
+  # The R23 -> LED copper is the same copper, renamed LED_A -> LED_K; its last
+  # leg moves from pad 2 (A) to pad 1 (K). Pad 1's DGND stub goes; pad 2 (A)
+  # gets +3V3D.
+  (remove (segment "DGND" "F.Cu" 0.2 159.625 78.2 160.35 78.925)
+          (reason "LED1 pad 1 is now the cathode, on LED_K"))
+  (remove (segment "DGND" "F.Cu" 0.2 160.35 78.925 160.35 80.248529)
+          (reason "LED1 pad 1 is now the cathode, on LED_K"))
+  (remove (segment "DGND" "F.Cu" 0.2 160.35 80.248529 157.298529 83.3)
+          (reason "LED1 pad 1 is now the cathode, on LED_K"))
+  (remove (segment "/mcu/LED_A" "B.Cu" 0.2 147.163235 73.163235 156.163235 73.163235)
+          (reason "net renamed LED_A -> LED_K: LED1 is sunk by PC13"))
+  (add (segment "/mcu/LED_K" "B.Cu" 0.2 147.163235 73.163235 156.163235 73.163235)
+       (reason "the same copper, as LED_K"))
+  (remove (segment "/mcu/LED_A" "B.Cu" 0.2 156.163235 73.163235 159 76)
+          (reason "net renamed LED_A -> LED_K: LED1 is sunk by PC13"))
+  (add (segment "/mcu/LED_K" "B.Cu" 0.2 156.163235 73.163235 159 76)
+       (reason "the same copper, as LED_K"))
+  (remove (segment "/mcu/LED_A" "F.Cu" 0.2 136.5 61.175 137.275 61.95)
+          (reason "net renamed LED_A -> LED_K: LED1 is sunk by PC13"))
+  (add (segment "/mcu/LED_K" "F.Cu" 0.2 136.5 61.175 137.275 61.95)
+       (reason "the same copper, as LED_K"))
+  (remove (segment "/mcu/LED_A" "F.Cu" 0.2 137.275 61.95 137.275 62.676471)
+          (reason "net renamed LED_A -> LED_K: LED1 is sunk by PC13"))
+  (add (segment "/mcu/LED_K" "F.Cu" 0.2 137.275 61.95 137.275 62.676471)
+       (reason "the same copper, as LED_K"))
+  (remove (segment "/mcu/LED_A" "F.Cu" 0.2 137.275 62.676471 144.25 69.651471)
+          (reason "net renamed LED_A -> LED_K: LED1 is sunk by PC13"))
+  (add (segment "/mcu/LED_K" "F.Cu" 0.2 137.275 62.676471 144.25 69.651471)
+       (reason "the same copper, as LED_K"))
+  (remove (segment "/mcu/LED_A" "F.Cu" 0.2 144.25 69.651471 144.25 70.5)
+          (reason "net renamed LED_A -> LED_K: LED1 is sunk by PC13"))
+  (add (segment "/mcu/LED_K" "F.Cu" 0.2 144.25 69.651471 144.25 70.5)
+       (reason "the same copper, as LED_K"))
+  (remove (segment "/mcu/LED_A" "F.Cu" 0.2 144.25 70.5 146.913235 73.163235)
+          (reason "net renamed LED_A -> LED_K: LED1 is sunk by PC13"))
+  (add (segment "/mcu/LED_K" "F.Cu" 0.2 144.25 70.5 146.913235 73.163235)
+       (reason "the same copper, as LED_K"))
+  (remove (segment "/mcu/LED_A" "F.Cu" 0.2 146.913235 73.163235 147.163235 73.163235)
+          (reason "net renamed LED_A -> LED_K: LED1 is sunk by PC13"))
+  (add (segment "/mcu/LED_K" "F.Cu" 0.2 146.913235 73.163235 147.163235 73.163235)
+       (reason "the same copper, as LED_K"))
+  (remove (segment "/mcu/LED_A" "F.Cu" 0.2 159 76 159.25 76.25)
+          (reason "net renamed LED_A -> LED_K: LED1 is sunk by PC13"))
+  (add (segment "/mcu/LED_K" "F.Cu" 0.2 159 76 159.25 76.25)
+       (reason "the same copper, as LED_K"))
+  (remove (via "/mcu/LED_A" 147.163235 73.163235 0.6 0.3 "F.Cu" "B.Cu")
+          (reason "net renamed LED_A -> LED_K"))
+  (add (via "/mcu/LED_K" 147.163235 73.163235 0.6 0.3 "F.Cu" "B.Cu")
+       (reason "the same via, as LED_K"))
+  (remove (via "/mcu/LED_A" 159 76 0.6 0.3 "F.Cu" "B.Cu")
+          (reason "net renamed LED_A -> LED_K"))
+  (add (via "/mcu/LED_K" 159 76 0.6 0.3 "F.Cu" "B.Cu")
+       (reason "the same via, as LED_K"))
+  (remove (segment "/mcu/LED_A" "F.Cu" 0.2 159.25 76.25 159.55 76.25)
+          (reason "LED_K now lands on LED1 pad 1 (K), not pad 2 (A)"))
+  (remove (segment "/mcu/LED_A" "F.Cu" 0.2 159.55 76.25 161.5 78.2)
+          (reason "LED_K now lands on LED1 pad 1 (K), not pad 2 (A)"))
+  (add (segment "/mcu/LED_K" "F.Cu" 0.2 159.25 76.25 159.625 76.625)
+       (reason "LED_K to LED1 pad 1 (K)"))
+  (add (segment "/mcu/LED_K" "F.Cu" 0.2 159.625 76.625 159.625 78.2)
+       (reason "LED_K to LED1 pad 1 (K)"))
+  # +3V3D to LED1 pad 2 (A). The USB pair walls this corner in: USB_DP on
+  # F.Cu east of the pad, USB_DM on B.Cu across its north-west, VBUS on B.Cu
+  # just south. Down from the pad, a via, then B.Cu west under the LED_K
+  # via all the way to the +3V3D track that feeds U9 pin 32 / FB2, landing
+  # on it through a via: an F.Cu leg here would wall C34's DGND pad off
+  # from the DGND pour.
+  (add (segment "+3V3D" "F.Cu" 0.25 161.5 78.2 161.5 79.3)
+       (reason "+3V3D to LED1 pad 2 (A)"))
+  (add (via "+3V3D" 161.5 79.3 0.6 0.3 "F.Cu" "B.Cu")
+       (reason "+3V3D to LED1 pad 2 (A), clear of VBUS"))
+  (add (segment "+3V3D" "B.Cu" 0.25 161.5 79.3 159.9 77.7)
+       (reason "+3V3D to LED1 pad 2 (A)"))
+  (add (segment "+3V3D" "B.Cu" 0.25 159.9 77.7 146.75 77.7)
+       (reason "+3V3D to LED1 pad 2 (A)"))
+  (add (via "+3V3D" 146.75 77.7 0.6 0.3 "F.Cu" "B.Cu")
+       (reason "+3V3D: onto the U9 pin 32 / FB2 +3V3D track"))
+)

@@ -4,21 +4,32 @@ measurement_range.py — can every point the source can reach be measured, signe
 ===============================================================================
 
 ``validation/assertions.py`` says WHERE the measurement zero is (U6 REF, U7 REF
-and the ADC's AINCOM all on VREF_2V5). This module says whether the NUMBERS
-work. From the part values in the live circuit it recomputes
+and the ADC's AINCOM all on VREF_2V5) and how the sweep midpoint is wired.
+This module says whether the NUMBERS work. From the part values in the live
+circuit it recomputes
 
-  * the sweep span, V_SWEEP = (R4/R3)(V_DAC - VREF/2);
+  * the sweep span. The midpoint is DAC channel B halved by R1/R2, so
+        V_SWEEP = (R4/R3) * (V_A - V_B * R2/(R1 + R2))
+    with V_A, V_B in 0..VREF. Its NEGATIVE end (A = 0, B = full scale) is a
+    hardware bound. Its POSITIVE end equals the negative only while firmware
+    keeps B at full scale (the firmware contract, docs/firmware_handoff.md),
+    so the checked envelope is that contract. What the hardware alone allows
+    if the contract is broken is computed and REPORTED, not passed;
   * the largest current a passive DUT can draw, |I| <= |V_SWEEP|/(R30 + R10):
     V and I share a sign in a passive DUT, and R30 + R10 sit outside the
     OPA548 loop, so this bound holds whatever the OPA548 current limit does;
   * both channels' transfer functions onto the ADS1256 inputs;
+  * the FORCE-path fault envelope: U5's output driven into a rail, current
+    set only by R9 + F1 + R30 + R10. Every resistor in that path must be
+    RATED (a "W" in its value or MPN) for its share of it;
 
-and fails if any of those operating points, at worst-case tolerance, would put
-an ADC input outside its absolute window or the signal outside full scale.
+and fails if any normal operating point, at worst-case tolerance, would put
+an ADC input outside its absolute window or the signal outside full scale,
+or if a FORCE-path resistor is under-rated for the fault envelope.
 
-It checks the NORMAL operating envelope only: a passive DUT, the source inside
-its programmed span. Faults (external voltage on the jacks, a failed U5) are
-the protection sheet's business, not this check's.
+The measurement check is for the NORMAL operating envelope: a passive DUT and
+the source inside its contracted span. External voltage on the jacks is the
+protection sheet's business.
 
 Datasheet limits (each is a constant below)
 -------------------------------------------
@@ -31,11 +42,16 @@ INA128, TI SBOS051G: G = 1 + 50 kOhm/RG; RTI offset 50 uV + 500 uV/G max
     (P grade). The 50 kOhm is internal, so G carries its tolerance: a +/-0.5 %
     allowance is used below.
 
+OPA2277, TI SBOS079C: output swing at least (V+) - 1.2 V (RL = 10 kOhm).
+Bel 0ZRM0010FF1E: resistance 3.0 .. 7.5 ohm (the low end maximises fault
+    current).
+
 Engineering allowances (NOT datasheet values; stated so they can be argued)
 --------------------------------------------------------------------------
-SWEEP_TOL 0.5 %: 0.1 % R3-R6 (+/-0.2 % on the gain), REF5025 +/-0.1 %, and the
-    DAC8552's full-scale error, rounded up.
-UNSPECIFIED_R_TOL 1 %: R30 and R10 carry no tolerance in their values.
+SWEEP_TOL 0.5 %: 0.1 % R1-R6 (+/-0.2 % on the gain), REF5025 +/-0.1 %, and
+    the DAC8552's full-scale error, rounded up.
+UNSPECIFIED_R_TOL 1 %: for any resistor whose value carries no tolerance.
+RAIL_MAX 15.5 V: the +/-15 V bench supply, set high by ~3 %.
 """
 
 import os
@@ -59,9 +75,15 @@ INA_VOS_IN, INA_VOS_OUT = 50e-6, 500e-6   # INA128P max RTI: 50 uV + 500 uV/G
 # ---- design choices checked here ---------------------------------------------
 PGA = 2                     # one PGA for both channels (see blocks/adc.py)
 
+U3_SWING_MIN = 1.2          # OPA2277: output reaches at least (V+) - 1.2 V
+F1_R_MIN = 3.0              # 0ZRM0010FF1E minimum resistance, ohm
+
 # ---- engineering allowances --------------------------------------------------
 SWEEP_TOL = 0.005
 UNSPECIFIED_R_TOL = 0.01
+RAIL_MAX = 15.5             # +/-15 V bench rail, high
+RAIL_NOM = 15.0
+FORCE_PATH = ("R9", "R30", "R10")     # in series with F1 from U5 OUT to AGND
 
 
 class MeasurementRangeError(AssertionError):
@@ -89,6 +111,23 @@ def tolerance(part, default):
     return float(m.group(1)) / 100.0 if m else default
 
 
+_WATTS = re.compile(r"(?<![0-9.])([0-9]+(?:\.[0-9]+)?|[0-9]+/[0-9]+)\s*W\b")
+
+
+def power_rating(part):
+    """Rated power in W from the value, else the MPN field ('2W', '1/4W',
+    '0.5W'); None when neither states one."""
+    for text in (str(part.value), part.fields.get("MPN", "")):
+        m = _WATTS.search(text or "")
+        if m:
+            num = m.group(1)
+            if "/" in num:
+                a, b = num.split("/")
+                return float(a) / float(b)
+            return float(num)
+    return None
+
+
 def ina_gain(rg, tol=0.0):
     """INA128 gain for RG (None = open), inflated by `tol` on the 50k term."""
     return 1.0 if rg is None else 1.0 + INA_RG_INTERNAL * (1 + tol) / rg
@@ -98,8 +137,8 @@ def compute(circuit):
     """Every number the check needs, from the live part values."""
     parts = {p.ref: p for p in circuit.parts}
     R = {ref: ohms(parts[ref]) for ref in
-         ("R3", "R4", "R5", "R6", "R10", "R11", "R12", "R13", "R14", "R30",
-          "R32", "R33")}
+         ("R1", "R2", "R3", "R4", "R5", "R6", "R9", "R10", "R11", "R12",
+          "R13", "R14", "R30", "R32", "R33")}
     problems = []
 
     # ---- source ------------------------------------------------------------
@@ -107,13 +146,43 @@ def compute(circuit):
         problems.append(f"sweep difference amp unbalanced: R4/R3 = "
                         f"{R['R4']}/{R['R3']}, R6/R5 = {R['R6']}/{R['R5']}")
     g_sweep = R["R4"] / R["R3"]
-    v_sweep = g_sweep * VREF_NOM / 2
+    k_mid = R["R2"] / (R["R1"] + R["R2"])          # V_B -> VREF_HALF
+    # Firmware contract: B at full scale (V_B = VREF). Negative end: A = 0.
+    v_neg = g_sweep * (0.0 - VREF_NOM * k_mid)
+    v_pos = g_sweep * (VREF_NOM - VREF_NOM * k_mid)
+    if abs(v_pos + v_neg) > 1e-9 * max(1.0, abs(v_neg)):
+        problems.append(f"sweep span asymmetric with B at full scale: "
+                        f"{v_neg:+.3f} .. {v_pos:+.3f} V (R1 = {R['R1']}, "
+                        f"R2 = {R['R2']}: the midpoint is not V_B/2)")
+    v_sweep = max(abs(v_neg), abs(v_pos))
     v_sweep_worst = v_sweep * (1 + SWEEP_TOL)
+    # Out of contract (B below full scale): A = FS, B = 0 commands G * VREF;
+    # U3B clips somewhere between its guaranteed swing and the +15 V rail.
+    v_pos_uncontracted = min(g_sweep * VREF_NOM, RAIL_NOM)
     r_out = R["R30"] + R["R10"]
     i_max = v_sweep / r_out
-    r10_hi = R["R10"] * (1 + UNSPECIFIED_R_TOL)
-    r30_lo = R["R30"] * (1 - UNSPECIFIED_R_TOL)
+    r10_hi = R["R10"] * (1 + tolerance(parts["R10"], UNSPECIFIED_R_TOL))
+    r30_lo = R["R30"] * (1 - tolerance(parts["R30"], UNSPECIFIED_R_TOL))
     i_max_worst = v_sweep_worst / (r30_lo + r10_hi)
+
+    # ---- FORCE-path fault envelope: U5 OUT driven into a rail --------------
+    lo = {r: R[r] * (1 - tolerance(parts[r], UNSPECIFIED_R_TOL))
+          for r in FORCE_PATH}
+    i_fault = RAIL_MAX / (sum(lo.values()) + F1_R_MIN)
+    fault = {}
+    for ref in FORCE_PATH:
+        p = i_fault ** 2 * R[ref] * (1 + tolerance(parts[ref],
+                                                   UNSPECIFIED_R_TOL))
+        rating = power_rating(parts[ref])
+        fault[ref] = (p, rating)
+        if rating is None:
+            problems.append(f"{ref} ({parts[ref].value}): no power rating "
+                            f"stated in its value or MPN; it carries "
+                            f"{p:.2f} W in the FORCE-path fault envelope")
+        elif rating < p:
+            problems.append(f"{ref} rated {rating:g} W but dissipates "
+                            f"{p:.2f} W with U5's output in a rail "
+                            f"({i_fault * 1e3:.0f} mA)")
 
     # ---- voltage channel: Kelvin attenuator -> U7 (G from R14) -------------
     if (R["R12"], R["R32"]) != (R["R13"], R["R33"]):
@@ -177,6 +246,9 @@ def compute(circuit):
     return {
         "problems": problems,
         "v_sweep": v_sweep, "v_sweep_worst": v_sweep_worst,
+        "v_neg": v_neg, "v_pos": v_pos,
+        "v_pos_uncontracted": v_pos_uncontracted,
+        "i_fault": i_fault, "fault": fault,
         "i_max": i_max, "i_max_worst": i_max_worst,
         "k": k, "g_v": g_v, "g_i": g_i,
         "full_scale": full_scale, "pin_window": (pin_lo, pin_hi),
@@ -198,8 +270,20 @@ def run_measurement_range(circuit, verbose=True):
         print("\n" + "=" * 70)
         print("MEASUREMENT RANGE (bipolar, from live part values)")
         print("=" * 70)
-        print(f"  source span ........ V_SWEEP = +/-{r['v_sweep']:.3f} V "
-              f"(+/-{r['v_sweep_worst']:.3f} V worst case)")
+        print(f"  source span ........ V_SWEEP = {r['v_neg']:+.3f} .. "
+              f"{r['v_pos']:+.3f} V (+/-{r['v_sweep_worst']:.3f} V worst "
+              f"case)")
+        print(f"      negative end: hardware bound (A = 0, B = full scale)")
+        print(f"      positive end: FIRMWARE CONTRACT (B = full scale). "
+              f"Broken, the hardware allows up to "
+              f"~{r['v_pos_uncontracted']:+.1f} V (U3B swing >= +"
+              f"{RAIL_NOM - U3_SWING_MIN:.1f} V, rail +{RAIL_NOM:.0f} V): "
+              f"not measurable, see docs/firmware_handoff.md §3")
+        print(f"  FORCE-path fault ... U5 OUT in a {RAIL_MAX} V rail: "
+              f"{r['i_fault'] * 1e3:.0f} mA; "
+              + ", ".join(f"{ref} {p:.2f} W of {rating:g} W"
+                          if rating else f"{ref} {p:.2f} W (unrated)"
+                          for ref, (p, rating) in r["fault"].items()))
         print(f"  current bound ...... |I| <= V_SWEEP/(R30+R10) = "
               f"{r['i_max'] * 1e3:.1f} mA ({r['i_max_worst'] * 1e3:.1f} mA "
               f"worst case), any passive DUT, any ILIM")

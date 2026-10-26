@@ -9,14 +9,36 @@ Two PHYSICALLY SEPARATE SPI buses (spec §C.1):
     SPI1 (PA5/PA7/PA4)  -> DAC  (write-only)
     SPI2 (PB13/15/14/12)-> ADC  (bidirectional)
 
-NOTE — C43 (VCAP1 decoupling, 2.2uF) is added here for electrical completeness:
-the STM32F4 internal LDO requires it and it was absent from the source component
-table. All other parts match the source Sheet-2 BOM.
+NOTE — C43 (VCAP1 decoupling) is added here for electrical completeness: the
+STM32F4 internal LDO requires it and it was absent from the source component
+table. Its value is the data sheet's, for THIS package: the LQFP64 has a single
+VCAP pin (VCAP_1, pin 30; VCAP_2 exists only on the 100-pin packages), and
+DS10314 Table 16 asks for 4.7 uF with ESR < 1 ohm on a single VCAP pin
+(2 x 2.2 uF is the two-pin case). C43 was 2.2 uF; audit F4.
+
+SAFE-STATE HEARTBEAT (audit F2)
+-------------------------------
+PC5 -> R36 -> C47 -> D6 (BAT54S) -> DAC_ARM, held by C48 and bled by R37: a
+diode charge pump that turns a SOFTWARE-toggled square wave into the enable
+of the DAC reference gate U11 (Sheet 3). Nothing but edges reaches DAC_ARM —
+there is no DC path from any rail — so a reset (pins float), a debugger halt,
+a crash, a pin stuck high or low, or an unpowered MCU all drop DAC_ARM below
+U11's VIL within ~52 ms and the sweep output to zero. R36 limits the PC5
+edge current to 3.3 mA. Component values and their simulated margins are in
+blocks/dac_sweep.py; the firmware contract is docs/firmware_handoff.md.
+
+STATUS LED: SUNK BY PC13, NOT SOURCED
+-------------------------------------
+PC13..PC15 sit behind the backup-domain power switch; DS10314 says they can
+sink only 3 mA and "must not be used as a current source (e.g. to drive an
+LED)". LED1 is therefore lit by PC13 pulling LOW: +3V3D -> LED1 -> R23 ->
+PC13. R23 = 1 k gives ~1 mA (green Vf ~2 V): visible, and a third of the
+3 mA limit. (It was 330 R, sourced from PC13.)
 """
 
 from libraries.custom_symbols import (
     STM32F411RET6, Crystal, R, C, C_POL, L_FerriteBead, LED, SW_Push,
-    Header_1x05, USB_C_Receptacle, USBLC6_2SC6, PWR_FLAG,
+    Header_1x05, USB_C_Receptacle, USBLC6_2SC6, PWR_FLAG, BAT54S,
 )
 from skidl import Net
 from .nets import nc, nc_named
@@ -36,7 +58,8 @@ def create_mcu_block(n):
     C39 = C()(ref="C39", tag="C39", value="4.7uF",
               footprint="Capacitor_SMD:C_0805_2012Metric")
     C40 = C()(ref="C40", tag="C40", value="1uF")
-    C43 = C()(ref="C43", tag="C43", value="2.2uF")  # VCAP1 (added, see header)
+    # VCAP1: 4.7 uF, X5R/X7R, >= 6.3 V (10 V chosen), ESR < 1 ohm (any MLCC).
+    C43 = C()(ref="C43", tag="C43", value="4.7uF 10V X5R")
     # One more +3V3D decoupler at U9, added on the routed board by its
     # designer; carried here so the regenerated board keeps it.
     C45 = C()(ref="C45", tag="C45", value="100nF")
@@ -45,7 +68,7 @@ def create_mcu_block(n):
     C41 = C()(ref="C41", tag="C41", value="100nF")
     SW1 = SW_Push()(ref="SW1", tag="SW1", value="RESET")
     R22 = R()(ref="R22", tag="R22", value="10k")
-    R23 = R()(ref="R23", tag="R23", value="330R")
+    R23 = R()(ref="R23", tag="R23", value="1k")
     LED1 = LED()(ref="LED1", tag="LED1", value="GREEN")
     J2 = Header_1x05()(ref="J2", tag="J2", value="SWD")
     J3 = USB_C_Receptacle()(ref="J3", tag="J3", value="USB-C")
@@ -57,6 +80,12 @@ def create_mcu_block(n):
     R28 = R()(ref="R28", tag="R28", value="100k")
     R29 = R()(ref="R29", tag="R29", value="100k")
     C42 = C()(ref="C42", tag="C42", value="100nF")
+    # Safe-state heartbeat charge pump (see header) and the CS_DAC pull-up.
+    R36 = R()(ref="R36", tag="R36", value="1k")
+    C47 = C()(ref="C47", tag="C47", value="100nF")
+    D6 = BAT54S()(ref="D6", tag="D6", value="BAT54S")
+    C48 = C()(ref="C48", tag="C48", value="470nF 16V X7R")
+    R37 = R()(ref="R37", tag="R37", value="100k")
 
     # ---- power ----
     # U9["VDD"] resolves to ALL FOUR VDD pads of the LQFP-64 (19/32/48/64) and
@@ -123,8 +152,9 @@ def create_mcu_block(n):
     n.DGND += J3["GND"]
 
     # USB-C shield (pad S1, four physical shell tabs): tied DIRECTLY to DGND.
-    # This is a deliberate choice, not an omission. The board is bus-powered
-    # and single-enclosure, so there is no chassis/signal-ground potential
+    # This is a deliberate choice, not an omission. The board is powered from
+    # the bench supply at J1 (VBUS only feeds the PA0 sense divider and U10's
+    # clamp) and is single-enclosure, so there is no chassis/signal-ground potential
     # difference for an RC or ferrite path to manage; a direct tie gives the
     # lowest-impedance return for cable-shield ESD and CM currents and keeps
     # the shell from floating. The analog ground is unaffected: AGND reaches
@@ -134,13 +164,24 @@ def create_mcu_block(n):
     # SBU1/SBU2 (pads A8/B8) carry no sideband signalling in this design.
     nc_named(J3, "SBU1", "SBU2")
 
-    # ---- status LED ----
+    # ---- status LED: sunk by PC13 (see header) ----
     n.LED_STATUS += U9["PC13"], R23[1]
-    led_a = Net("LED_A"); led_a += R23[2], LED1["A"]
-    n.DGND += LED1["K"]
+    led_k = Net("LED_K"); led_k += R23[2], LED1["K"]
+    n.P3V3D += LED1["A"]
+
+    # ---- safe-state heartbeat: PC5 -> charge pump -> DAC_ARM (Sheet 3) ----
+    # (The passives are wired pad 2 = signal side, pad 1 = the next node
+    # west, so that laid out at 0 degrees the chain runs east -> west from
+    # the heartbeat via to the moat: the board chose the pad numbers.)
+    hb = Net("SAFE_HB"); hb += U9["PC5"], R36[2]
+    hb_r = Net("SAFE_HB_R"); hb_r += R36[1], C47[2]
+    hb_ac = Net("SAFE_HB_AC"); hb_ac += C47[1], D6["COM"]
+    n.DGND += D6["A"]
+    n.DAC_ARM += D6["K"], C48[2], R37[2]
+    n.DGND += C48[1], R37[1]
 
     # ---- unused MCU pins: explicit no-connects ----
-    # The LQFP-64 has 64 pads. 31 are used above; the remaining 33 GPIOs are
+    # The LQFP-64 has 64 pads. 32 are used above; the remaining 32 GPIOs are
     # deliberately unpopulated in Stage 1 and are declared here so that no pad
     # is silently absent from the netlist (validation/footprint_check.py
     # errors on any pad that is neither netted nor listed here).
@@ -149,7 +190,7 @@ def create_mcu_block(n):
         "PC14", "PC15",                                  # LSE oscillator (unused)
         "PC0", "PC1", "PC2", "PC3",                      # port C low
         "PA1", "PA2", "PA3", "PA6",                      # port A spares
-        "PC4", "PC5",
+        "PC4",                                           # (PC5: heartbeat)
         "PB0", "PB1", "PB2", "PB10",                     # port B spares
         "PC6", "PC7", "PC8", "PC9",
         "PA10",                                          # USB_ID (device only)
@@ -180,4 +221,5 @@ def create_mcu_block(n):
         "LED1": LED1, "J2": J2, "J3": J3, "U10": U10, "R24": R24, "R25": R25,
         "R26": R26, "R27": R27, "R28": R28, "R29": R29, "C42": C42,
         "FLG7": FLG7, "FLG8": FLG8,
+        "R36": R36, "C47": C47, "D6": D6, "C48": C48, "R37": R37,
     }

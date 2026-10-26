@@ -155,7 +155,10 @@ NETCLASSES = {
             "the fuse F1 holds 100 mA and the TVS D5 conducts fault current, "
             "so the track is sized for the FAULT case, not the operating one; "
             "0.50 mm at 1 oz carries ~1.4 A at a 10 C rise."),
-        "nets": ["FORCE+", "FORCE-", "VO_RAW", "VO_SENSE", "F1_MID"],
+        "nets": ["FORCE+", "FORCE-", "VO_RAW", "VO_SENSE", "F1_MID",
+                 # U5 output snubber midpoint (R38/C49, DNP): sits on the
+                 # +/-11 V output node, so it keeps the output's clearance.
+                 "VO_SNUB"],
     },
     "SENSE": {
         "clearance": 0.25,
@@ -172,7 +175,10 @@ NETCLASSES = {
             "the INA128's input bias, so it does not degrade the measurement. "
             "via 0.6/0.3 mm = F7 exactly (minimum via, to keep stubs short)."),
         "nets": ["SENSE+", "SENSE-", "VREF_2V5", "V_DAC", "VREF_HALF",
-                 "V_SWEEP", "I_SENSE_OUT", "V_SENSE_OUT"],
+                 "V_SWEEP", "I_SENSE_OUT", "V_SENSE_OUT",
+                 # The DAC's gated reference and its channel-B output (the
+                 # sweep midpoint): the same precision chain as V_DAC.
+                 "DAC_VREF", "V_DACB"],
     },
     "DIGITAL": {
         "clearance": 0.20,
@@ -187,7 +193,10 @@ NETCLASSES = {
             "intrinsic pad gap) and the SSOP-28. via 0.6/0.3 mm = F7."),
         "nets": ["SCK1", "MOSI1", "CS_DAC", "SCK2", "MOSI2", "MISO2",
                  "CS_ADC", "DRDY", "RESET_ADC", "SWDIO", "SWCLK", "NRST",
-                 "BOOT0", "LED_STATUS", "VBUS_SENSE"],
+                 "BOOT0", "LED_STATUS", "VBUS_SENSE",
+                 # Safe-state heartbeat (PC5) through the charge pump to the
+                 # DAC reference gate: 3.3 V logic levels, kHz edges.
+                 "SAFE_HB", "SAFE_HB_R", "SAFE_HB_AC", "DAC_ARM"],
     },
     "USB": {
         "clearance": 0.20,
@@ -221,7 +230,15 @@ NETCLASSES = {
             "SENSE (high-impedance, low-current) so the same numbers apply; "
             "kept as a separate class so the Kelvin/reference nets can be "
             "tightened later without touching these."),
-        "nets": ["VCAP1", "OSC_IN", "OSC_OUT", "CC1", "CC2", "LED_A",
+        # "/mcu/LED_A" is the pre-audit BOARD name of the R23 -> LED1 net
+        # (LED1 was sourced then; it is sunk now, so the net is LED_K). It
+        # matches no net on the board of record and stays listed, in board
+        # form, only so that the original board in unipolar-routed/, which
+        # validation/routed_board_check.py DRC-checks under THIS policy as
+        # its baseline, keeps the class it always had: otherwise the same
+        # copper would count as "new" violations purely through the rename.
+        "nets": ["VCAP1", "OSC_IN", "OSC_OUT", "CC1", "CC2", "LED_K",
+                 "/mcu/LED_A",
                  "VREF_HALF_RAW", "DIFF_P", "DIFF_N",
                  "OPA548_ILIM", "OPA548_ES",
                  "U6_RG1", "U6_RG2", "U7_RG1", "U7_RG2",

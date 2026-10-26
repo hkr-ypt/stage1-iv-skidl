@@ -808,9 +808,13 @@ def emit_child_sheet(model, block, path, uids):
             labels.extend(emit_label(model.label_kind(net), net,
                                      ex, py, side, luid))
 
+        # A DNP part (libraries/custom_symbols.py::dnp) stays on the board
+        # and leaves the BOM: KiCad's own flags, not a value-string convention.
+        fitted = not getattr(part, "dnp", False)
         symbols.append(f'  (symbol (lib_id {q(sym.lib_id)}) '
                        f'(at {U(sx)} {U(sy)} 0) (unit 1) '
-                       f'(in_bom yes) (on_board yes) (dnp no)')
+                       f'(in_bom {"yes" if fitted else "no"}) (on_board yes) '
+                       f'(dnp {"no" if fitted else "yes"})')
         symbols.append(f'    (uuid {uid})')
         symbols.extend(props)
         symbols.extend(pin_refs)

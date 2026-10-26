@@ -767,8 +767,14 @@ def _silk_items(board):
             sz = _first(font, "size") if font is not None else None
             if sz is not None and len(sz) > 1:
                 size = _f(sz[1])
-            out.append(("board-text", text,
-                        silk_text_box(text, x, y, size)))
+            bx = silk_text_box(text, x, y, size)
+            if round(_r) % 180 == 90:
+                # Board text turned a quarter: the same box, standing up.
+                # (Footprint designators keep the axis-aligned box above,
+                # which is what the KiCad baseline fixture calibrates.)
+                hw, hh = (bx[2] - bx[0]) / 2, (bx[3] - bx[1]) / 2
+                bx = (x - hh, y - hw, x + hh, y + hw)
+            out.append(("board-text", text, bx))
     return out
 
 
