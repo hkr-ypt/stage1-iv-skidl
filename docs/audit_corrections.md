@@ -162,7 +162,7 @@ footprints, 889 tracks, 107 vias, 2 zones, fully routed.
 | OS | Ubuntu 24.04.5 LTS, Linux 6.18 (cloud container) |
 | Python / SKiDL | Python 3.12.3, SKiDL 2.2.3 |
 | KiCad libraries | kicad-symbols 9.0.9.1 @ `ad36cd14bcd1`, kicad-footprints 9.0.9.1 @ `2b941bf1d978` (pinned) |
-| KiCad (ERC, DRC, round trip, loads) | kicad-cli **10.0.7**; pcbnew 10.0.7 through `/usr/bin/python3.12` |
+| KiCad (ERC, DRC, round trip, loads) | kicad-cli **10.0.7**; pcbnew 10.0.7 (through the distribution Python 3.12) |
 | Date | 2026-10-26 |
 
 ### Results
