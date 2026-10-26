@@ -13,10 +13,35 @@ Key topology points enforced here:
     analog and digital grounds meet (checked in validation/assertions.py).
   * U1 (3.3V LDO) is fed from +5V_RAW (digital side) so digital load current
     never flows through FB1 into the analog rail.
+  * D8/D9 (MBR0540 Schottky) clamp each +/-15 V rail to within one Schottky
+    drop of AGND in the WRONG direction. See "PARTIAL SUPPLY" below.
+
+PARTIAL SUPPLY — WHY D8/D9 EXIST
+--------------------------------
+With one +/-15 V rail absent (bench output off or unplugged) the other one
+still powers U3, U5, U6 and U7 through their supply pins, and their
+quiescent current (U5 alone is up to 20 mA, SBOS070D) flows out of the
+DEAD rail pin and pulls that rail TOWARDS the live one. A floating -15VA
+can rise above AGND. The sense clamps D2/D4 (anode on -15VA, Sheet 6) then
+conduct INTO SENSE+/SENSE-, i.e. into the DUT, with nothing but the dead
+rail's impedance to limit it; +15VA dragged below AGND does the same
+through D1/D3. D9 (anode -15VA, cathode AGND) and D8 (anode AGND, cathode
++15VA) carry that quiescent current instead and hold the dead rail within
+VF <= 0.51 V (MBR0540, at <= 0.5 A) of AGND, so the voltage the sense
+clamps can put on the DUT is at most that drop, less their own forward
+voltage, instead of most of the live rail. Reverse
+leakage: <= 10 uA at 20 V and 25 C (5 mA at 100 C junction), rail to AGND,
+outside every measurement path. The same 0.51 V bound is what keeps the
+U12 disconnect (Sheet 8) guaranteed OPEN when a rail is missing.
+
++5V_RAW gets no clamp: nothing on the +5 V side connects to -15VA, so it
+cannot be dragged negative; with +5 V absent, the DAC reference gate
+(Sheet 3) holds the setpoint at 0 V.
 """
 
 from libraries.custom_symbols import (
     TerminalBlock_4, LD1117S33, REF5025, L_FerriteBead, R, C, C_POL, PWR_FLAG,
+    D_Schottky,
 )
 from .nets import nc
 
@@ -68,6 +93,9 @@ def create_power_block(n):
     # loss; 4.7 uF X7R (~3 uF or more at 2.5 V) is inside it with margin.
     C9 = C()(ref="C9", tag="C9", value="4.7uF 10V X7R")
     C10 = C()(ref="C10", tag="C10", value="100nF")
+    # Dead-rail clamps (header, PARTIAL SUPPLY).
+    D8 = D_Schottky()(ref="D8", tag="D8", value="MBR0540")
+    D9 = D_Schottky()(ref="D9", tag="D9", value="MBR0540")
 
     # ---- raw supply inputs from bench supply (J1) ----
     n.P15VA += J1["Pin_1"]      # +15V_RAW == +15VA (same net downstream)
@@ -80,6 +108,11 @@ def create_power_block(n):
     n.AGND += C5["-"]
     n.AGND += C6["+"]
     n.N15VA += C6["-"]
+    # Dead-rail clamps: reverse-biased while both rails are up.
+    n.P15VA += D8["K"]
+    n.AGND += D8["A"]
+    n.AGND += D9["K"]
+    n.N15VA += D9["A"]
 
     # ---- +3V3 digital LDO (U1), fed from +5V_RAW ----
     n.P5V_RAW += U1["VIN"], C1["+"], C3[1]
@@ -140,7 +173,7 @@ def create_power_block(n):
     return {
         "J1": J1, "U1": U1, "U2": U2, "FB1": FB1, "R31": R31,
         "C1": C1, "C2": C2, "C3": C3, "C4": C4, "C5": C5, "C6": C6,
-        "C7": C7, "C8": C8, "C9": C9, "C10": C10,
+        "C7": C7, "C8": C8, "C9": C9, "C10": C10, "D8": D8, "D9": D9,
         "FLG1": FLG1, "FLG2": FLG2, "FLG3": FLG3, "FLG4": FLG4,
         "FLG5": FLG5, "FLG6": FLG6,
     }

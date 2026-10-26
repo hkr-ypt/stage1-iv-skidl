@@ -13,6 +13,7 @@
   (lib (name "Power_Protection")(type "KiCad")(uri "${KICAD9_SYMBOL_DIR}/Power_Protection.kicad_sym")(options "")(descr "Upstream KiCad library this design resolves pin numbers against. Not referenced by any schematic symbol - see docs/LIBRARY_DEPENDENCIES.md."))
   (lib (name "Reference_Voltage")(type "KiCad")(uri "${KICAD9_SYMBOL_DIR}/Reference_Voltage.kicad_sym")(options "")(descr "Upstream KiCad library this design resolves pin numbers against. Not referenced by any schematic symbol - see docs/LIBRARY_DEPENDENCIES.md."))
   (lib (name "Regulator_Linear")(type "KiCad")(uri "${KICAD9_SYMBOL_DIR}/Regulator_Linear.kicad_sym")(options "")(descr "Upstream KiCad library this design resolves pin numbers against. Not referenced by any schematic symbol - see docs/LIBRARY_DEPENDENCIES.md."))
+  (lib (name "Relay_SolidState")(type "KiCad")(uri "${KICAD9_SYMBOL_DIR}/Relay_SolidState.kicad_sym")(options "")(descr "Upstream KiCad library this design resolves pin numbers against. Not referenced by any schematic symbol - see docs/LIBRARY_DEPENDENCIES.md."))
   (lib (name "Switch")(type "KiCad")(uri "${KICAD9_SYMBOL_DIR}/Switch.kicad_sym")(options "")(descr "Upstream KiCad library this design resolves pin numbers against. Not referenced by any schematic symbol - see docs/LIBRARY_DEPENDENCIES.md."))
   (lib (name "power")(type "KiCad")(uri "${KICAD9_SYMBOL_DIR}/power.kicad_sym")(options "")(descr "Upstream KiCad library this design resolves pin numbers against. Not referenced by any schematic symbol - see docs/LIBRARY_DEPENDENCIES.md."))
 )

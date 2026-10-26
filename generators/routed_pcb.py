@@ -44,7 +44,7 @@ from generators.footprint_xform import (  # noqa: E402
     head, kids, first, fmt, place_footprint,
 )
 from generators.layout import (  # noqa: E402
-    Layout, LayoutError, load_layout, apply_eco, strip, one_line,
+    Layout, LayoutError, load_layout, apply_eco, strip, one_line, _ref_sort,
 )
 from generators import pcb as _pcb  # noqa: E402
 
@@ -221,6 +221,39 @@ def place_parts(nodes, layout):
     return placed, skipped
 
 
+def place_board_parts(layout, libs=None):
+    """Footprints the layout places that no symbol names (mounting holes).
+
+    Loaded from the vendored library like every other footprint. A zone
+    inside a footprint (a keepout) is stored by KiCad in BOARD coordinates,
+    unlike the footprint's graphics, so its points are translated here;
+    rotation and the bottom side are refused rather than half-supported.
+    """
+    placed = {}
+    if not layout.board_parts:
+        return placed
+    libs = libs or KicadLibraries()
+    for ref in sorted(layout.board_parts, key=_ref_sort):
+        bp = layout.board_parts[ref]
+        if bp.side != "F" or bp.rot:
+            raise LayoutError(f"board part {ref}: only top side, rotation 0 "
+                              f"is supported (got {bp.side}, {bp.rot})")
+        node, _src = _pcb.load_footprint(libs, bp.lib_id)
+        node = copy.deepcopy(node)
+        _pcb._set_uuid(node, uid(f"fp:{ref}"))
+        _pcb.set_reference(node, ref)
+        place_footprint(node, bp.x, bp.y, 0, "F")
+        for zone in kids(node, "zone"):
+            for pts in kids(first(zone, "polygon"), "pts"):
+                for p in pts[1:]:
+                    if head(p) == "xy":
+                        p[1] = A(fmt(float(p[1]) + bp.x))
+                        p[2] = A(fmt(float(p[2]) + bp.y))
+        _unique_child_uuids(node, ref)
+        placed[ref] = node
+    return placed
+
+
 def _zone_node(zone, codes):
     """(zone (net "AGND") ...) from the layout -> 20241229 board syntax."""
     net = str(first(zone, "net")[1])
@@ -234,9 +267,13 @@ def _zone_node(zone, codes):
     return SexpList(out)
 
 
-def emit_board(nodes, net_names, codes, layout):
+def emit_board(nodes, net_names, codes, layout, libs=None):
     """The complete board as text. Deterministic."""
     placed, skipped = place_parts(nodes, layout)
+    clash = sorted(set(placed) & set(layout.board_parts))
+    if clash:
+        raise LayoutError(f"board parts reuse circuit references: {clash}")
+    board_only = place_board_parts(layout, libs)
     for s in layout.segments:
         if s.net not in codes:
             raise LayoutError(f"track on net {s.net!r}, which the circuit "
@@ -259,6 +296,8 @@ def emit_board(nodes, net_names, codes, layout):
         board.append(L(A("net"), A(codes[name]), Q(name)))
     for ref in nodes:                                 # circuit order
         board.append(placed[ref])
+    for ref in sorted(board_only, key=_ref_sort):
+        board.append(board_only[ref])
     for g in sorted(layout.graphics, key=one_line):
         g = copy.deepcopy(g)
         g.append(L(A("uuid"), Q(uid(f"graphic:{one_line(g)}"))))
@@ -288,6 +327,7 @@ def emit_board(nodes, net_names, codes, layout):
         board.append(_zone_node(z, codes))
     text = write_sexp(SexpList(board)) + "\n"
     return text, {"skipped_texts": skipped, "parts": len(placed),
+                  "board_parts": len(board_only),
                   "segments": len(layout.segments), "vias": len(layout.vias),
                   "zones": len(layout.zones), "nets": len(net_names)}
 
@@ -299,7 +339,9 @@ def emit_board(nodes, net_names, codes, layout):
 LAYOUT_DIR = os.path.join(_REPO_ROOT, "layout")
 BASE_LAYOUT = os.path.join(LAYOUT_DIR, "stage1_iv.layout")
 ECOS = [os.path.join(LAYOUT_DIR, "bipolar.eco"),
-        os.path.join(LAYOUT_DIR, "audit_corrections.eco")]
+        os.path.join(LAYOUT_DIR, "audit_corrections.eco"),
+        os.path.join(LAYOUT_DIR, "final_corrections.eco"),
+        os.path.join(LAYOUT_DIR, "policy_clearance.eco")]
 
 
 def composed_layout(base=BASE_LAYOUT, ecos=None):

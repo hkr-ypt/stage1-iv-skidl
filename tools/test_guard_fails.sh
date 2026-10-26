@@ -38,8 +38,9 @@ reset_copy() {
 # patch runs first, then main.py regenerates and re-checks. A board defect that
 # only main.py catches, or only routed_board_check.py catches, counts as MISSED.
 # The board is the board of record: circuit + layout/stage1_iv.layout +
-# layout/*.eco (generators/routed_pcb.py). Injections 22-23 need KiCad 10's
-# DRC, as the CI runner has; without it they are reported MISSED, not passed.
+# layout/*.eco (generators/routed_pcb.py). Injections 22-23 and 32 need
+# KiCad 10's DRC, as the CI runner has; without it they are reported MISSED,
+# not passed.
 expect_fail() {
     local gate="$1" name="$2" patch="$3"
     reset_copy
@@ -368,6 +369,66 @@ import pathlib
 p = pathlib.Path("blocks/protection.py"); s = p.read_text()
 assert "value=\"100R 1% 2W\"" in s
 p.write_text(s.replace("value=\"100R 1% 2W\"", "value=\"100R 1% 1/4W\""))
+'
+
+# --- the remaining hardware corrections (docs/final_corrections.md) -------------
+
+# 28. F2 jumpered out: FORCE- reaches the shunt with nothing to limit an
+#     external source on J7 (24 W into R10 from a 15.5 V rail)
+expect_fail assert "F2 bypassed: J7 FORCE- straight onto the shunt" '
+import pathlib
+p = pathlib.Path("blocks/protection.py"); s = p.read_text()
+old = "n.ISENSE_HI += F2[2]"
+assert old in s
+p.write_text(s.replace(old, "n.ISENSE_HI += F2[2], J7[\"FORCE-\"]"))
+'
+
+# 29. the U12 LED string returned to AGND instead of -15VA: with -15 V absent
+#     the relay stays closed, so FORCE+ is no longer disconnected in that state
+expect_fail assert "U12 LED string ends on AGND (one rail keeps FORCE+ on)" '
+import pathlib
+p = pathlib.Path("blocks/protection.py"); s = p.read_text()
+old = "n.N15VA += D7[\"A\"]"
+assert old in s
+p.write_text(s.replace(old, "n.AGND += D7[\"A\"]"))
+'
+
+# 30. a dead-rail clamp fitted backwards: D9 would forward-bias across -15VA
+expect_fail assert "D9 reversed (-15VA clamp would short the rail)" '
+import pathlib
+p = pathlib.Path("blocks/power.py"); s = p.read_text()
+old = "n.AGND += D9[\"K\"]\n    n.N15VA += D9[\"A\"]"
+assert old in s
+p.write_text(s.replace(old, "n.AGND += D9[\"A\"]\n    n.N15VA += D9[\"K\"]"))
+'
+
+# 31. R10 back to a half-watt part: an external source on J7 puts ~14 W into
+#     it until F2 trips, beyond 5 x 0.5 W
+expect_fail range "R10 rated 0.5 W against an external source on J7" '
+import pathlib
+p = pathlib.Path("blocks/current_sense.py"); s = p.read_text()
+assert "value=\"10.0R 0.1% 3W\"" in s
+p.write_text(s.replace("value=\"10.0R 0.1% 3W\"", "value=\"10.0R 0.1% 0.5W\""))
+'
+
+# 32. the policy-clearance re-routes dropped: the board is back at the human
+#     0.20 mm spacing, which the repository netclasses reject (KiCad 10 DRC)
+expect_fail board "policy_clearance.eco no longer applied" '
+import pathlib
+p = pathlib.Path("generators/routed_pcb.py"); s = p.read_text()
+old = ",\n        os.path.join(LAYOUT_DIR, \"policy_clearance.eco\")]"
+assert old in s
+p.write_text(s.replace(old, "]"))
+'
+
+# 33. a mounting hole dropped onto routed copper: its keepout and courtyard
+#     must stop the board, not the first screw
+expect_fail board "mounting hole H1 placed on routed tracks" '
+import pathlib
+p = pathlib.Path("layout/final_corrections.eco"); s = p.read_text()
+old = "MountingHole_3.2mm_M3_Isolated\" F 87.7 37.5 0)"
+assert old in s
+p.write_text(s.replace(old, "MountingHole_3.2mm_M3_Isolated\" F 110 60 0)"))
 '
 
 echo "----------------------------------------------------------------------"

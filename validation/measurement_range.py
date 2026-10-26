@@ -19,9 +19,18 @@ circuit it recomputes
     V and I share a sign in a passive DUT, and R30 + R10 sit outside the
     OPA548 loop, so this bound holds whatever the OPA548 current limit does;
   * both channels' transfer functions onto the ADS1256 inputs;
-  * the FORCE-path fault envelope: U5's output driven into a rail, current
-    set only by R9 + F1 + R30 + R10. Every resistor in that path must be
-    RATED (a "W" in its value or MPN) for its share of it;
+  * the FORCE-path fault envelope: U5's output driven into a rail (ILIM
+    ineffective, sweep saturated, or U5 failed), current set only by the
+    series parts outside U5's loop, each at its guaranteed MINIMUM:
+        DUT short ...... R9 + F1 + R30 + U12 + F2 + R10
+        D5 shorted ..... R9 + F1 + R30 + U12   (FORCE+ straight to AGND)
+    R30's minimum includes its TCR at the hottest film temperature its
+    rating allows. Every resistor in that path must be RATED (a "W" in its
+    value or MPN) for its share of it. This bound is the one the protection
+    relies on; the OPA548 ILIM setting (~49 mA nominal) is reported beside
+    it but is not a bound (SBOS070D specifies ILIM accuracy only at 2.5 A);
+  * an external source on J7 (FORCE-): only F2 + R10 limit it, so R10's
+    short-time overload rating must cover that current until F2 trips;
 
 and fails if any normal operating point, at worst-case tolerance, would put
 an ADC input outside its absolute window or the signal outside full scale,
@@ -43,8 +52,14 @@ INA128, TI SBOS051G: G = 1 + 50 kOhm/RG; RTI offset 50 uV + 500 uV/G max
     allowance is used below.
 
 OPA2277, TI SBOS079C: output swing at least (V+) - 1.2 V (RL = 10 kOhm).
-Bel 0ZRM0010FF1E: resistance 3.0 .. 7.5 ohm (the low end maximises fault
-    current).
+OPA548, TI SBOS070D: ILIM = 15000 * 4.75 V / (13750 + R_CL); the +/-100 mA
+    typ / +/-250 mA max accuracy is specified at R_CL = 14.8 k (2.5 A) only.
+Bel 0ZRM0010FF1E (F1, F2): resistance 3.0 .. 7.5 ohm (the low end maximises
+    fault current); Imax 2 A.
+Vishay PR02 (R30, doc. 28729): TCR +/-250 ppm/K, Rth 75 K/W.
+Vishay RS02B (R10, doc. 30204): short-time overload 5 x rated power, 5 s.
+Toshiba TLP176AM (U12): RON <= 2 ohm, no minimum (taken as 0 ohm); ION
+    0.7 A.
 
 Engineering allowances (NOT datasheet values; stated so they can be argued)
 --------------------------------------------------------------------------
@@ -76,14 +91,22 @@ INA_VOS_IN, INA_VOS_OUT = 50e-6, 500e-6   # INA128P max RTI: 50 uV + 500 uV/G
 PGA = 2                     # one PGA for both channels (see blocks/adc.py)
 
 U3_SWING_MIN = 1.2          # OPA2277: output reaches at least (V+) - 1.2 V
-F1_R_MIN = 3.0              # 0ZRM0010FF1E minimum resistance, ohm
+PTC_R_MIN = 3.0             # 0ZRM0010FF1E minimum resistance, ohm (F1, F2)
+PTC_I_MAX = 2.0             # 0ZRM0010FF1E Imax, A
+R30_TCR = 250e-6            # PR02, per K
+R30_RTH = 75.0              # PR02 hot-spot thermal resistance, K/W
+R10_OVERLOAD_X = 5.0        # RS02B short-time overload, x rated power, 5 s
+U12_RON_MIN = 0.0           # TLP176AM: no minimum RON is specified
+U12_RON_MAX = 2.0           # TLP176AM RON max, ohm
+U12_ION_MAX = 0.7           # TLP176AM ON-state current, A
+ILIM_K, ILIM_R0 = 15000 * 4.75, 13750.0   # OPA548 ILIM equation
 
 # ---- engineering allowances --------------------------------------------------
 SWEEP_TOL = 0.005
 UNSPECIFIED_R_TOL = 0.01
 RAIL_MAX = 15.5             # +/-15 V bench rail, high
 RAIL_NOM = 15.0
-FORCE_PATH = ("R9", "R30", "R10")     # in series with F1 from U5 OUT to AGND
+FORCE_PATH = ("R9", "R30", "R10")     # in series with F1, U12, F2 to AGND
 
 
 class MeasurementRangeError(AssertionError):
@@ -137,8 +160,8 @@ def compute(circuit):
     """Every number the check needs, from the live part values."""
     parts = {p.ref: p for p in circuit.parts}
     R = {ref: ohms(parts[ref]) for ref in
-         ("R1", "R2", "R3", "R4", "R5", "R6", "R9", "R10", "R11", "R12",
-          "R13", "R14", "R30", "R32", "R33")}
+         ("R1", "R2", "R3", "R4", "R5", "R6", "R7", "R9", "R10", "R11",
+          "R12", "R13", "R14", "R30", "R32", "R33")}
     problems = []
 
     # ---- source ------------------------------------------------------------
@@ -166,13 +189,31 @@ def compute(circuit):
     i_max_worst = v_sweep_worst / (r30_lo + r10_hi)
 
     # ---- FORCE-path fault envelope: U5 OUT driven into a rail --------------
-    lo = {r: R[r] * (1 - tolerance(parts[r], UNSPECIFIED_R_TOL))
+    rmin = {r: R[r] * (1 - tolerance(parts[r], UNSPECIFIED_R_TOL))
           for r in FORCE_PATH}
-    i_fault = RAIL_MAX / (sum(lo.values()) + F1_R_MIN)
+    # R30 hot: the film may run up to rating x Rth above ambient, and a
+    # negative TCR lowers it by that much again.
+    r30_rating = power_rating(parts["R30"]) or 0.0
+    rmin["R30"] *= 1 - R30_TCR * r30_rating * R30_RTH
+    r30_min = rmin["R30"]
+    # U5 OUT -> R9 -> F1 -> R30 -> U12 -> FORCE+
+    r_plus = rmin["R9"] + PTC_R_MIN + rmin["R30"] + U12_RON_MIN
+    i_fault_dut = RAIL_MAX / (r_plus + PTC_R_MIN + rmin["R10"])   # via F2, R10
+    i_fault_gnd = RAIL_MAX / r_plus                              # D5 shorted
+    i_fault = i_fault_dut
+    i_plus = max(i_fault_dut, i_fault_gnd)
     fault = {}
     for ref in FORCE_PATH:
-        p = i_fault ** 2 * R[ref] * (1 + tolerance(parts[ref],
-                                                   UNSPECIFIED_R_TOL))
+        # Worst dissipation in `ref` with everything else at its minimum:
+        # V^2 R / (R + rest)^2 over R's own range (one value, not the low end
+        # for the current and the high end for the power at once). R10 is in
+        # the DUT-short path only; R9 and R30 are worst with D5 shorted.
+        rest = (r_plus + PTC_R_MIN + rmin["R10"] if ref == "R10"
+                else r_plus) - rmin[ref]
+        r_hi = R[ref] * (1 + tolerance(parts[ref], UNSPECIFIED_R_TOL))
+        r_star = min(max(rest, rmin[ref]), r_hi)
+        p = RAIL_MAX ** 2 * r_star / (r_star + rest) ** 2
+        i = RAIL_MAX / (r_star + rest)
         rating = power_rating(parts[ref])
         fault[ref] = (p, rating)
         if rating is None:
@@ -182,7 +223,24 @@ def compute(circuit):
         elif rating < p:
             problems.append(f"{ref} rated {rating:g} W but dissipates "
                             f"{p:.2f} W with U5's output in a rail "
-                            f"({i_fault * 1e3:.0f} mA)")
+                            f"({i * 1e3:.0f} mA)")
+    if i_plus > U12_ION_MAX:
+        problems.append(f"U12 carries {i_plus * 1e3:.0f} mA in the fault "
+                        f"envelope, above its {U12_ION_MAX * 1e3:.0f} mA ION")
+    # External source of the rails' own magnitude on J7: F2 + R10 only.
+    i_ext = RAIL_MAX / (PTC_R_MIN + rmin["R10"])
+    p_ext = i_ext ** 2 * R["R10"] * (1 + tolerance(parts["R10"],
+                                                   UNSPECIFIED_R_TOL))
+    r10_rating = power_rating(parts["R10"]) or 0.0
+    if i_ext > PTC_I_MAX:
+        problems.append(f"external {RAIL_MAX} V on J7 drives {i_ext:.2f} A "
+                        f"through F2, above its {PTC_I_MAX} A Imax")
+    if p_ext > R10_OVERLOAD_X * r10_rating:
+        problems.append(f"external {RAIL_MAX} V on J7 puts {p_ext:.1f} W in "
+                        f"R10 until F2 trips, above its short-time overload "
+                        f"rating ({R10_OVERLOAD_X:g} x {r10_rating:g} W)")
+    # The OPA548 current limit, reported, never relied on.
+    i_ilim = ILIM_K / (ILIM_R0 + R["R7"])
 
     # ---- voltage channel: Kelvin attenuator -> U7 (G from R14) -------------
     if (R["R12"], R["R32"]) != (R["R13"], R["R33"]):
@@ -248,7 +306,9 @@ def compute(circuit):
         "v_sweep": v_sweep, "v_sweep_worst": v_sweep_worst,
         "v_neg": v_neg, "v_pos": v_pos,
         "v_pos_uncontracted": v_pos_uncontracted,
-        "i_fault": i_fault, "fault": fault,
+        "i_fault": i_fault, "i_fault_gnd": i_fault_gnd, "fault": fault,
+        "r30_lo": r30_min, "i_ext": i_ext, "p_ext": p_ext,
+        "r10_overload": R10_OVERLOAD_X * r10_rating, "i_ilim": i_ilim,
         "i_max": i_max, "i_max_worst": i_max_worst,
         "k": k, "g_v": g_v, "g_i": g_i,
         "full_scale": full_scale, "pin_window": (pin_lo, pin_hi),
@@ -279,11 +339,21 @@ def run_measurement_range(circuit, verbose=True):
               f"~{r['v_pos_uncontracted']:+.1f} V (U3B swing >= +"
               f"{RAIL_NOM - U3_SWING_MIN:.1f} V, rail +{RAIL_NOM:.0f} V): "
               f"not measurable, see docs/firmware_handoff.md §3")
-        print(f"  FORCE-path fault ... U5 OUT in a {RAIL_MAX} V rail: "
-              f"{r['i_fault'] * 1e3:.0f} mA; "
+        print(f"  FORCE-path fault ... U5 OUT in a {RAIL_MAX} V rail, "
+              f"every series part at its minimum (R30 hot: "
+              f"{r['r30_lo']:.1f} ohm, U12 0 ohm): DUT short "
+              f"{r['i_fault'] * 1e3:.0f} mA, D5 shorted "
+              f"{r['i_fault_gnd'] * 1e3:.0f} mA; "
               + ", ".join(f"{ref} {p:.2f} W of {rating:g} W"
                           if rating else f"{ref} {p:.2f} W (unrated)"
                           for ref, (p, rating) in r["fault"].items()))
+        print(f"  OPA548 ILIM ........ {r['i_ilim'] * 1e3:.1f} mA nominal "
+              f"(R7): typical only, NOT a bound; the passive bound above "
+              f"holds with ILIM at any value")
+        print(f"  external on J7 ..... {RAIL_MAX} V through F2 + R10: "
+              f"{r['i_ext']:.2f} A (F2 Imax {PTC_I_MAX:g} A), R10 "
+              f"{r['p_ext']:.1f} W until F2 trips (short-time rating "
+              f"{r['r10_overload']:g} W for 5 s)")
         print(f"  current bound ...... |I| <= V_SWEEP/(R30+R10) = "
               f"{r['i_max'] * 1e3:.1f} mA ({r['i_max_worst'] * 1e3:.1f} mA "
               f"worst case), any passive DUT, any ILIM")

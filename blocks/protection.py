@@ -4,7 +4,11 @@ protection.py — SHEET 8: Protection & DUT Connector
 
 Defense-in-depth on the FORCE+ path, read in order (spec §C.9):
 
-    VO_SENSE -> F1 (PTC fuse) -> R30 (100R series) -> D5 (TVS to AGND) -> J4
+    VO_SENSE -> F1 (PTC) -> R30 (100R) -> U12 (photorelay) -> D5 (TVS) -> J4
+
+and on the FORCE- return:
+
+    J7 -> F2 (PTC) -> ISENSE_HI (R10 shunt high side, U6 +IN) -> R10 -> AGND
 
 What each stage does, and what it does NOT do:
 
@@ -14,36 +18,68 @@ What each stage does, and what it does NOT do:
   * R30 (100 ohm) is the element that BOUNDS the current, passively. With U5's
     output driven hard into a rail (the worst credible fault: ILIM
     ineffective, the sweep saturated, or U5 itself failed) the current is set
-    only by R9 + F1 + R30 + R10:
-        15.5 V / (9.9 + 3.0 + 99 + 9.9) ohm = 127 mA,  1.60 W in R30
-    so R30 must carry that continuously. It is a Vishay PR02 (2 W at 70 C,
-    hot spot <= 220 C, Rth 75 K/W -> ~120 K rise at 1.6 W), mounted with the
-    body raised off the board (docs/physical_design.md). It is placed 7 mm
-    (courtyards) from the precision divider (R12/R13/R32/R33). It is NOT far
-    from F1: R30 sits electrically between F1 and D5/J4, and the only room
-    within reach is the strip beside F1, so the courtyards are 2.1 mm apart.
-    R30's heat lowers F1's hold current. In a fault that makes F1 trip sooner;
-    on the normal 49 mA plateau (0.24 W in R30) it eats into the hold margin,
-    which bring-up measures (docs/bringup_checklist.md). Real separation needs
-    the protection area re-laid out.
-  * F1 is NOT a backstop. 0ZRM0010FF1E holds 100 mA and trips at 200 mA at
-    23 C (Bel 0ZRM data sheet); the whole fault envelope above (<= 127 mA)
-    lies between the two, where the data sheet promises neither. It may trip
-    on a sustained fault, especially warm, and that is all. It also derates:
-    hold current is 68 mA at 50 C, 56 mA at 60 C and 45 mA at 70 C, so above
-    ~65 C ambient it can trip on the NORMAL 49 mA plateau. If bench testing
-    shows nuisance trips, the contingency is 0ZRM0017FF1E (170 mA hold,
-    same body and lead pitch, same footprint) — a conditional swap, not a
+    only by the series resistance outside U5's loop. The guaranteed minimum
+    of each part (R9 1 %, F1 and F2 at their 3.0 ohm data-sheet minimum, R30
+    1 % and its TCR at the hot spot, R10 0.1 %, U12 taken as 0 ohm) gives
+
+        DUT short, FORCE+ to FORCE- .... 15.5 V / 121 ohm  ~ 128 mA
+        D5 shorted (FORCE+ to AGND) .... 15.5 V / 108 ohm  ~ 143 mA
+
+    validation/measurement_range.py recomputes both from the live values and
+    fails if any resistor in the path is under-rated. R30 is a Vishay PR02
+    (2 W at 70 C, hot spot <= 220 C), mounted with the body raised off the
+    board (docs/physical_design.md); it carries <= 1.95 W in the D5-short case.
+  * F1 and F2 are NOT backstops for that envelope. 0ZRM0010FF1E holds 100 mA
+    and trips at 200 mA at 23 C (Bel 0ZRM data sheet); 128..143 mA lies
+    between the two, where the data sheet promises neither. They may trip on
+    a sustained fault, especially warm, and that is all. They derate: hold
+    current is 68 mA at 50 C, 56 mA at 60 C and 45 mA at 70 C. F1 therefore
+    sits away from U5's heat sink and R30 (docs/physical_design.md); if
+    bench testing still shows nuisance trips, the contingency is 0ZRM0017FF1E
+    (170 mA hold, same body, lead pitch and footprint) — conditional, not a
     default.
+  * F2 is the FORCE- protection, against what F1/R30 cannot see: an EXTERNAL
+    source on J7 (a miswired bench lead, an energised DUT). J7 otherwise sees
+    10 ohm to AGND: 15.5 V there is 1.5 A and 24 W in R10. With F2 in series
+    the current is <= 15.5 V / (3.0 + 9.99) ohm = 1.19 A, inside F2's 2 A
+    Imax, and R10 is a 3 W wirewound (Sheet 5) whose short-time-overload
+    rating (5 x 3 W for 5 s) covers the ~14 W it carries until F2 trips
+    (~0.6 s typical at 1.2 A, Bel curve A; the data sheet bounds it only at
+    0.5 A, <= 10 s). Recalibrate R10 after any such event. F2 is in SERIES:
+    nothing is connected across the shunt, so it adds no leakage path, does
+    not touch the Kelvin pair (J5/J6), is symmetric for signed current and
+    leaves AGND where it was. Its 3..7.5 ohm sits outside both measurements;
+    it costs compliance only (<= 0.7 V at 91 mA). A clamp at J7 was rejected:
+    anything from FORCE- to AGND is a path AROUND R10, i.e. unmeasured
+    current at the nA levels this instrument characterises.
+  * U12 (TLP176AM photorelay) DISCONNECTS FORCE+ unless BOTH +/-15 V rails are
+    up. Its LED is driven by a string across the two rails:
+
+        +15VA -> R39 (620R) -> U12 LED -> D7 (BZT52C24) -> -15VA
+
+    With either rail absent (held within 0.51 V of AGND by the rail clamps
+    D8/D9, Sheet 1) the string has <= 15.5 + 0.51 = 16.0 V across it, below
+    D7's 16.8 V leakage test point (IR <= 0.1 uA), so IF <= 0.1 uA, a
+    thousandth of U12's 0.1 mA guaranteed-off (IFC) current: U12 is OPEN,
+    guaranteed by data-sheet limits at 25 C. It is guaranteed CLOSED
+    (IF >= IFT max 3 mA) at a rail-to-rail total >= 25.6 + 1.4 + 3 mA x
+    626 ohm = 28.9 V, i.e. +/-14.45 V. Between the two it is not guaranteed
+    either way, but any state in that band has >= 16 V across U5, twice its
+    8 V minimum supply, so U5 is operating. Typical: closes near 26 V total.
+    At +/-15.5 V the worst-case string current is 11.6 mA (D7 0.26 W of
+    0.37 W, R39 0.08 W). U12 adds <= 2 ohm (data sheet) to FORCE+, outside
+    U5's loop and outside the Kelvin sense; taken as 0 ohm for the fault
+    bound. Off, it blocks 60 V and leaks <= 1 uA.
   * D5 (SMBJ15CA, 15 V standoff) clamps transients into J4 without clipping
-    the legitimate +/-10.04 V sweep (Sheet 3).
+    the legitimate +/-10.04 V sweep (Sheet 3), and shields U12's output from
+    anything above its 60 V rating.
 
 R30 also costs DUT compliance, and more so now that the sweep reaches
 +/-10.04 V: at the 49 mA ILIM it drops 4.94 V and R10 (Sheet 5) another
 0.49 V, so what stands across the DUT at full current is only ~+/-4.6 V (less
-again by F1's own resistance). At the micro- and milliamp currents where diode
-reverse leakage and the sub-threshold knee are characterised, that drop is
-millivolts and essentially the whole +/-10.04 V reaches the DUT.
+again by F1, F2 and U12). At the micro- and milliamp currents where diode
+reverse leakage and the sub-threshold knee are characterised, those drops
+are millivolts and essentially the whole +/-10.04 V reaches the DUT.
 
 DUT CONNECTOR — FOUR SEPARATE JACKS
 -----------------------------------
@@ -56,11 +92,14 @@ panel jack:
     J4  FORCE+     J5  SENSE+     J6  SENSE-     J7  FORCE-
 
 Each jack's single pin is aliased to its function name, so the connections
-below still read by function, never by pad number. FORCE-/SENSE+/SENSE- pass
-straight through to Sheets 5/6 (their protection lives on those sheets).
+below still read by function, never by pad number. SENSE+/SENSE- pass
+straight through to Sheet 6 (their protection lives there); FORCE- reaches
+Sheet 5 as ISENSE_HI, through F2.
 """
 
-from libraries.custom_symbols import Fuse_PTC, R, D_TVS, BananaJack
+from libraries.custom_symbols import (
+    Fuse_PTC, R, D_TVS, D_Zener, BananaJack, PhotoRelay_TLP176AM,
+)
 from skidl import Net
 
 
@@ -77,6 +116,15 @@ def create_protection_block(n):
 
     D5 = D_TVS()(ref="D5", tag="D5", value="SMBJ15CA")
 
+    # FORCE- series PTC: same part as F1 (see header).
+    F2 = Fuse_PTC()(ref="F2", tag="F2", value="0ZRM0010FF1E")
+
+    # Both-rails-present DUT disconnect (see header).
+    U12 = PhotoRelay_TLP176AM()(ref="U12", tag="U12", value="TLP176AM")
+    R39 = R()(ref="R39", tag="R39", value="620R 1% 0.25W",
+              footprint="Resistor_SMD:R_1206_3216Metric")
+    D7 = D_Zener()(ref="D7", tag="D7", value="BZT52C24")
+
     # One panel-mount 4 mm banana jack per DUT terminal.
     J4 = BananaJack("FORCE+")(ref="J4", tag="J4", value="DUT FORCE+")
     J5 = BananaJack("SENSE+")(ref="J5", tag="J5", value="DUT SENSE+")
@@ -86,13 +134,27 @@ def create_protection_block(n):
     # ---- FORCE+ protection chain ----
     n.VO_SENSE += F1[1]
     n.F1_MID += F1[2], R30[1]
-    n.FORCE_PLUS += R30[2], D5["A1"], J4["FORCE+"]
+    # U12's output is bidirectional (AC/DC), so OUT1/OUT2 are assigned to
+    # suit the board: OUT2 (pin 6) faces R30, OUT1 (pin 4) faces D5.
+    force_sw = Net("FORCE_SW")               # R30 -> photorelay
+    force_sw += R30[2], U12["OUT2"]
+    n.FORCE_PLUS += U12["OUT1"], D5["A1"], J4["FORCE+"]
     n.AGND += D5["A2"]                       # bidirectional TVS to AGND
 
-    # ---- Kelvin wires pass-through to their sense sheets ----
+    # ---- photorelay LED string across both rails ----
+    led_a = Net("SSR_LED_A"); led_a += R39[2], U12["A"]
+    led_k = Net("SSR_LED_K"); led_k += U12["K"], D7["K"]
+    n.P15VA += R39[1]
+    n.N15VA += D7["A"]
+
+    # ---- FORCE- return: series PTC, then the shunt (Sheet 5) ----
+    n.FORCE_MINUS += J7["FORCE-"], F2[1]
+    n.ISENSE_HI += F2[2]
+
+    # ---- Kelvin wires pass-through to their sense sheet ----
     n.SENSE_PLUS += J5["SENSE+"]
     n.SENSE_MINUS += J6["SENSE-"]
-    n.FORCE_MINUS += J7["FORCE-"]
 
-    return {"F1": F1, "R30": R30, "D5": D5,
+    return {"F1": F1, "R30": R30, "D5": D5, "F2": F2, "U12": U12,
+            "R39": R39, "D7": D7,
             "J4": J4, "J5": J5, "J6": J6, "J7": J7}

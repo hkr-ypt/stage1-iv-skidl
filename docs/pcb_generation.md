@@ -162,24 +162,29 @@ now derived as `0.45 − 0.02 = 0.43 mm`. `check_hole_spacing` enforces it.
 
 ## Netclasses
 
-Every one of the 66 nets is in exactly one class. **There is no default
+Every one of the design's nets (77 after the final corrections; 66 when this
+was written) is in exactly one class. **There is no default
 class**: `classify()` raises `UnclassifiedNet` naming the offenders, so a net
 added without a decision fails the build rather than inheriting someone else's
 clearance. `tools/test_guard_fails.sh` case 9 demonstrates it.
 
 | Class | Nets | Clearance | Track | Via (pad/drill) | Why this number |
 |---|---:|---:|---:|---|---|
-| `POWER_HV` | 2 | 0.30 | 0.50 | 0.80 / 0.40 | 2× F4 for the 30 V rail-to-rail between `+15VA` and `-15VA` (see below) |
-| `POWER_LV` | 5 | 0.20 | 0.40 | 0.70 / 0.35 | F4 + margin; 0.40 mm at 1 oz carries ≈1.1 A at 10 °C rise (IPC-2152), covering U1's full 800 mA rating |
+| `POWER_HV` | 4 | 0.30 | 0.50 | 0.80 / 0.40 | 2× F4 for the 30 V rail-to-rail between `+15VA` and `-15VA` (see below) |
+| `POWER_LV` | 6 | 0.20 | 0.40 | 0.70 / 0.35 | F4 + margin; 0.40 mm at 1 oz carries ≈1.1 A at 10 °C rise (IPC-2152), covering U1's full 800 mA rating |
 | `GROUND` | 2 | 0.20 | 0.40 | 0.70 / 0.35 | returns carry the rail currents; both nets are poured, so this applies to stitching and the R31 star link |
-| `FORCE` | 5 | 0.25 | 0.50 | 0.80 / 0.40 | ±11 V compliance; track sized for the **fault** case (F1 holds 100 mA, D5 conducts), not the 49 mA operating current |
-| `SENSE` | 8 | 0.25 | 0.25 | 0.60 / 0.30 | high-Z precision analog; current negligible, clearance buys surface-leakage margin around the Kelvin and reference nodes |
-| `DIGITAL` | 15 | 0.20 | 0.25 | 0.60 / 0.30 | SPI/SWD, nothing impedance-controlled; 0.25 mm is the density compromise for escaping the LQFP-64 and SSOP-28 |
+| `FORCE` | 8 | 0.25 | 0.50 | 0.80 / 0.40 | ±11 V compliance; track sized for the **fault** case (F1 holds 100 mA, D5 conducts), not the 49 mA operating current |
+| `SENSE` | 10 | 0.25 | 0.25 | 0.60 / 0.30 | high-Z precision analog; current negligible, clearance buys surface-leakage margin around the Kelvin and reference nodes |
+| `DIGITAL` | 22 | 0.20 | 0.25 | 0.60 / 0.30 | SPI/SWD, nothing impedance-controlled; 0.25 mm is the density compromise for escaping the LQFP-64 and SSOP-28 |
 | `USB` | 6 | 0.20 | 0.38 | 0.60 / 0.30 | USB 2.0 FS pair, 0.38/0.20 mm — a known 2-layer compromise, see below |
-| `LOCAL_ANALOG` | 23 | 0.25 | 0.25 | 0.60 / 0.30 | block-local analog nodes; same character as `SENSE`, kept separate so `SENSE` can be tightened later |
+| `LOCAL_ANALOG` | 19 | 0.25 | 0.25 | 0.60 / 0.30 | block-local analog nodes; same character as `SENSE`, kept separate so `SENSE` can be tightened later |
 
 The full derivation text for each class is in `libraries/netclasses.py` — it is
 not decoration, `validation/drc_check.py` and this table both come from it.
+Counts are for the current design: the U12 LED string (SSR_LED_A/K) is
+POWER_HV because it spans the rails; FORCE_SW and ISENSE_HI are FORCE; VCAP1
+moved from LOCAL_ANALOG to POWER_LV and LED_K, CC1, CC2 to DIGITAL, none of
+them being high-impedance analog nodes (`final_corrections.md` §2.3).
 
 ### The ±15 V rails
 

@@ -53,13 +53,13 @@ generated board in three layers, and says which ones it could not run.
      ``stage1_iv.kicad_dru`` as tools/gen_project_config.py writes them
      (libraries/netclasses.py). These are stricter than what the board was
      routed to (0.25-0.30 mm for sense and power nets against the human's
-     0.20 mm), and KiCad reports clearance errors on the human routing under
-     them. Required: 0 unconnected, 0 schematic-parity problems, and **no
-     violation the original does not have** — matched by what and where
-     (item kind, layer, position, measured value), not by net, because the
-     ECO renames the nets of a few pads. The pre-existing ones are counted
-     and printed; they are not waived silently, and they are not claimed as
-     a pass.
+     0.20 mm): the original has clearance errors under them, and
+     layout/policy_clearance.eco re-routes every one. Required, with zones
+     refilled at these clearances: **0 errors** (clearance included, whether
+     or not the original has the same one), 0 unconnected items, 0
+     schematic-parity problems, and no warning the original does not also
+     have — matched by what and where (item kind, layer, position, measured
+     value), not by net, because the ECO renames the nets of a few pads.
 
 Run standalone::
 
@@ -413,24 +413,48 @@ def kicad_checks(board_path, reference=REFERENCE):
                         f"{len(ref_ab_errors)} error(s) under them "
                         f"({_counts(ref_ab)}). Re-capture the layout.")
 
-    # --- policy rules: nothing new --------------------------------------
+    # --- policy rules: clean -------------------------------------------
+    # The original is NOT clean under these rules (its routing is 0.20 mm
+    # where the policy asks 0.25-0.30 mm); layout/policy_clearance.eco
+    # re-routes those runs. So no policy error is accepted here, pre-existing
+    # or not; a warning is accepted only if the original has it too.
     ref_keys = collections.Counter(violation_key(v)
                                    for v in ref_pol["violations"])
     have = collections.Counter(violation_key(v)
                                for v in board_pol["violations"])
-    new, gone = have - ref_keys, ref_keys - have
+    gone = ref_keys - have
+    pol_errors = [v for v in board_pol["violations"]
+                  if v["severity"] == "error"]
+    ref_pol_warn = collections.Counter(violation_key(v) for v in
+                                       ref_pol["violations"]
+                                       if v["severity"] != "error")
+    new_pol_warn = collections.Counter(violation_key(v) for v in
+                                       board_pol["violations"]
+                                       if v["severity"] != "error") \
+        - ref_pol_warn
     res["policy"] = {
         "violations": _counts(board_pol),
         "unconnected": len(board_pol.get("unconnected_items", [])),
         "parity": len(board_pol.get("schematic_parity", [])),
         "reference_violations": _counts(ref_pol),
-        "pre_existing": sum((have & ref_keys).values()),
-        "new": [_describe(k) for k in new.elements()],
+        "errors": len(pol_errors),
+        "new_warnings": [_describe(k) for k in new_pol_warn.elements()],
         "removed": [_describe(k) for k in gone.elements()],
     }
-    for k in new.elements():
-        problems.append(f"policy DRC violation the original does not have: "
+    for v in pol_errors:
+        problems.append(f"policy DRC error: {v['type']}: "
+                        f"{v['description']} "
+                        f"{[i['description'] for i in v['items']]}")
+    for k in new_pol_warn.elements():
+        problems.append(f"policy DRC warning the original does not have: "
                         f"{_describe(k)}")
+    if board_pol.get("unconnected_items"):
+        problems.append(f"policy DRC: {len(board_pol['unconnected_items'])} "
+                        f"unconnected item(s) with zones filled at the "
+                        f"policy clearances — "
+                        + "; ".join(" / ".join(i["description"]
+                                               for i in u["items"])
+                                    for u in board_pol["unconnected_items"][:4]))
     for p in board_pol.get("schematic_parity", []):
         problems.append(f"schematic parity: {p['description']} "
                         f"{[i['description'] for i in p.get('items', [])]}")
@@ -532,15 +556,14 @@ def print_report(report):
     print(f"      original under the same rules: "
           f"{ab['reference_violations'] or 'no violations'}")
     print(f"    repository netclass policy (stage1_iv.kicad_pro):")
-    print(f"      {pol['violations']}; {pol['unconnected']} unconnected; "
+    print(f"      {pol['violations'] or 'no violations'}; "
+          f"{pol['unconnected']} unconnected; "
           f"{pol['parity']} schematic-parity")
-    print(f"      {pol['pre_existing']} of them are on the original at the same "
-          f"place ({pol['reference_violations']}); "
-          f"{len(pol['new'])} new; the ECO removed {len(pol['removed'])}")
-    print(f"      NOT clean under the policy netclasses: the human routing "
-          f"uses 0.20 mm where")
-    print(f"      the policy asks 0.25-0.30 mm. None of it is the ECO's; see "
-          f"docs/physical_design.md.")
+    print(f"      original under the same rules: {pol['reference_violations']}"
+          f" (its 0.20 mm routing; layout/policy_clearance.eco re-routes it)")
+    print(f"      {pol['errors']} error(s), {len(pol['new_warnings'])} warning(s)"
+          f" the original does not have; {len(pol['removed'])} of the "
+          f"original's are gone")
 
 
 def main(argv=None):

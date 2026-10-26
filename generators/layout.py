@@ -171,6 +171,27 @@ class Placement:
         return ("footprint", self.ref)
 
 
+class BoardPart:
+    """A board-only footprint: mechanical, with no symbol and no nets.
+
+    Mounting holes are the case. The circuit cannot place them (it does not
+    know them), so the layout names the library footprint as well as where
+    it goes: ``(board_part "H1" "nick:footprint" F x y rot)``.
+    """
+    __slots__ = ("ref", "lib_id", "side", "x", "y", "rot")
+
+    def __init__(self, ref, lib_id, side, x, y, rot):
+        self.ref, self.lib_id, self.side = str(ref), str(lib_id), str(side)
+        self.x, self.y, self.rot = float(x), float(y), norm180(float(rot))
+
+    def node(self):
+        return L(A("board_part"), Q(self.ref), Q(self.lib_id), A(self.side),
+                 A(fmt(self.x)), A(fmt(self.y)), A(fmt(self.rot)))
+
+    def key(self):
+        return ("board_part", self.ref)
+
+
 class Segment:
     __slots__ = ("net", "layer", "width", "x1", "y1", "x2", "y2")
 
@@ -264,6 +285,7 @@ class Layout:
         self.graphics = []            # verbatim board graphics, no uuid
         self.zones = []               # zone nodes: (zone "NET" ...), no fill
         self.placements = {}          # ref -> Placement
+        self.board_parts = {}         # ref -> BoardPart (no symbol)
         self.texts = {}               # key -> TextOverride
         self.segments = []
         self.vias = []
@@ -285,6 +307,8 @@ class Layout:
             out.append("  " + one_line(z))
         for ref in sorted(self.placements, key=_ref_sort):
             out.append("  " + one_line(self.placements[ref].node()))
+        for ref in sorted(self.board_parts, key=_ref_sort):
+            out.append("  " + one_line(self.board_parts[ref].node()))
         for key in sorted(self.texts, key=lambda k: (_ref_sort(k[1]),) + k[2:]):
             out.append("  " + one_line(self.texts[key].node()))
         for s in sorted(self.segments, key=_seg_sort):
@@ -312,6 +336,8 @@ class Layout:
             idx.setdefault(v.key(), []).append(v)
         for p in self.placements.values():
             idx.setdefault(p.key(), []).append(p)
+        for p in self.board_parts.values():
+            idx.setdefault(p.key(), []).append(p)
         for t in self.texts.values():
             idx.setdefault(t.key(), []).append(t)
         return idx
@@ -337,6 +363,8 @@ def parse_item(node):
     h = head(node)
     if h == "footprint":
         return Placement(node[1], node[2], node[3], node[4], node[5])
+    if h == "board_part":
+        return BoardPart(*node[1:7])
     if h == "segment":
         return Segment(*node[1:8])
     if h == "via":
@@ -392,7 +420,7 @@ def load_layout(path):
             lay.graphics.append(child[1])
         elif h == "zone":
             lay.zones.append(child)
-        elif h in ("footprint", "segment", "via", "text"):
+        elif h in ("footprint", "board_part", "segment", "via", "text"):
             item = parse_item(child)
             _add(lay, item, path)
         else:
@@ -402,9 +430,13 @@ def load_layout(path):
 
 def _add(lay, item, where):
     if isinstance(item, Placement):
-        if item.ref in lay.placements:
+        if item.ref in lay.placements or item.ref in lay.board_parts:
             raise LayoutError(f"{where}: {item.ref} placed twice")
         lay.placements[item.ref] = item
+    elif isinstance(item, BoardPart):
+        if item.ref in lay.placements or item.ref in lay.board_parts:
+            raise LayoutError(f"{where}: {item.ref} placed twice")
+        lay.board_parts[item.ref] = item
     elif isinstance(item, TextOverride):
         if item.key() in lay.texts:
             raise LayoutError(f"{where}: text {item.key()} given twice")
@@ -433,6 +465,13 @@ def _remove(lay, item, where):
         if canon(lay.placements[item.ref].node()) != canon(item.node()):
             raise LayoutError(stale)
         del lay.placements[item.ref]
+        return
+    if isinstance(item, BoardPart):
+        if item.ref not in lay.board_parts:
+            raise LayoutError(f"{where}: remove {item.ref}: not placed")
+        if canon(lay.board_parts[item.ref].node()) != canon(item.node()):
+            raise LayoutError(stale)
+        del lay.board_parts[item.ref]
         return
     if isinstance(item, Graphic):
         for i, g in enumerate(lay.graphics):

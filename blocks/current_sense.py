@@ -3,7 +3,8 @@ current_sense.py — SHEET 5: Current Sensing
 ===========================================
 
 Ground-referenced, BIPOLAR current measurement. Shunt R10 (10.0 ohm) sits in
-the FORCE- return path between the DUT return and AGND; U6 (INA128P)
+the FORCE- return path between the DUT return (through F2, Sheet 8) and
+AGND; U6 (INA128P)
 amplifies the shunt drop and shifts it onto the 2.500 V reference:
 
     I_SENSE_OUT = VREF_2V5 + G * R10 * I
@@ -45,8 +46,30 @@ recovers resolution for small currents in firmware.
 
 U6 REF is on VREF_2V5, driven directly by the REF5025 (low impedance, as the
 INA128 REF pin requires). Its REF current is (VREF - A2out)/80k = 12..51 uA.
-The J4 FORCE- node, the shunt high side, and U6 +IN are one physical node
-(TP3 monitors it, labeled ISENSE_HI); U6 -IN sits at the shunt's AGND side.
+The shunt high side and U6 +IN are one physical node, ISENSE_HI (TP3), fed
+from J7 through the series PTC F2; U6 -IN sits at the shunt's AGND pad.
+Nothing else connects to ISENSE_HI: every ampere that leaves the DUT through
+FORCE- passes through R10 and nothing passes around it.
+
+R10 — THE ORDERED PART
+----------------------
+Vishay Dale RS02B10R00BE12 (doc. 30204, global part number decoded from
+that data sheet: RS02B model, 10R00 = 10.00 ohm, B = +/-0.1 %, E12 =
+lead-free bulk): 3 W wirewound (characteristic U, 25 C), TCR +/-20 ppm/C
+for >= 10 ohm, body 14.22 +/- 1.57 mm x 4.75 +/- 0.79 mm, 0.813 mm leads.
+Footprint: KiCad DIN0614 (14.3 x 5.7 mm) at 20.32 mm pitch, horizontal:
+the body lies flat, so its two terminations sit at the same height and
+temperature (no lead-length asymmetry to turn self-heating into thermal EMF
+across the shunt). Why a 3 W part for a 24 mW job: R10 must survive an
+external source on J7 until F2 trips — up to 1.19 A, ~14 W, ~0.6 s typical
+(Sheet 8) — and the RS02B's short-time overload test (5 x rated power,
+5 s, dR <= 0.2 % + 0.05 ohm) covers that. A 0.5 W metal film does not:
+Vishay CMF (doc. 31018) tests 2.5 x rated voltage for 5 s, i.e. ~3 W. Costs, stated: the element is CuNi or
+NiCr depending on value (data sheet), so thermal EMF at the terminations is
+not specified — bring-up measures zero-current offset after a high-current
+dwell (docs/bringup_checklist.md); and the RS winding is inductive (the NS02B
+non-inductive variant has the same body and footprint, but no distributor
+listing of NS02B10R00BE12 was found, so it is not the default).
 """
 
 from libraries.custom_symbols import INA128P, R, C, TestPoint
@@ -54,15 +77,14 @@ from skidl import Net
 
 
 def create_current_sense_block(n):
-    # R10 IS the current measurement, so it is a precision part: 10.0 ohm
-    # +/-0.1 %, TCR <= 25 ppm/K (audit: <= 50 ppm/K), metal film, DIN 0207
-    # axial (same footprint). Dissipation: 24 mW at the 49 mA plateau,
-    # 0.16 W worst case (127 mA fault envelope, Sheet 8); a 0.5 W-class 0207
-    # part runs that at <= 1/3 rating, which also keeps its self-heating drift
-    # small. Example: Vishay Dale CMF55 class (verify the ordering code).
-    R10 = R()(ref="R10", tag="R10", value="10.0R 0.1% 25ppm",
-              footprint="Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P10.16mm_Horizontal")
-    R10.fields["MPN"] = "10.0R 0.1% 25ppm/K 0.5W metal film, 0207 axial"
+    # R10 IS the current measurement: 10.0 ohm +/-0.1 %, 20 ppm/K, and 3 W so
+    # it outlives an external-source fault on J7 until F2 trips (header).
+    # Normal dissipation: 24 mW at the 49 mA plateau, 0.16 W at the 128 mA
+    # fault bound (Sheet 8) — 5 % of rating, so self-heating drift is small.
+    R10 = R()(ref="R10", tag="R10", value="10.0R 0.1% 3W",
+              footprint="Resistor_THT:"
+                        "R_Axial_DIN0614_L14.3mm_D5.7mm_P20.32mm_Horizontal")
+    R10.fields["MPN"] = "RS02B10R00BE12"
     U6 = INA128P()(ref="U6", tag="U6", value="INA128P")
     R11 = R()(ref="R11", tag="R11", value="35.7k 0.1%")
     C20 = C()(ref="C20", tag="C20", value="100nF 50V X7R")   # +15VA
@@ -70,8 +92,8 @@ def create_current_sense_block(n):
     TP3 = TestPoint()(ref="TP3", tag="TP3", value="ISENSE_HI")
     TP4 = TestPoint()(ref="TP4", tag="TP4", value="I_SENSE_OUT")
 
-    # ---- shunt in FORCE- return; sense across it ----
-    n.FORCE_MINUS += R10[1], TP3[1], U6["+IN"]     # high side (== ISENSE_HI)
+    # ---- shunt in FORCE- return (after F2); sense across it ----
+    n.ISENSE_HI += R10[1], TP3[1], U6["+IN"]       # high side
     n.AGND += R10[2], U6["-IN"]                     # low side -> AGND
 
     # ---- output reference: mid-scale of the ADC window ----

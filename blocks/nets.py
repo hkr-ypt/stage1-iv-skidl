@@ -49,6 +49,8 @@ _SIMPLE = [
     "VO_RAW", "VO_SENSE",
     "I_SENSE_OUT", "V_SENSE_OUT",
     "F1_MID",
+    # FORCE- return after F2 (Sheet 8) = shunt high side, U6 +IN (Sheet 5)
+    "ISENSE_HI",
 ]
 
 # Names containing characters illegal in Python identifiers → explicit mapping

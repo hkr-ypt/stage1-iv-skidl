@@ -1,6 +1,6 @@
 # Component Manifest — Stage 1 I–V Characterization System
 
-Total components: **135** — 126 on the board (123 fitted, 3 DNP footprints) and 9 schematic-only PWR_FLAG symbols.
+Total components: **141** — 132 on the board (129 fitted, 3 DNP footprints) and 9 schematic-only PWR_FLAG symbols.
 
 | Ref | Value | MPN | KiCad Library | Footprint | Sheet | Fit | Status |
 |-----|-------|-----|---------------|-----------|-------|-----|--------|
@@ -68,9 +68,13 @@ Total components: **135** — 126 on the board (123 fitted, 3 DNP footprints) an
 | D4 | 1N4148W | 1N4148W | Device:D | Diode_SMD:D_SOD-123 | 6 Voltage Sense | fit | OK — pin numbers read from Device.kicad_sym:11674 |
 | D5 | SMBJ15CA | SMBJ15CA | Device:D_TVS | Diode_SMD:D_SMB | 8 Protection/DUT | fit | OK — pin numbers read from Device.kicad_sym:35674 |
 | D6 | BAT54S | BAT54S | Diode:BAT54S | Package_TO_SOT_SMD:SOT-23 | 2 MCU | fit | OK — pin numbers read from Diode.kicad_sym:5067 |
+| D7 | BZT52C24 | BZT52C24 | Device:D_Zener | Diode_SMD:D_SOD-123 | 8 Protection/DUT | fit | OK — pin numbers read from Device.kicad_sym:38003 |
+| D8 | MBR0540 | MBR0540 | Device:D_Schottky | Diode_SMD:D_SOD-123 | 1 Power | fit | OK — pin numbers read from Device.kicad_sym:25682 |
+| D9 | MBR0540 | MBR0540 | Device:D_Schottky | Diode_SMD:D_SOD-123 | 1 Power | fit | OK — pin numbers read from Device.kicad_sym:25682 |
 | FB1 | BLM21PG221SN1D | BLM21PG221SN1D | Device:FerriteBead | Inductor_SMD:L_0805_2012Metric | 1 Power | fit | OK — pin numbers read from Device.kicad_sym:42596 |
 | F1 | 0ZRM0010FF1E | 0ZRM0010FF1E | Device:Polyfuse | Fuse:Fuse_Bourns_MF-RG300 | 8 Protection/DUT | fit | OK — pin numbers read from Device.kicad_sym:94206 |
 | FB2 | BLM21PG221SN1D | BLM21PG221SN1D | Device:FerriteBead | Inductor_SMD:L_0805_2012Metric | 2 MCU | fit | OK — pin numbers read from Device.kicad_sym:42596 |
+| F2 | 0ZRM0010FF1E | 0ZRM0010FF1E | Device:Polyfuse | Fuse:Fuse_Bourns_MF-RG300 | 8 Protection/DUT | fit | OK — pin numbers read from Device.kicad_sym:94206 |
 | J1 | BENCH SUPPLY 1:+15V 2:-15V 3:+5V 4:GND | MKDS 1,5/4-5,08 | Connector:Screw_Terminal_01x04 | TerminalBlock_Phoenix:TerminalBlock_Phoenix_MKDS-1,5-4-5.08_1x04_P5.08mm_Horizontal | 1 Power | fit | OK — pin numbers read from Connector.kicad_sym:326279 |
 | J2 | SWD | generic-2.54mm | Connector_Generic:Conn_01x05 | Connector_PinHeader_2.54mm:PinHeader_1x05_P2.54mm_Vertical | 2 MCU | fit | OK — pin numbers read from Connector_Generic.kicad_sym:631 |
 | J3 | USB-C | GCT USB4085 | Connector:USB_C_Receptacle_USB2.0_16P | Connector_USB:USB_C_Receptacle_GCT_USB4085 | 2 MCU | fit | OK — pin numbers read from Connector.kicad_sym:348661 |
@@ -88,7 +92,7 @@ Total components: **135** — 126 on the board (123 fitted, 3 DNP footprints) an
 | R7 | 1.43M | generic | Device:R | Resistor_SMD:R_1206_3216Metric | 4 Power Buffer | fit | OK — pin numbers read from Device.kicad_sym:104590 |
 | R8 | 10k | generic | Device:R | Resistor_SMD:R_0603_1608Metric | 4 Power Buffer | fit | OK — pin numbers read from Device.kicad_sym:104590 |
 | R9 | 10R 1% 0.25W | generic | Device:R | Resistor_SMD:R_1206_3216Metric | 4 Power Buffer | fit | OK — pin numbers read from Device.kicad_sym:104590 |
-| R10 | 10.0R 0.1% 25ppm | 10.0R 0.1% 25ppm/K 0.5W metal film, 0207 axial | Device:R | Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P10.16mm_Horizontal | 5 Current Sense | fit | OK — pin numbers read from Device.kicad_sym:104590 |
+| R10 | 10.0R 0.1% 3W | RS02B10R00BE12 | Device:R | Resistor_THT:R_Axial_DIN0614_L14.3mm_D5.7mm_P20.32mm_Horizontal | 5 Current Sense | fit | OK — pin numbers read from Device.kicad_sym:104590 |
 | R11 | 35.7k 0.1% | generic | Device:R | Resistor_SMD:R_0603_1608Metric | 5 Current Sense | fit | OK — pin numbers read from Device.kicad_sym:104590 |
 | R12 | 40.2k 0.1% | generic | Device:R | Resistor_SMD:R_0603_1608Metric | 6 Voltage Sense | fit | OK — pin numbers read from Device.kicad_sym:104590 |
 | R13 | 40.2k 0.1% | generic | Device:R | Resistor_SMD:R_0603_1608Metric | 6 Voltage Sense | fit | OK — pin numbers read from Device.kicad_sym:104590 |
@@ -117,6 +121,7 @@ Total components: **135** — 126 on the board (123 fitted, 3 DNP footprints) an
 | R36 | 1k | generic | Device:R | Resistor_SMD:R_0603_1608Metric | 2 MCU | fit | OK — pin numbers read from Device.kicad_sym:104590 |
 | R37 | 100k | generic | Device:R | Resistor_SMD:R_0603_1608Metric | 2 MCU | fit | OK — pin numbers read from Device.kicad_sym:104590 |
 | R38 | 10R | generic | Device:R | Resistor_SMD:R_0805_2012Metric | 4 Power Buffer | DNP | OK — pin numbers read from Device.kicad_sym:104590 |
+| R39 | 620R 1% 0.25W | generic | Device:R | Resistor_SMD:R_1206_3216Metric | 8 Protection/DUT | fit | OK — pin numbers read from Device.kicad_sym:104590 |
 | SW1 | RESET | generic | Switch:SW_Push | Button_Switch_THT:SW_PUSH_6mm | 2 MCU | fit | OK — pin numbers read from Switch.kicad_sym:11011 |
 | TP1 | V_SWEEP | n/a | Connector:TestPoint | TestPoint:TestPoint_Pad_D1.5mm | 3 DAC/Sweep | fit | OK — pin numbers read from Connector.kicad_sym:339728 |
 | TP2 | VO_SENSE | n/a | Connector:TestPoint | TestPoint:TestPoint_Pad_D1.5mm | 4 Power Buffer | fit | OK — pin numbers read from Connector.kicad_sym:339728 |
@@ -137,5 +142,6 @@ Total components: **135** — 126 on the board (123 fitted, 3 DNP footprints) an
 | U9 | STM32F411RET6 | STM32F411RET6 | MCU_ST_STM32F4:STM32F411RETx | Package_QFP:LQFP-64_10x10mm_P0.5mm | 2 MCU | fit | OK — pin numbers read from MCU_ST_STM32F4.kicad_sym:332580 |
 | U10 | USBLC6-2SC6 | USBLC6-2SC6 | Power_Protection:USBLC6-2SC6 | Package_TO_SOT_SMD:SOT-23-6 | 2 MCU | fit | OK — pin numbers read from Power_Protection.kicad_sym:35786 |
 | U11 | TMUX1101DBVR | TMUX1101DBVR | Analog_Switch:TMUX1101DBV | Package_TO_SOT_SMD:SOT-23-5 | 3 DAC/Sweep | fit | OK — pin numbers read from Analog_Switch.kicad_sym:73592 |
+| U12 | TLP176AM | TLP176AM(TPL,E | Relay_SolidState:TLP175A | Package_SO:Toshiba_SOIC-4-6_4.4x3.6mm_P1.27mm | 8 Protection/DUT | fit | OK — pin numbers read from Relay_SolidState.kicad_sym:9219 |
 | Y1 | 7.6800MHz | generic | Device:Crystal | Crystal:Crystal_SMD_HC49-SD | 7 ADC | fit | OK — pin numbers read from Device.kicad_sym:9588 |
 | Y2 | 8MHz | generic | Device:Crystal | Crystal:Crystal_SMD_HC49-SD | 2 MCU | fit | OK — pin numbers read from Device.kicad_sym:9588 |

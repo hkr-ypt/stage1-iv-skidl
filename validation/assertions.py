@@ -57,23 +57,157 @@ def a_shared_reference(n, circuit):
             f"refs on VREF_2V5 = {sorted(_refs_on(n.VREF_2V5))}")
 
 
-def a_force_path_chain(n):
-    # U5 -> R9 -> VO_SENSE -> F1 -> F1_MID -> R30 -> FORCE+ -> D5 & J4
+def a_force_path_chain(n, circuit):
+    # U5 -> R9 -> VO_SENSE -> F1 -> F1_MID -> R30 -> FORCE_SW -> U12 (the
+    # photorelay's output) -> FORCE+ -> D5 & J4
     c1 = _has(n.VO_SENSE, "U5") and _has(n.VO_SENSE, "R9") and _has(n.VO_SENSE, "F1")
     c2 = _has(n.F1_MID, "F1") and _has(n.F1_MID, "R30")
-    c3 = (_has(n.FORCE_PLUS, "R30") and _has(n.FORCE_PLUS, "D5")
-          and _has(n.FORCE_PLUS, "J4"))
-    ok = c1 and c2 and c3
-    return ("FORCE+ path = OPA548(U5) -> R9 -> F1(fuse) -> R30 -> D5(TVS) -> J4",
+    sw = None
+    r30 = next((p for p in n.F1_MID.get_pins() if p.part.ref == "R30"), None)
+    if r30 is not None:
+        sw = _net_of(_two_pin_far(r30.part, r30))
+    c3 = (sw is not None and sorted(_refs_on(sw)) == ["R30", "U12"]
+          and {p.name for p in sw.get_pins() if p.part.ref == "U12"}
+          <= {"OUT1", "OUT2"})
+    c4 = (_has(n.FORCE_PLUS, "U12") and _has(n.FORCE_PLUS, "D5")
+          and _has(n.FORCE_PLUS, "J4") and not _has(n.FORCE_PLUS, "R30"))
+    ok = c1 and c2 and c3 and c4
+    return ("FORCE+ path = OPA548(U5) -> R9 -> F1(fuse) -> R30 -> U12 "
+            "(photorelay) -> D5(TVS) -> J4",
             ok, f"VO_SENSE={sorted(_refs_on(n.VO_SENSE))}, "
                 f"F1_MID={sorted(_refs_on(n.F1_MID))}, "
+                f"R30->U12={sorted(_refs_on(sw)) if sw else 'none'}, "
                 f"FORCE+={sorted(_refs_on(n.FORCE_PLUS))}")
+
+
+def a_force_minus_chain(n, circuit):
+    """J7 -> F2 -> ISENSE_HI -> R10 -> AGND, and nothing around the shunt.
+
+    Every ampere returning through FORCE- must cross R10, so the shunt node
+    may hold only R10, F2 (in series), the sense amplifier's +IN and its test
+    point. A part from ISENSE_HI or FORCE- to anything else (a clamp to
+    AGND, say) is a current path that bypasses the measurement.
+    """
+    problems = []
+    fm = sorted(_refs_on(n.FORCE_MINUS))
+    if fm != ["F2", "J7"]:
+        problems.append(f"FORCE- holds {fm}, not exactly J7 and F2")
+    pins = list(n.ISENSE_HI.get_pins())
+    hi = sorted(p.part.ref for p in pins)
+    if hi != ["F2", "R10", "TP3", "U6"]:
+        problems.append(f"ISENSE_HI holds {hi}; expected exactly one pin "
+                        f"each of F2, R10, TP3 and U6")
+    if not _has(n.ISENSE_HI, "U6", "+IN"):
+        problems.append("U6.+IN is not on ISENSE_HI")
+    r10 = next((p for p in pins if p.part.ref == "R10"), None)
+    if r10 is None or _two_pin_far(r10.part, r10) not in n.AGND.get_pins():
+        problems.append("R10 does not run from ISENSE_HI to AGND")
+    if not _has(n.AGND, "U6", "-IN"):
+        problems.append("U6.-IN is not on AGND (the shunt's low side)")
+    ok = not problems
+    return ("FORCE- path = J7 -> F2(fuse) -> ISENSE_HI -> R10 -> AGND, "
+            "nothing across the shunt", ok,
+            "; ".join(problems) if problems else
+            f"FORCE-={fm}, ISENSE_HI={hi}, R10 to AGND")
+
+
+def _series_walk(start_net, stop_nets, origin, limit=4):
+    """Two-pin parts in series from `start_net` until a net in `stop_nets`.
+
+    `origin` is the ref the walk starts from (not part of the chain).
+    Returns ([(part, pin_in, pin_out)], end_net), pin_in being the pin on the
+    origin side, or (None, why) if the chain branches or does not reach a
+    stop net within `limit` parts.
+    """
+    chain, net, seen = [], start_net, {origin}
+    for _ in range(limit):
+        pins = [p for p in net.get_pins() if p.part.ref not in seen]
+        if len(pins) != 1 or len(pins[0].part.pins) != 2:
+            return None, (f"{net.name} branches or ends at "
+                          f"{sorted(p.part.ref for p in pins)}")
+        p = pins[0]
+        far = _two_pin_far(p.part, p)
+        chain.append((p.part, p, far))
+        seen.add(p.part.ref)
+        net = _net_of(far)
+        if net is None:
+            return None, f"{p.part.ref}.{far.name} is unconnected"
+        if net.name in stop_nets:
+            return chain, net
+    return None, f"no rail within {limit} parts"
+
+
+def a_dut_disconnect_needs_both_rails(n, circuit):
+    """U12's LED is lit only by the +15VA -> -15VA difference, through a zener.
+
+    The string must run from +15VA to -15VA with no tap to AGND or any other
+    net (a tap would let ONE rail light the LED), and must hold a zener
+    pointing against the current (cathode towards +15VA): that is the
+    threshold which keeps U12 open with either rail absent.
+    """
+    problems = []
+    a, k = _pin(circuit, "U12", "A"), _pin(circuit, "U12", "K")
+    if a is None or k is None:
+        return ("Photorelay U12 (DUT disconnect) needs both +/-15 V rails",
+                False, "U12 or its LED pins are missing")
+    rails = {"+15VA", "-15VA"}
+    up, end_up = _series_walk(_net_of(a), rails, "U12")
+    down, end_down = _series_walk(_net_of(k), rails, "U12")
+    if up is None or down is None:
+        problems.append(f"LED string is not a plain series chain: "
+                        f"anode side {end_up if up is None else 'ok'}, "
+                        f"cathode side {end_down if down is None else 'ok'}")
+    else:
+        if (end_up.name, end_down.name) != ("+15VA", "-15VA"):
+            problems.append(f"anode side ends on {end_up.name}, cathode side "
+                            f"on {end_down.name}")
+        parts = up + down
+        # Current runs +15VA -> anode chain -> LED -> cathode chain -> -15VA,
+        # entering anode-side parts at pin_out and cathode-side parts at
+        # pin_in. A zener that blocks is one the current enters at K.
+        entry = [(part, pin_out) for part, _i, pin_out in up] + \
+                [(part, pin_in) for part, pin_in, _o in down]
+        ok_z = [part.ref for part, pin in entry
+                if part.fields.get("KiCad_Lib") == "Device:D_Zener"
+                and pin.name == "K"]
+        if len(ok_z) != 1:
+            problems.append(f"expected one reverse-biased zener in the string, "
+                            f"found {ok_z or 'none'}")
+        if not any(part.ref[0] == "R" for part, _i, _o in parts):
+            problems.append("no current-limiting resistor in the string")
+    for net in (_net_of(a), _net_of(k)):
+        if net is not None and net.name in ("AGND", "DGND"):
+            problems.append(f"U12 LED pin on {net.name}")
+    # Compare by membership: SKiDL may hand back a merged alias of a Net.
+    if not (_has(n.FORCE_PLUS, "U12", "OUT1")
+            or _has(n.FORCE_PLUS, "U12", "OUT2")):
+        problems.append("U12's output does not switch FORCE+")
+    ok = not problems
+    return ("Photorelay U12 (DUT disconnect) needs both +/-15 V rails", ok,
+            "; ".join(problems) if problems else
+            "+15VA -> " + " -> ".join(p.ref for p, _i, _o in reversed(up))
+            + " -> LED -> " + " -> ".join(p.ref for p, _i, _o in down)
+            + " -> -15VA; output in FORCE+")
+
+
+def a_dead_rail_clamps(n, circuit):
+    """Each +/-15 V rail has a Schottky to AGND, reverse-biased in service."""
+    plus = [p.part.ref for p in n.P15VA.get_pins()
+            if p.part.fields.get("KiCad_Lib") == "Device:D_Schottky"
+            and p.name == "K" and _has(n.AGND, p.part.ref, "A")]
+    minus = [p.part.ref for p in n.N15VA.get_pins()
+             if p.part.fields.get("KiCad_Lib") == "Device:D_Schottky"
+             and p.name == "A" and _has(n.AGND, p.part.ref, "K")]
+    ok = bool(plus) and bool(minus)
+    return ("Dead-rail clamps: Schottky AGND -> +15VA and -15VA -> AGND", ok,
+            f"+15VA clamp={plus or 'none'}, -15VA clamp={minus or 'none'}")
 
 
 def a_kelvin_independent(n):
     # Kelvin sense nets must share NO pins with the force nets.
     sp = _pin_ids(n.SENSE_PLUS) & _pin_ids(n.FORCE_PLUS)
-    sm = _pin_ids(n.SENSE_MINUS) & _pin_ids(n.FORCE_MINUS)
+    sm = (_pin_ids(n.SENSE_MINUS) & _pin_ids(n.FORCE_MINUS)) | \
+        (_pin_ids(n.SENSE_MINUS) & _pin_ids(n.ISENSE_HI))
     # And the voltage-sense amp (U7) must reach the SENSE nets, not the FORCE nets.
     u7_on_sense = _has(n.SENSE_PLUS, "U7") is False  # U7 sits behind R12/R13
     force_free = (not _refs_on(n.SENSE_PLUS) & {"R10"}
@@ -412,6 +546,9 @@ ALL_ASSERTIONS = [
     a_arm_needs_a_heartbeat,
     a_cs_dac_pulled_up,
     a_force_path_chain,
+    a_force_minus_chain,
+    a_dut_disconnect_needs_both_rails,
+    a_dead_rail_clamps,
     a_kelvin_independent,
     a_adc_on_spi2,
     a_dac_on_spi1,

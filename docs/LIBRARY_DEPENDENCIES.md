@@ -23,7 +23,7 @@ never has to find an upstream symbol to open or ERC this design.
 
 | lib_id | symbols | resolves via |
 |---|---|---|
-| `stage1_iv:*` | 27 | `${KIPRJMOD}/libraries/stage1_iv.kicad_sym` (committed) |
+| `stage1_iv:*` | 30 | `${KIPRJMOD}/libraries/stage1_iv.kicad_sym` (committed) |
 
 ## Upstream symbols the pin numbers were read from
 
@@ -46,16 +46,19 @@ as each part's `KiCad_Lib` field and verified by
 | `Device:C_Polarized` | C1, C17, C18, C2, C29, C5 +3 | `Device.kicad_sym:5140` |
 | `Device:Crystal` | Y1, Y2 | `Device.kicad_sym:9588` |
 | `Device:D` | D1, D2, D3, D4 | `Device.kicad_sym:11674` |
+| `Device:D_Schottky` | D8, D9 | `Device.kicad_sym:25682` |
 | `Device:D_TVS` | D5 | `Device.kicad_sym:35674` |
+| `Device:D_Zener` | D7 | `Device.kicad_sym:38003` |
 | `Device:FerriteBead` | FB1, FB2 | `Device.kicad_sym:42596` |
 | `Device:LED` | LED1 | `Device.kicad_sym:48335` |
-| `Device:Polyfuse` | F1 | `Device.kicad_sym:94206` |
-| `Device:R` | R1, R10, R11, R12, R13, R14 +32 | `Device.kicad_sym:104590` |
+| `Device:Polyfuse` | F1, F2 | `Device.kicad_sym:94206` |
+| `Device:R` | R1, R10, R11, R12, R13, R14 +33 | `Device.kicad_sym:104590` |
 | `Diode:BAT54S` | D6 | `Diode.kicad_sym:5067` |
 | `MCU_ST_STM32F4:STM32F411RETx` | U9 | `MCU_ST_STM32F4.kicad_sym:332580` |
 | `Power_Protection:USBLC6-2SC6` | U10 | `Power_Protection.kicad_sym:35786` |
 | `Reference_Voltage:REF5025ADGK` | U2 | `Reference_Voltage.kicad_sym:29304` |
 | `Regulator_Linear:LD1117S33TR_SOT223` | U1 | `Regulator_Linear.kicad_sym:85573` |
+| `Relay_SolidState:TLP175A` | U12 | `Relay_SolidState.kicad_sym:9219` |
 | `Switch:SW_Push` | SW1 | `Switch.kicad_sym:11011` |
 | `power:PWR_FLAG` | #FLG1, #FLG2, #FLG3, #FLG4, #FLG5, #FLG6 +3 | `power.kicad_sym:9842` |
 
@@ -79,14 +82,15 @@ runtime dependency — laying out the PCB needs these libraries installed.
 | `Connector_USB:USB_C_Receptacle_GCT_USB4085` | J3 |
 | `Crystal:Crystal_SMD_HC49-SD` | Y1, Y2 |
 | `Diode_SMD:D_SMB` | D5 |
-| `Diode_SMD:D_SOD-123` | D1, D2, D3, D4 |
-| `Fuse:Fuse_Bourns_MF-RG300` | F1 |
+| `Diode_SMD:D_SOD-123` | D1, D2, D3, D4, D7, D8 +1 |
+| `Fuse:Fuse_Bourns_MF-RG300` | F1, F2 |
 | `Inductor_SMD:L_0805_2012Metric` | FB1, FB2 |
 | `LED_SMD:LED_0805_2012Metric` | LED1 |
 | `Package_DIP:DIP-8_W7.62mm` | U6, U7 |
 | `Package_QFP:LQFP-64_10x10mm_P0.5mm` | U9 |
 | `Package_SO:SOIC-8_3.9x4.9mm_P1.27mm` | U3 |
 | `Package_SO:SSOP-28_5.3x10.2mm_P0.65mm` | U8 |
+| `Package_SO:Toshiba_SOIC-4-6_4.4x3.6mm_P1.27mm` | U12 |
 | `Package_SO:VSSOP-8_3x3mm_P0.65mm` | U2, U4 |
 | `Package_TO_SOT_SMD:SOT-223-3_TabPin2` | U1 |
 | `Package_TO_SOT_SMD:SOT-23` | D6 |
@@ -94,9 +98,9 @@ runtime dependency — laying out the PCB needs these libraries installed.
 | `Package_TO_SOT_SMD:SOT-23-6` | U10 |
 | `Resistor_SMD:R_0603_1608Metric` | R1, R11, R12, R13, R14, R15 +26 |
 | `Resistor_SMD:R_0805_2012Metric` | R31, R38 |
-| `Resistor_SMD:R_1206_3216Metric` | R7, R9 |
-| `Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P10.16mm_Horizontal` | R10 |
+| `Resistor_SMD:R_1206_3216Metric` | R39, R7, R9 |
 | `Resistor_THT:R_Axial_DIN0411_L9.9mm_D3.6mm_P12.70mm_Horizontal` | R30 |
+| `Resistor_THT:R_Axial_DIN0614_L14.3mm_D5.7mm_P20.32mm_Horizontal` | R10 |
 | `TerminalBlock_Phoenix:TerminalBlock_Phoenix_MKDS-1,5-4-5.08_1x04_P5.08mm_Horizontal` | J1 |
 | `TestPoint:TestPoint_Pad_D1.5mm` | TP1, TP2, TP3, TP4, TP5, TP6 +2 |
 | `stage1_iv:TO-220-7_P2.54x3.7mm_StaggerOdd_Lead3.8mm_Vertical_Drill1.2mm` | U5 |

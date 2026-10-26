@@ -8,6 +8,12 @@ parts, and the layout ECO `layout/audit_corrections.eco`, with a reason on
 every operation.
 
 - Base: commit `bfbb140` (the bipolar routed board).
+- **Follow-up:** the items this record leaves open (R10 part number, R30/F1
+  spacing, mounting holes, the 109 policy clearance errors, partial-supply
+  states, FORCE− protection, the ILIM bound, the identifier snapshot) are
+  dispositioned in [`final_corrections.md`](final_corrections.md). This file
+  is kept as the record of the earlier round; the notes marked
+  *Superseded* below point to where each changed.
 - Source of truth: SKiDL → `python3 main.py` regenerates the netlist, the
   nine schematic sheets, the component manifest and the routed board. No
   generated file was edited by hand.
@@ -24,12 +30,12 @@ every operation.
 |---|---|---|---|
 | **F1** | J1 (±15 V / +5 V bench input) had no per-terminal marking on the routed board; docs claimed it was "labelled twice"; the bootstrap generator's legend had the wrong pinout | Board: `BENCH SUPPLY` heading and `+15V`, `-15V`, `+5V`, `GND` at pins 1–4 (J1 sits rotated 180°, so pin 1 is the right-most terminal); `FORCE+`, `FORCE-`, `SENSE+`, `SENSE-` beside J4–J7. J1 value: `BENCH SUPPLY 1:+15V 2:-15V 3:+5V 4:GND`. `generators/pcb.py` reads its J1 labels from J1's pad nets. False claims corrected in `docs/silkscreen_and_packages.md`, `DESIGN_DOCUMENT.md` | **Done** |
 | **F2** | Output drove −10.04 V from power-up until firmware wrote the DAC; the DAC holds codes through MCU reset/halt/crash | (a) Sweep midpoint from DAC channel B: `V_SWEEP = 8.0321·(V_A − V_B/2)`; power-up gives ≈ 0 V. (b) R34 100 k /SYNC pull-up. (c) **DAC reference gate**: U11 TMUX1101 + R35, armed only by a software heartbeat on PC5 through the D6 charge pump. (d) Four new connectivity assertions; measurement-range models the contract. (e) `docs/firmware_handoff.md` | **Done in hardware** (§2). Margins simulated, to be measured. Positive bound is a firmware contract |
-| **F3** | R30 (100 Ω 1/4 W 1206) overloaded in a rail fault; F1 described as a backstop | R30 = Vishay **PR02 100 Ω 1 % 2 W, `PR02000201000FB100`**, DIN0411 axial, body raised. Fault envelope (127 mA; R30 1.63 W of 2 W; R9 and R10 0.16 W) checked on every build. R9 = 10 Ω 1 % 0.25 W, R10 = 10.0 Ω 0.1 % 25 ppm/°C 0.5 W. F1 "backstop" claims removed everywhere | **Done**, except placement: **7 mm from the divider, but only 2.1 mm from F1** (§4) |
+| **F3** | R30 (100 Ω 1/4 W 1206) overloaded in a rail fault; F1 described as a backstop | R30 = Vishay **PR02 100 Ω 1 % 2 W, `PR02000201000FB100`**, DIN0411 axial, body raised. Fault envelope (127 mA; R30 1.63 W of 2 W; R9 and R10 0.16 W) checked on every build. R9 = 10 Ω 1 % 0.25 W, R10 = 10.0 Ω 0.1 % 25 ppm/°C 0.5 W. F1 "backstop" claims removed everywhere | **Done**, except placement: **7 mm from the divider, but only 2.1 mm from F1** (§4). *Superseded:* F1 moved 14 mm from R30, `final_corrections.md` §2.1; the fault envelope now includes F2 and U12 (§2.7 there) |
 | **F4** | C43 (VCAP_1) 2.2 µF; LQFP64's single VCAP needs 4.7 µF | C43 = 4.7 µF 10 V X5R (DS10314 Table 16) | **Done** |
 | **V1** | OPA548 runs in current limit by design; TI recommends an output snubber for that | R38 10 Ω + C49 10 nF 50 V X7R pads from VO_RAW to AGND, **DNP**; fit if bring-up sees oscillation | **Done** |
 | L1 | D1–D4 marked 1N4148 on a SOD-123 footprint | 1N4148W (the SOD-123 part) | Done |
 | L2 | ±15 V ceramics had no rating | C11, C12, C15, C16, C20–C23 = 100 nF **50 V X7R** (audit asked ≥ 25 V; 50 V for DC-bias margin) | Done |
-| L3 | R10 tolerance/TCR unspecified | 10.0 Ω **0.1 %, 25 ppm/°C**, 0.5 W, 0207 axial. The MPN field carries this specification; no specific part number was selected | Done (spec). Sourcing open |
+| L3 | R10 tolerance/TCR unspecified | 10.0 Ω **0.1 %, 25 ppm/°C**, 0.5 W, 0207 axial. The MPN field carries this specification; no specific part number was selected | Done (spec). Sourcing open. *Superseded:* RS02B10R00BE12, 3 W, 20 ppm/°C (`final_corrections.md` §2.2) |
 | L4 | R14 "DNP" only in the value text | Real DNP: schematic `(dnp yes) (in_bom no)`, board `exclude_from_bom dnp`. Same for R38/C49 | Done |
 | L5 | PC13 sourced ≈ 4 mA into LED1 (DS10314: must not source) | LED1 now sunk by PC13: +3V3D → LED1 → R23 **1 kΩ** → PC13, ≈ 1.3 mA (limit 3 mA) | Done |
 | L6 | C9 (REF5025 output) 1 µF at the bottom of its 1–100 µF stability range | C9 = **4.7 µF 10 V X7R** (SBOS410O) | Done |
@@ -37,8 +43,8 @@ every operation.
 | L8 | U5 pinout `VERIFY-DATASHEET` | Cross-checked pin by pin against TI **SBOS070D** at every symbol build (`libraries/provenance/opa548_sbos070d_pin_functions.txt`); `RESOLVED` | Done (stagger remains a mechanical check) |
 | L9 | U5 tab is at −15 V | Isolation guidance in `bringup_checklist.md` §1 and `DESIGN_DOCUMENT.md` §5.3 | Done (docs) |
 | L10 | High-impedance nodes and flux | Cleaning and bake guidance, node list, in `bringup_checklist.md` §1 | Done (docs) |
-| L11 | No mounting holes; test points on the bottom | **Decision: no holes added, bottom TPs kept** (§4) | Decided, documented |
-| L12 | New copper and clearances | Every new track designed at the repository netclass clearances; **0 new** DRC violations under either rule set; 109 pre-existing policy clearance errors remain (§5) | Done; **board is not DRC-clean under the policy** |
+| L11 | No mounting holes; test points on the bottom | **Decision: no holes added, bottom TPs kept** (§4) | Decided, documented. *Superseded:* three isolated M3 holes H1–H3 added (`final_corrections.md` §2.4) |
+| L12 | New copper and clearances | Every new track designed at the repository netclass clearances; **0 new** DRC violations under either rule set; 109 pre-existing policy clearance errors remain (§5) | Done; **board is not DRC-clean under the policy**. *Superseded:* 0 policy errors (`final_corrections.md` §2.3) |
 | D | Stale or false documentation | "Bus-powered", F1 "backstop", "J1 labelled twice", U5 `VERIFY-DATASHEET`, the `V_DAC − VREF/2` transfer function, part counts, C43/R23/R30/LED values: corrected in README, `DESIGN_DOCUMENT.md`, `SCHEMATIC.md`, `manifest.yaml` and `docs/*` (§7) | Done |
 
 ## 2. F2 — the safe state on reset, halt and crash
@@ -96,7 +102,8 @@ VDD = 5 V: V_IH 1.49 V, V_IL 0.87 V):
    drives the DUT at ≈ 0 V from a low impedance. The residual offset is
    estimated at ≤ 0.1–0.15 V; bring-up measures it.
 5. **Partial supply states** (for example ±15 V with +5 V absent) were not
-   modelled. Bring-up §5 characterises them.
+   modelled. Bring-up §5 characterises them. *Superseded:* analysed, and
+   D8/D9 and U12 added (`final_corrections.md` §2.5).
 6. The pump numbers are from simulation and have not been measured.
 
 ## 3. Component / BOM changes
@@ -226,16 +233,22 @@ signals.
 
 ## 6. Remaining lower-severity items
 
+As left by this round. Each is dispositioned in
+[`final_corrections.md`](final_corrections.md) (§ in brackets).
+
 - **R10 part number.** The specification is set (0.1 %, 25 ppm/°C, ≥ 0.5 W,
   0207 axial). A specific orderable part number still has to be chosen.
-- **R30 / F1 proximity**, §4.
-- **Mounting holes**, next layout spin.
-- **109 policy clearance deviations**, §5.
+  [§2.2: RS02B10R00BE12]
+- **R30 / F1 proximity**, §4. [§2.1: F1 relocated]
+- **Mounting holes**, next layout spin. [§2.4: H1–H3]
+- **109 policy clearance deviations**, §5. [§2.3: 0 remaining]
 - **Partial-supply states** and **power-sequencing transients** are not
-  handled in hardware (bring-up §5 characterises them).
-- **FORCE− has no TVS or fuse** (pre-existing review item R15).
+  handled in hardware (bring-up §5 characterises them). [§2.5: D8/D9, U12;
+  transients still measured at bring-up]
+- **FORCE− has no TVS or fuse** (pre-existing review item R15). [§2.6: F2]
 - **OPA548 ILIM** is uncharacterised at ≈ 49 mA (pre-existing R4). The
-  measurement and the protection no longer rely on its value.
+  measurement and the protection no longer rely on its value. [§2.7: passive
+  bound stated; ILIM still typical only]
 
 ## 7. Documentation touched, and dated records left as they were
 
@@ -249,7 +262,9 @@ Left as dated records, not rewritten: `docs/audit_identifiers_before.md` and
 `docs/audit_identifiers_after.md`, snapshots of the identifier work. The
 "after" file still shows U5 as `VERIFY-DATASHEET` and the old C43/D1–D4/R23
 values. Regenerating it here would embed this machine's library path, which
-`tools/check_no_abs_paths.py` rejects. Run `python3 tools/audit_identifiers.py
+`tools/check_no_abs_paths.py` rejects. *Superseded:* the generator now
+prints portable paths and the "after" file has been regenerated
+(`final_corrections.md` §2.8). Run `python3 tools/audit_identifiers.py
 > docs/audit_identifiers_after.md` on a machine with the libraries at a
 standard prefix to refresh it. Also left as recorded: the KiCad 7 transcripts
 in `docs/library_strategy.md` and the auto-placer notes in

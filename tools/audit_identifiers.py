@@ -40,6 +40,35 @@ sys.path.insert(0, HERE)
 from resolve_kicad_libs import KicadLibraries, LibraryNotFound  # noqa: E402
 
 
+def _portable(path, libs):
+    """A path as the report prints it: never machine-specific.
+
+    Repository files are repo-relative; library files are rooted at the KiCad
+    path variable that locates them (the library *revision*, printed in the
+    provenance table, is what identifies their content). The report is a
+    committed document, and tools/check_no_abs_paths.py holds it to that.
+    """
+    if not path:
+        return path
+    text = str(path)
+    for root, var in ((REPO_ROOT, ""),
+                      (libs.symbol_dir, "${KICAD9_SYMBOL_DIR}"),
+                      (libs.footprint_dir, "${KICAD9_FOOTPRINT_DIR}")):
+        if not root:
+            continue
+        root = os.path.abspath(root)
+        if os.path.isabs(text) and os.path.abspath(text).startswith(root + os.sep):
+            rel = os.path.relpath(text, root)
+            return f"{var}/{rel}" if var else rel
+    return text
+
+
+def _portable_origin(origin, libs):
+    """The resolver's origin string with any path in it made portable."""
+    return re.sub(r"(/[^\s]+)", lambda m: _portable(m.group(1), libs),
+                  str(origin))
+
+
 def _natural(ref):
     num = "".join(ch for ch in ref if ch.isdigit())
     return (ref[0] if ref else "", int(num) if num else 0)
@@ -110,7 +139,7 @@ def audit(libs, circuit):
             sym = libs.get_symbol(lib_id) if sym_lib_ok else None
             if sym is not None:
                 sym_ok = True
-                sym_source = f"{sym.file}:{sym.line}"
+                sym_source = f"{_portable(sym.file, libs)}:{sym.line}"
                 for p in sym.pins:
                     sym_pin_map.setdefault(p.number, p.name)
 
@@ -124,7 +153,7 @@ def audit(libs, circuit):
             fp = libs.get_footprint(fp_id) if fp_lib_ok else None
             if fp is not None:
                 fp_ok = True
-                fp_source = f"{fp.file}:{fp.line}"
+                fp_source = f"{_portable(fp.file, libs)}:{fp.line}"
                 pad_names = set(fp.pad_names)
                 pad_total = fp.pad_count
 
@@ -181,6 +210,8 @@ def audit(libs, circuit):
             "ref": part.ref,
             "value": str(part.value),
             "mpn": part.fields.get("MPN", ""),
+            # schematic-only (PWR_FLAG): no footprint, by design
+            "virtual": bool(part.fields.get("Symbol_Class")),
             "pins_verified": pins_verified,
             "kicad_lib": lib_id,
             "sym_lib_ok": sym_lib_ok,
@@ -217,9 +248,10 @@ def to_markdown(rows, libs):
     info = libs.describe()
     prov = libs.provenance()
     unresolved_sym = [r for r in rows if not r["sym_ok"]]
-    unresolved_fp = [r for r in rows if not r["fp_ok"]]
+    virtual = [r for r in rows if r["virtual"]]
+    unresolved_fp = [r for r in rows if not r["fp_ok"] and not r["virtual"]]
     placeholder = [r for r in rows if r["pins_verified"] == "PLACEHOLDER-REMAP"]
-    with_missing = [r for r in rows if r["missing"]]
+    with_missing = [r for r in rows if r["missing"] and not r["virtual"]]
     with_unnetted = [r for r in rows if r["unnetted_pads"]]
     with_name_conflicts = [r for r in rows if r.get("pin_name_conflicts")]
 
@@ -234,9 +266,10 @@ def to_markdown(rows, libs):
     A("")
     A("| | value |")
     A("|---|---|")
-    A(f"| resolved from | {info['origin']} |")
-    A(f"| symbol_dir | `{info['symbol_dir']}` |")
-    A(f"| footprint_dir | `{info['footprint_dir']}` |")
+    A(f"| resolved from | {_portable_origin(info['origin'], libs)} |")
+    A("| symbol_dir | `${KICAD9_SYMBOL_DIR}` |")
+    A("| footprint_dir | `${KICAD9_FOOTPRINT_DIR}` (the design's own footprints "
+      "are vendored in `libraries/footprints/`) |")
     for label in ("symbols", "footprints"):
         p = prov.get(label, {})
         if p.get("tag"):
@@ -251,7 +284,9 @@ def to_markdown(rows, libs):
     A("|---|---|")
     A(f"| parts | {len(rows)} |")
     A(f"| **unresolved symbols** (KiCad_Lib does not exist) | **{len(unresolved_sym)}** |")
-    A(f"| **unresolved footprints** | **{len(unresolved_fp)}** |")
+    A(f"| schematic-only symbols (PWR_FLAG: no footprint by design) | "
+      f"{len(virtual)} |")
+    A(f"| **unresolved footprints** (board parts) | **{len(unresolved_fp)}** |")
     A(f"| parts with `Pins_Verified == PLACEHOLDER-REMAP` | {len(placeholder)} |")
     A(f"| parts declaring a pin with no matching pad | {len(with_missing)} |")
     A(f"| parts with at least one unaccounted pad | {len(with_unnetted)} |")

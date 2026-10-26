@@ -532,20 +532,25 @@ validation:
   routed_board_check:
     module: validation/routed_board_check.py
     board: stage1_iv.kicad_pcb (circuit + layout/stage1_iv.layout +
-      layout/bipolar.eco; the human routing with the bipolar ECO)
+      layout/bipolar.eco + layout/audit_corrections.eco +
+      layout/final_corrections.eco + layout/policy_clearance.eco; the human
+      routing with four ECOs)
     checks: [byte-identical to what the sources generate, parity with the
              circuit, Update PCB no-op + its calibration, schema, netclass
              coverage, fab conformance, rules file, rule satisfiability;
              courtyard/edge/ground-split/hole/silkscreen heuristics with no
              finding the original unipolar-routed/ board lacks; KiCad 10 DRC under the
              as-built rules (every check on) and under the repository policy
-             netclasses, with no violation the original lacks]
+             netclasses: 0 errors, 0 unconnected, no warning the original
+             lacks]
     result: >
       PASS - KiCad 10.0.6, zones refilled, all track errors, schematic parity:
       0 unconnected, 0 parity; as-built rules 0 errors, 2 warnings (J3 silk at
-      the board edge, as on the original); repository policy 114 clearance
-      errors, all at the same place on the original (116 there), 0 new. NOT
-      clean under the policy netclasses. See docs/physical_design.md.
+      the board edge, as on the original). Repository policy: 0 errors, the
+      same 2 warnings, 0 unconnected (KiCad 10.0.7, final corrections; it was
+      114, then 109, pre-existing clearance errors before
+      layout/policy_clearance.eco). See docs/physical_design.md and
+      docs/final_corrections.md.
   reproduce_reference:
     module: tools/reproduce_reference.py
     checks: [layout capture current, semantic board comparison, KiCad 10 DRC

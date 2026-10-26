@@ -29,7 +29,9 @@
       "Device:C_Polarized",
       "Device:Crystal",
       "Device:D",
+      "Device:D_Schottky",
       "Device:D_TVS",
+      "Device:D_Zener",
       "Device:FerriteBead",
       "Device:LED",
       "Device:Polyfuse",
@@ -39,6 +41,7 @@
       "Power_Protection:USBLC6-2SC6",
       "Reference_Voltage:REF5025ADGK",
       "Regulator_Linear:LD1117S33TR_SOT223",
+      "Relay_SolidState:TLP175A",
       "Switch:SW_Push",
       "power:PWR_FLAG"
     ],
@@ -610,6 +613,21 @@
         }
       ]
     },
+    "D_Schottky": {
+      "upstream_lib_id": "Device:D_Schottky",
+      "symbol_source": "Device.kicad_sym:25682",
+      "pins_verified": "RESOLVED",
+      "pins": [
+        {
+          "number": "1",
+          "name": "K"
+        },
+        {
+          "number": "2",
+          "name": "A"
+        }
+      ]
+    },
     "D_TVS": {
       "upstream_lib_id": "Device:D_TVS",
       "symbol_source": "Device.kicad_sym:35674",
@@ -622,6 +640,21 @@
         {
           "number": "2",
           "name": "A2"
+        }
+      ]
+    },
+    "D_Zener": {
+      "upstream_lib_id": "Device:D_Zener",
+      "symbol_source": "Device.kicad_sym:38003",
+      "pins_verified": "RESOLVED",
+      "pins": [
+        {
+          "number": "1",
+          "name": "K"
+        },
+        {
+          "number": "2",
+          "name": "A"
         }
       ]
     },
@@ -1165,6 +1198,29 @@
         {
           "number": "4",
           "name": "Pin_4"
+        }
+      ]
+    },
+    "TLP175A": {
+      "upstream_lib_id": "Relay_SolidState:TLP175A",
+      "symbol_source": "Relay_SolidState.kicad_sym:9219",
+      "pins_verified": "RESOLVED",
+      "pins": [
+        {
+          "number": "1",
+          "name": "A"
+        },
+        {
+          "number": "3",
+          "name": "K"
+        },
+        {
+          "number": "4",
+          "name": "OUT1"
+        },
+        {
+          "number": "6",
+          "name": "OUT2"
         }
       ]
     },

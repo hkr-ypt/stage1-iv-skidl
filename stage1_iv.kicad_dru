@@ -18,7 +18,7 @@
 # pad-to-pad between different footprints are untouched.
 
 # J3  Connector_USB:USB_C_Receptacle_GCT_USB4085
-#   pads A5/A6 are 0.150 mm apart; netclass would require 0.25 mm
+#   pads A5/A6 are 0.150 mm apart; netclass would require 0.20 mm
 (rule "intra_footprint_clearance_J3"
   (constraint clearance (min 0.13mm))
   (condition "A.Type == 'Pad' && B.Type == 'Pad' && A.memberOfFootprint('J3') && B.memberOfFootprint('J3')"))
