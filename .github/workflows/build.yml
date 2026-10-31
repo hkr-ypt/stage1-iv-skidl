@@ -19,7 +19,10 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    # Pinned: the KiCad 10 PPA publishes for 24.04. On ubuntu-latest (26.04
+    # since late October 2026) apt falls back to the distro's KiCad 9, which
+    # cannot read the board of record.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
@@ -235,7 +238,7 @@ jobs:
 
   build-without-kicad:
     # The design must build with no KiCad at all, and must then say SKIPPED.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
