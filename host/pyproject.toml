@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "stage1iv"
+version = "0.1.0"
+description = "Host library and tools for the Stage 1 I-V characterization instrument"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "See repository" }
+dependencies = ["pyserial==3.5"]
+
+[project.optional-dependencies]
+test = ["pytest>=7"]
+
+[project.scripts]
+iv-diag = "stage1iv.cli:diag_main"
+iv-sweep = "stage1iv.cli:sweep_main"
+iv-cal = "stage1iv.cli:cal_main"
+
+[tool.setuptools]
+packages = ["stage1iv"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

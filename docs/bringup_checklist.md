@@ -123,7 +123,9 @@ FORCE+/FORCE− with the Kelvin leads on its terminals.
   output at 0 V this is a small-signal check; at 10 mA (§7) the drop across
   U12 (R30 pad 2 to J4) is ≤ 20 mV (RON ≤ 2 Ω).
 - [ ] Rails: +15VA, −15VA, +5V_RAW, +5VA, +3V3D (3.3 V ± 2 %), VDDA, and
-  **VREF_2V5 at TP8 = 2.500 V** (REF5025A: ±0.05 % initial).
+  **VREF_2V5 at TP8 = 2.500 V** (U2 is REF5025**AI**DGKT, the standard grade:
+  ±0.1 % initial = ±2.5 mV, ≤ 8 ppm/°C drift; the high grade's 0.05 % /
+  3 ppm/°C does **not** apply to this part).
 - [ ] **Safe state, MCU not running.** DAC_ARM ≈ 0 V. DAC_VREF ≈ 0 V.
   TP1 (V_SWEEP) and TP2 (VO_SENSE) ≈ 0 V. The firmware handoff estimates the
   residual offset at ≤ 0.1–0.15 V; record it. **STOP if V_SWEEP is near
@@ -164,53 +166,85 @@ jacks with the Kelvin leads on it.
   duration of any excursion on FORCE+. Anything above about 1 V into the load
   is a finding to report.
 
-## 6. Reference gate and heartbeat (audit F2), with test firmware
+## 6. Reference gate and heartbeat (audit F2), with the firmware
 
-Test firmware follows `firmware_handoff.md` §1–§3: B = `0xFFFF`, A = `0x8000`,
-then a software heartbeat on PC5.
+The firmware is in `firmware/` (see `docs/firmware/bringup_firmware.md` for
+the full firmware bring-up order, the logic-analyser checks that come first,
+and the commands). The production image runs the heartbeat at **2 kHz on a
+fixed 250 µs grid** and reports `ARMED` 100 ms after the first edge. The
+frequency, single-edge and B = 0 tests need the **bring-up image**
+(`stage1_iv_fw-bringup.elf`, `*IDN? build=bringup`); flash the release image
+again afterwards.
 
-- [ ] **Arm.** Start the heartbeat at 1 kHz. DAC_ARM: expect ≈ 2.4 V
-  (simulated 2.42–2.46 V; worst case 1.87 V; U11 needs 1.49 V). Record it.
+- [ ] **Arm** (`ARM`, release image, 2 kHz). DAC_ARM: simulated 2.70 V
+  nominal, 2.15 V worst case; U11 needs 1.49 V. Record it.
   **STOP if it is below 1.7 V.**
-- [ ] Time from the first PC5 edge until DAC_ARM crosses 1.49 V. The simulation
-  says several edges; firmware assumes ≤ 10 ms.
+- [ ] At 1 kHz (bring-up `HB.FREQ 1000`): expect ≈ 2.6 V (simulated 2.62 V;
+  worst case 2.03 V). Record it.
+- [ ] Time from the first PC5 edge until DAC_ARM crosses 1.49 V (simulated
+  2.1 ms nominal, 4.0 ms worst case at 2 kHz). The firmware waits 100 ms
+  before it reports `ARMED`.
 - [ ] DAC_VREF = VREF_2V5 within about 1 mV (U11's Ron carries only the DAC's
   reference current).
-- [ ] **Margin.** Heartbeat at 500 Hz: DAC_ARM ≥ 1.6 V (simulated worst case
-  1.61 V). Record it.
-- [ ] **Single edge.** Drive PC5 high once and hold it: DAC_ARM peaks near
-  0.5 V (simulated 0.53 V), stays below 0.87 V, then decays. DAC_VREF stays
-  at 0 V.
-- [ ] **Disarm tests.** For each case below, first set A to +5 V (`0xBFFF`),
-  then repeat with A at −5 V (`0x3FFF`). Scope TP1 and FORCE+ (1 kΩ load) and
-  record the time until |V_SWEEP| < 0.2 V. Expect ≤ 60 ms (simulated
-  ≈ 52 ms):
-  - [ ] heartbeat stopped with PC5 left low;
-  - [ ] heartbeat stopped with PC5 left high;
-  - [ ] SW1 reset;
-  - [ ] debugger halt;
-  - [ ] a deliberate crash (for example a HardFault, or an infinite loop that
-    skips the heartbeat);
+- [ ] **Margin.** Heartbeat at 500 Hz (bring-up `HB.FREQ 500`): DAC_ARM
+  ≥ 1.76 V (simulated worst case; 2.42 V nominal). Record it.
+- [ ] **Single edge** (bring-up, DISARMED: `HB.EDGE`, then `HB.HOLD OFF`):
+  DAC_ARM peaks near 0.5 V (simulated 0.54 V nominal, 0.66 V worst case),
+  stays below 0.87 V, then decays. DAC_VREF stays at 0 V.
+- [ ] **Disarm tests.** For each case below, first set the output to +5 V
+  (`SRC V=5`), then repeat at −5 V (`SRC V=-5`). Scope TP1 and FORCE+ (1 kΩ
+  load) and record the time until |V_SWEEP| < 0.2 V.
+
+  **Limits: ≤ 70 ms with PC5 left low or floating, ≤ 85 ms with PC5 left
+  high.** Rationale: the pump simulation (`firmware_spec.md` §4.4) gives the
+  time for DAC_ARM to fall below V_IL = 0.87 V as 52–54 ms nominal and
+  61–63 ms in the slow corner (low diode VF, C48 +10 %, R37 +1 %) with PC5
+  low, and 64–66 ms nominal / 75–77 ms worst case with PC5 held high
+  (C47 feed-through). The earlier "≤ 60 ms" expectation would fail a correct
+  board in the slow corner and in every PC5-high case. The firmware's own
+  `T_DISARM` is 100 ms, above both limits. In the cases where the firmware
+  is still running it does not rely on the gate: it writes the zero code
+  first, so V_SWEEP falls much sooner than the limit.
+  - [ ] orderly `DISARM` (ramp at 10 V/s, then the zero code; record the
+    ramp and the gate opening after the last edge);
+  - [ ] heartbeat stopped, DAC holding the level, PC5 left low or high
+    (bring-up `CRASH HANG_IRQOFF`: the PC5 level at the moment of the hang
+    is whichever the grid was at — note it from the analyser, repeat until
+    both levels are covered; the IWDG resets the MCU 1.0–2.8 s later);
+  - [ ] SW1 held in reset (PC5 floats; after release the boot writes the
+    zero pair at once);
+  - [ ] debugger halt (on resume the dead-man fires and zeroes);
+  - [ ] deliberate crashes: `CRASH HARDFAULT` (fault handler zero, < 1 ms)
+    and `CRASH HANG` (dead-man zero within 2 ms);
   - [ ] +5 V supply removed (MCU and DAC unpowered).
 
-  **STOP if any case leaves V_SWEEP at its last value.**
+  **STOP if any case leaves V_SWEEP at its last value, or exceeds its
+  limit.**
 - [ ] **/SYNC during reset.** Scope CS_DAC while pressing SW1. It stays high
   throughout, so no DAC frame is clocked in.
-- [ ] **Re-arm after reset.** After an SW1 reset the firmware rewrites B and A
-  before arming. V_SWEEP comes back at the commanded value, not at the
-  pre-reset one.
-- [ ] **Positive-bound contract (negative test, briefly).** With the 1 kΩ load
-  only, set B = `0x0000` and A = `0x8000` while armed. V_SWEEP should be
-  about +10 V; that it is not 0 V shows the bound depends on B. Then restore
-  B. This demonstrates why firmware must never write B below full scale.
+- [ ] **No re-arm after reset.** After every reset (SW1, watchdog, crash,
+  `RESET`) the firmware writes B = `0xFFFF`, A = zero code before any PC5
+  edge and stays `DISARMED`; `STAT?` reports `disarm_reason=reset` and the
+  reset cause. V_SWEEP stays at 0 V until a new `ARM` and `SRC`.
+- [ ] **Positive-bound contract (negative test, briefly; bring-up image
+  only).** With the 1 kΩ load only: `ARM`, then
+  `DAC.RAW 32768 0 CONFIRM=UNSAFE` (B = `0x0000`, A = `0x8000`). V_SWEEP
+  should be about +10 V; that it is not 0 V shows the bound depends on B.
+  Then `DAC.RAW OFF` (zero pair, B back at full scale). This command exists
+  only in the bring-up build (`ERR UNKNOWN` in release and debug); it shows
+  why the production firmware never writes B below full scale.
 
 ## 7. Output stage, current limit and protection
 
 - [ ] **Sweep into 1 kΩ** from −10 V to +10 V and back: the Kelvin and current
   channels track, with signed readings and no step at 0 V.
 - [ ] **Current-limit plateau.** Short FORCE+ to FORCE− (Kelvin leads on the
-  short) and command +10 V. Record the plateau current (nominally ≈ 49 mA;
-  TI does not characterise ILIM at this setting). Repeat at −10 V.
+  short) and command +10 V (`SRC V=10`, `MEAS? N=16`). Record the plateau
+  current, and repeat at −10 V. The ≈ 49 mA figure is a **nominal design
+  value** from R7 (49.4 mA typical); TI does not characterise ILIM at this
+  setting, so it is not a specification. The measured value, smaller
+  polarity, becomes the calibration coefficient (`CAL.SET i_plateau=<A>`,
+  `CAL.SAVE`), which the firmware's `CLIM` classification uses.
 - [ ] **Thermal soak on the plateau.** Hold the short at +10 V for 30 min at
   room temperature. Measure R30's body, F1's and F2's bodies and U5's tab
   with a thermocouple or IR camera. **Neither F1 nor F2 may trip.** Record
@@ -238,25 +272,28 @@ then a software heartbeat on PC5.
 
 ## 8. Measurement checks and calibration
 
-Follow `firmware_handoff.md` §4–§5.
+Follow `firmware_handoff.md` §4–§5 and `docs/firmware/calibration.md`.
 
 - [ ] ADS1256: SCLK ≤ 1.92 MHz, CLKOUT off (ADCON CLK = 00), D1–D3 driven low,
-  SELFCAL done.
-- [ ] Zero with the gate disarmed: jacks open, then jacks shorted. Record the
-  offsets of both channels.
+  SELFCAL done (logic analyser, `docs/firmware/bringup_firmware.md` §2).
+- [ ] Zero with the gate disarmed: jacks open (`ZERO`), then jacks shorted
+  (`MEAS? N=64`). Record the offsets of both channels.
 - [ ] **R10 thermal EMF.** Run the plateau (or 50 mA into a short) for 5 min,
   set the output to 0 V, and read the current channel at once and again after
   5 min. The difference against the cold zero is the shunt's thermal EMF
   (referred to the input: µV / 10 Ω). Record it; above ≈ 1 µA equivalent,
   check that R10 lies flat with symmetric leads.
 - [ ] Gain: a 0.01 % 100 Ω resistor in a 4-wire connection, measured against a
-  calibrated DMM at several points of each polarity.
+  calibrated DMM at several points of each polarity (`iv-cal --r-ref 100`).
 - [ ] **Open-Kelvin detection.** With current flowing, lift SENSE+, then
   SENSE−. The firmware cross-check (Kelvin voltage against
-  V_SWEEP − I·(R30 + R10 + R_F1 + R_F2 + R_U12)) must flag it.
+  V_SWEEP − I·(R30 + R10 + R_F1 + R_F2 + R_U12)) must flag it: `KELVIN` in
+  the records and `EVT WARN KELVIN` after 3 points (open SENSE− only above
+  ≈ 2–15 mA, as documented in `firmware_spec.md` §7.7).
 - [ ] **U12 open state.** With a 1 kΩ load and +5 V commanded, remove −15 V:
   U12 opens, I → 0 while the commanded V stays; the firmware must report the
-  output as disconnected (`firmware_handoff.md`), not as an open DUT.
+  output as disconnected (`NO_OUTPUT` flag, `EVT WARN NO_OUTPUT`), not as an
+  open DUT. With ±15 V off at `ARM`, the answer is `ERR PRECOND afe`.
 - [ ] Hysteresis sweep of a known diode, −V → +V → −V: signed and continuous,
   and the plateau region is flagged as current limit, not as DUT behaviour.
 
@@ -264,8 +301,8 @@ Follow `firmware_handoff.md` §4–§5.
 
 Rail voltages and currents, the R39 voltage (U12 LED current), VREF_2V5,
 the safe-state residual, the dead-rail voltages and load voltages of §5, the
-U12 close/open thresholds, DAC_ARM at 1 kHz and 500 Hz, the arm time, the six
-disarm times, the plateau current at both polarities, the R30 / F1 / F2 / U5
+U12 close/open thresholds, DAC_ARM at 2 kHz, 1 kHz and 500 Hz, the arm time,
+every disarm time (with the PC5 level), the plateau current at both polarities, the R30 / F1 / F2 / U5
 temperatures after the soak, the snubber decision, the R10 thermal-EMF
 offset, and the calibration constants. Update `docs/audit_corrections.md`
 §"What is calculated, not measured" with the measured values.
