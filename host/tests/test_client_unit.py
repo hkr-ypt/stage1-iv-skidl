@@ -63,13 +63,26 @@ def test_deferred_timeout_raises(device, inst):
 def test_keepalive_does_not_corrupt_matching(device):
     i = Instrument(device.t, keepalive_interval=0.01, command_timeout=2.0)
     i.open()
+
+    def pings():
+        return sum(1 for l in device.received if l == "PING")
+
     try:
-        for _ in range(50):
+        # Commands keep running until several keep-alive PINGs have been
+        # interleaved with them. The short pause lets the keep-alive thread
+        # win the (unfair) command lock between commands, as it does when a
+        # real application is not issuing commands back to back.
+        deadline = time.monotonic() + 10.0
+        n = 0
+        while (n < 50 or pings() < 3) and time.monotonic() < deadline:
             assert i.cfg_get()["n_avg"] == 1
             assert i.idn(refresh=True).model == "stage1-iv"
+            n += 1
+            time.sleep(0.002)
     finally:
         i.close()
-    assert sum(1 for l in device.received if l == "PING") > 0
+    assert n >= 50
+    assert pings() >= 3
 
 
 def test_bringup_build_refused(device):
