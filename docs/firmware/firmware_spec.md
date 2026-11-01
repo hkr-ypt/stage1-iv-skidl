@@ -1656,8 +1656,8 @@ here. Each item says what the code does and why; the code and
     to (`PROTO_AFTER_RESERVE`); otherwise it waits in the RX ring. So a
     stalled host still reads every sweep between its `SWEEP_BEGIN` and
     `SWEEP_END` and loses no event its own commands cause (spec §7.1 did not
-    define the priorities). `EVT FAULT` and `EVT WARN` are not ordered: they
-    go out at once.
+    define the priorities). Every other event (`FAULT`, `WARN`, `SRC_DONE`,
+    ...) is not ordered: it goes out at once.
 12. *Ramps* step on a 1 ms **grid** (`next += 1 ms`, resynchronised when more
     than a period late) so that the 10 V/s disarm ramp finishes ±10 V in
     1.0 s, inside the 1.1 s deadline whatever the pass jitter. An individual
@@ -1718,6 +1718,13 @@ here. Each item says what the code does and why; the code and
     buses at /1 and the PLL and HSE off, so the recorded clock state is the
     real one. A VBUS conversion without EOC within 5 ms reads as VBUS absent.
     The configuration descriptor is self-powered, 2 mA.
+25. *`DISARM` and `SWP.ABORT` act on arrival.* While command parsing is held
+    back (a deferred command, or no room for responses and ordered events
+    because the host is not reading), a `DISARM` or `SWP.ABORT` line without
+    arguments takes effect as soon as it is in the RX ring; it is answered
+    in its place in the command order (`DISARM` as a no-op, an early
+    `SWP.ABORT` with `OK`). Without this, a host that writes but does not
+    read could leave the output armed behind held commands.
 
 **Hardware documentation updated with this work:** `bringup_checklist.md`
 (§3 REF5025AI tolerance; §6 disarm limits 70/85 ms with rationale, the

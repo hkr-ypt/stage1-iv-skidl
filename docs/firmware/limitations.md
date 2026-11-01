@@ -63,7 +63,9 @@ The user-visible ones:
   `ERR BUSY` while an `SRC` ramp runs.
 * A host that stops reading behind unread records also stops getting its
   commands parsed once the ordered-event queue is about a third full: they
-  wait in the receive buffer rather than lose their events.
+  wait in the receive buffer rather than lose their events. `DISARM` and
+  `SWP.ABORT` still take effect at once; their events can then precede
+  their `OK`.
 * The session zero is marked stale at the start of every new host session.
 
 ## 4. Residual risks (unchanged from spec §3.3)

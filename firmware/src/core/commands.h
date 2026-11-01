@@ -24,4 +24,14 @@ void commands_emit_hello(void);
 /* Runs a pending RESET / CRASH once its response has left the TX ring. */
 void commands_service(uint64_t now_us);
 
+/* DISARM and SWP.ABORT (without arguments) take effect as soon as their line
+ * is in the RX ring while command parsing is held back (a deferred command,
+ * or no room for responses and events): proto.c spots such lines; they are
+ * still executed and answered later, in order. */
+typedef enum { URGENT_NONE = 0, URGENT_DISARM, URGENT_ABORT, URGENT_COUNT } urgent_t;
+urgent_t commands_urgent_kind(const char *line, size_t len);
+/* Acts on one such line now. True if it did, for SWP.ABORT only when a sweep
+ * was aborted: that line is then answered OK without executing it again. */
+bool     commands_urgent_act(urgent_t k);
+
 #endif /* COMMANDS_H */

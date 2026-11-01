@@ -723,6 +723,101 @@ static void test_stalled_host_back_to_back_sweeps_keep_their_events(void)
     TEST_ASSERT_TRUE(ran >= 2u);
 }
 
+static void test_disarm_acts_while_commands_are_held(void)
+{
+    /* A host that writes but does not read: two sweeps fill the ordered
+     * queue, the third SWP.RUN is held, and DISARM behind it must still take
+     * effect at once; its OK keeps its place in the command order. */
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("CFG settle_us=100 end=hold"));
+    TEST_ASSERT_EQUAL(0, strncmp(h_cmd("SWP.WP 0 2 STEP=0.02"), "OK SWP", 6));
+    arm();
+    size_t from = h_lines();
+    psim_set_tx_space_limit(0);
+    for (int k = 0; k < 3; k++) {
+        h_send("SWP.RUN");
+        h_run_us(1500000);
+    }
+    TEST_ASSERT_TRUE(fabs(h_vsweep()) > 1.0);   /* end=hold: still at 2 V */
+    h_send("DISARM");
+    TEST_ASSERT_TRUE(h_run_until_state(ST_DISARMED, 3000000));
+    TEST_ASSERT_TRUE(fabs(h_vsweep()) < 0.01);
+    TEST_ASSERT_FALSE(h_gate());
+    psim_set_tx_space_limit(PSIM_TX_NO_LIMIT);
+    h_run_us(5000000);
+    TEST_ASSERT_EQUAL_UINT32(4, count_responses(from));
+    size_t last = SIZE_MAX;
+    for (size_t i = from; i < h_lines(); i++) {
+        if (starts(h_line(i), "OK") || starts(h_line(i), "ERR")) {
+            last = i;
+        }
+    }
+    TEST_ASSERT_EQUAL_STRING("OK", h_line(last));   /* DISARM, answered last */
+    proto_stats_t ps;
+    proto_get_stats(&ps);
+    TEST_ASSERT_EQUAL_UINT32(0, ps.evt_lost);
+}
+
+static void test_swp_abort_acts_while_commands_are_held(void)
+{
+    /* a large response fills the TX ring of a host that is not reading: the
+     * SWP.ABORT behind it still stops the sweep at once, and is answered OK */
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("CFG settle_us=100000"));
+    TEST_ASSERT_EQUAL(0, strncmp(h_cmd("SWP.WP 0 4 STEP=0.1"), "OK SWP", 6));
+    arm();
+    size_t from = h_lines();
+    psim_set_tx_space_limit(0);
+    h_send("SWP.RUN");
+    h_run_us(500000);
+    for (int k = 0; k < 6; k++) {
+        h_send("DIAG?");               /* ~450 B each: the TX gate closes */
+    }
+    h_run_us(100000);
+    TEST_ASSERT_EQUAL(ST_SWEEPING, h_state());
+    h_send("SWP.ABORT");
+    h_run_us(300000);
+    TEST_ASSERT_EQUAL(ST_ARMED, h_state());
+    psim_set_tx_space_limit(PSIM_TX_NO_LIMIT);
+    h_run_us(3000000);
+    TEST_ASSERT_EQUAL_UINT32(8, count_responses(from));
+    TEST_ASSERT_NOT_NULL(strstr(h_line(h_find("EVT SWEEP_END", from)), "status=aborted"));
+    size_t last = SIZE_MAX;
+    for (size_t i = from; i < h_lines(); i++) {
+        if (starts(h_line(i), "OK") || starts(h_line(i), "ERR")) {
+            last = i;
+        }
+    }
+    TEST_ASSERT_EQUAL_STRING("OK", h_line(last));   /* SWP.ABORT, not ERR STATE */
+}
+
+static void test_disarm_during_deferred_measurement(void)
+{
+    /* MEAS? holds later commands for up to 10 s; a DISARM behind it acts at
+     * once, the measurement is answered ERR STATE, then the DISARM OK */
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("CFG adc_rate=10"));
+    h_run_us(2000000);
+    arm();
+    size_t from = h_lines();
+    h_send("MEAS? N=40");
+    h_run_us(300000);
+    h_send("DISARM");
+    h_run_us(300000);
+    TEST_ASSERT_TRUE(h_state() == ST_DISARMING || h_state() == ST_DISARMED);
+    TEST_ASSERT_TRUE(h_run_until_state(ST_DISARMED, 2000000));
+    h_run_us(200000);
+    size_t m = SIZE_MAX, d = SIZE_MAX;
+    for (size_t i = from; i < h_lines(); i++) {
+        if (starts(h_line(i), "ERR STATE") && m == SIZE_MAX) {
+            m = i;
+        } else if (strcmp(h_line(i), "OK") == 0) {
+            d = i;
+        }
+    }
+    TEST_ASSERT_NOT_EQUAL(SIZE_MAX, m);
+    TEST_ASSERT_NOT_EQUAL(SIZE_MAX, d);
+    TEST_ASSERT_TRUE(m < d);
+    TEST_ASSERT_EQUAL_UINT32(2, count_responses(from));
+}
+
 static void test_session_loss_during_deferred_job_frees_the_slot(void)
 {
     /* SELFTEST runs for a while; the host disconnects mid-way */
@@ -768,5 +863,8 @@ int main(void)
     RUN_TEST(test_integer_keys_accept_the_number_grammar);
     RUN_TEST(test_stalled_host_state_events_never_lost);
     RUN_TEST(test_stalled_host_back_to_back_sweeps_keep_their_events);
+    RUN_TEST(test_disarm_acts_while_commands_are_held);
+    RUN_TEST(test_swp_abort_acts_while_commands_are_held);
+    RUN_TEST(test_disarm_during_deferred_measurement);
     return UNITY_END();
 }

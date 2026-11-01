@@ -29,6 +29,8 @@
 /* PT lines leave room for a command and some events. */
 #define PT_MIN_FREE          (CMD_MIN_FREE + PROTO_PT_LINE_MAX + PROTO_EVT_RESERVE)
 #define EVT_LOST_LINE_MAX    48u
+/* the longest line that can be an urgent DISARM / SWP.ABORT */
+#define URG_LINE_MAX         24u
 
 #if (PROTO_TX_RING < PT_MIN_FREE + PROTO_PT_LINE_MAX)
 #error "PROTO_TX_RING too small for the output priorities"
@@ -316,6 +318,14 @@ static struct {
     char          after[PROTO_AFTER_MAX];
     size_t        after_len;
     uint16_t      after_n;
+    /* DISARM / SWP.ABORT lines spotted on arrival (commands_urgent_kind):
+     * per kind, lines in the RX ring not yet executed, and how many of the
+     * oldest of them were already acted on while parsing was held back */
+    char          urg_scan[URG_LINE_MAX];
+    size_t        urg_scan_len;
+    bool          urg_scan_long;
+    uint16_t      urg_pending[URGENT_COUNT];
+    uint16_t      urg_acted[URGENT_COUNT];
     /* a finished deferred response waiting for TX space */
     char          resp[PROTO_RESP_MAX];
     size_t        resp_len;
@@ -346,6 +356,10 @@ static void reset_io(void)
     s_p.hold_len = 0;
     s_p.after_len = 0;
     s_p.after_n = 0;
+    s_p.urg_scan_len = 0;
+    s_p.urg_scan_long = false;
+    memset(s_p.urg_pending, 0, sizeof s_p.urg_pending);
+    memset(s_p.urg_acted, 0, sizeof s_p.urg_acted);
     s_p.resp_pending = false;
     s_p.resp_len = 0;
     s_p.evt_lost_pending = 0;
@@ -613,6 +627,46 @@ static void stream_records(void)
 
 /* ---- input -------------------------------------------------------------------------- */
 
+/* Spots complete DISARM / SWP.ABORT lines as they enter the RX ring. */
+static void urg_scan(const uint8_t *b, size_t n)
+{
+    for (size_t i = 0; i < n; i++) {
+        uint8_t c = b[i];
+        if (c == '\n') {
+            if (!s_p.urg_scan_long) {
+                urgent_t k = commands_urgent_kind(s_p.urg_scan, s_p.urg_scan_len);
+                if (k != URGENT_NONE) {
+                    s_p.urg_pending[k]++;
+                }
+            }
+            s_p.urg_scan_len = 0;
+            s_p.urg_scan_long = false;
+        } else if (c == '\r') {
+            continue;
+        } else if (s_p.urg_scan_len < sizeof s_p.urg_scan) {
+            s_p.urg_scan[s_p.urg_scan_len++] = (char)c;
+        } else {
+            s_p.urg_scan_long = true;
+        }
+    }
+}
+
+/* While commands cannot be parsed, act on the waiting DISARM / SWP.ABORT
+ * lines now (their responses keep their place in the order). */
+static void urgent_service(void)
+{
+    if (s_p.urg_acted[URGENT_DISARM] < s_p.urg_pending[URGENT_DISARM]
+        && commands_urgent_act(URGENT_DISARM)) {
+        s_p.urg_acted[URGENT_DISARM] = s_p.urg_pending[URGENT_DISARM];
+    }
+    /* one abort per sweep actually aborted: a later SWP.ABORT may belong to a
+     * sweep that a held SWP.RUN has yet to start */
+    if (s_p.urg_acted[URGENT_ABORT] < s_p.urg_pending[URGENT_ABORT]
+        && commands_urgent_act(URGENT_ABORT)) {
+        s_p.urg_acted[URGENT_ABORT]++;
+    }
+}
+
 static void read_port(uint64_t now)
 {
     uint8_t tmp[64];
@@ -627,6 +681,7 @@ static void read_port(uint64_t now)
             return;
         }
         session_note_rx(now);
+        urg_scan(tmp, n);
         ring_put(&s_rx, tmp, n);
     }
 }
@@ -689,6 +744,18 @@ static void process_line(void)
     s_p.line_long = false;
     s_p.line_bad = false;
 
+    /* the same classification urg_scan() made when the line arrived */
+    urgent_t uk = (!too_long && len <= URG_LINE_MAX)
+                  ? commands_urgent_kind(s_p.line, len) : URGENT_NONE;
+    bool acted = false;
+    if (uk != URGENT_NONE && s_p.urg_pending[uk] > 0u) {
+        s_p.urg_pending[uk]--;
+        if (s_p.urg_acted[uk] > 0u) {
+            s_p.urg_acted[uk]--;
+            acted = true;
+        }
+    }
+
     if (too_long) {
         s_p.stats.rx_overflows++;
         commands_format_error(&resp, E_SYNTAX, "line too long");
@@ -713,6 +780,11 @@ static void process_line(void)
     }
     if (ts == TOK_TOO_MANY) {
         commands_format_error(&resp, E_ARG, "too many arguments");
+        put_response(&resp);
+        return;
+    }
+    if (acted && uk == URGENT_ABORT) {
+        lb_puts(&resp, "OK");   /* the sweep was aborted when the line arrived */
         put_response(&resp);
         return;
     }
@@ -784,6 +856,10 @@ void proto_service(uint64_t now_us)
         return;
     }
     read_port(now_us);
+    if (commands_deferred_pending() || s_p.resp_pending || ring_free(&s_tx) < CMD_MIN_FREE
+        || sizeof s_p.after - s_p.after_len < PROTO_AFTER_RESERVE) {
+        urgent_service();
+    }
     if (commands_deferred_pending() || s_p.resp_pending) {
         complete_deferred();
     } else if (ring_free(&s_tx) >= CMD_MIN_FREE

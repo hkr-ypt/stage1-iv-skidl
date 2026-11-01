@@ -1389,6 +1389,47 @@ void commands_format_error(lb_t *out, err_t e, const char *msg)
     lb_puts(out, (msg && msg[0]) ? msg : "failed");
 }
 
+urgent_t commands_urgent_kind(const char *line, size_t len)
+{
+    size_t i = 0;
+    while (i < len && (line[i] == ' ' || line[i] == '\t')) {
+        i++;
+    }
+    size_t j = i;
+    while (j < len && line[j] != ' ' && line[j] != '\t') {
+        j++;
+    }
+    for (size_t k = j; k < len; k++) {
+        if (line[k] != ' ' && line[k] != '\t') {
+            return URGENT_NONE;   /* arguments: executed (and refused) in order */
+        }
+    }
+    tok_t t = { line + i, (uint16_t)(j - i) };
+    if (tok_eq(t, "DISARM")) {
+        return URGENT_DISARM;
+    }
+    if (tok_eq(t, "SWP.ABORT")) {
+        return URGENT_ABORT;
+    }
+    return URGENT_NONE;
+}
+
+bool commands_urgent_act(urgent_t k)
+{
+    inst_state_t st = inst_state();
+    if (k == URGENT_DISARM) {
+        if (st == ST_ARMING || st == ST_ARMED || st == ST_SWEEPING) {
+            inst_disarm(DR_COMMAND);
+        }
+        return true;   /* the in-order DISARM is then a no-op OK */
+    }
+    if (k == URGENT_ABORT && st == ST_SWEEPING) {
+        engine_sweep_abort(SWS_ABORTED);
+        return true;
+    }
+    return false;
+}
+
 bool commands_execute(const cmdline_t *cl, lb_t *out)
 {
     const cmd_t *cmd = NULL;

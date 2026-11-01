@@ -58,7 +58,13 @@ command, field or error code is a protocol change and increments
   commands wait in the receive buffer meanwhile. `EVT` and `PT` lines may
   appear between a command and its response.
 - **Ordering guarantees.** Events a command causes always follow its `OK`
-  (for example `OK`, then `EVT STATE ARMING`). `EVT SWEEP_BEGIN`,
+  (for example `OK`, then `EVT STATE ARMING`), with one exception: `DISARM`
+  and `SWP.ABORT` without arguments take effect as soon as their line has
+  arrived, even while earlier commands are still waiting (a deferred
+  command, or a host that is not reading, see *Flow control*). Their
+  response keeps its place in the command order, so their events can then
+  precede it, and commands sent before them that were still waiting see the
+  disarmed (or no longer sweeping) state. `EVT SWEEP_BEGIN`,
   `EVT SWEEP_END` and `EVT STATE` are never sent before the `PT` records
   pushed before them, and no record pushed after one of them is sent before
   it, even while the host is not reading: a host may stop reading a sweep at
@@ -138,7 +144,7 @@ also pulses NRST), or `none`. `crash=` names: `hardfault`, `memmanage`,
 | Command | States | Effect / response |
 |---|---|---|
 | `ARM` | DISARMED | Checks the preconditions (session, POST passed, ADC idle-able, a gate-open front-end check within 1 s, BOR level 3, valid configuration). `OK`, then `EVT STATE ARMING`, then `EVT STATE ARMED` 100 ms after the first heartbeat edge. Errors: `ERR STATE`, `ERR FAULT`, `ERR PRECOND <name>` |
-| `DISARM` | ARMING, ARMED, SWEEPING; DISARMED, DISARMING (no-op) | `OK`; aborts any sweep (`status=aborted`), ramps to 0 V at ≥ 10 V/s, zero pair, heartbeat off, `EVT STATE DISARMING reason=command` ... `EVT STATE DISARMED reason=command` (100 ms after the last edge) |
+| `DISARM` | ARMING, ARMED, SWEEPING; DISARMED, DISARMING (no-op) | `OK`; takes effect on arrival even when earlier commands wait (§2); aborts any sweep (`status=aborted`), ramps to 0 V at ≥ 10 V/s, zero pair, heartbeat off, `EVT STATE DISARMING reason=command` ... `EVT STATE DISARMED reason=command` (100 ms after the last edge) |
 | `SRC V=<volts>` | ARMED | Ramps the output to the level at `ramp_rate`; `OK`, then `EVT SRC_DONE v_v=<V> status=reached` when reached. A compliance trip during the ramp zeroes the output and ends it with `EVT SRC_DONE v_v=0.000000 status=compliance` (and `EVT WARN COMPLIANCE`); bring-up `DAC.RAW OFF` ends it with `status=aborted`. `DISARM` or a fault ends a ramp with `EVT STATE` instead. `ERR RANGE` beyond `v_limit` or the DAC range. A new `SRC` replaces the target of a ramp in progress |
 | `FAULT.CLR` | FAULT (`ERR STATE` otherwise) | Clears the latched fault if its cause is gone and `T_DISARM` (100 ms) has elapsed since the last edge: `OK`, then `EVT STATE DISARMED`. Otherwise `ERR PRECOND <reason>`: `wait` (T_DISARM), `adc` (ADC not re-initialised and self-tested yet; the check is started, retry), `dac` (SPI1 still failing), `invariant`, `stack` and `clock` (these two need `RESET`) |
 | `RESET` | DISARMED, FAULT | `OK`, then a software reset 50–200 ms later (after the `OK` has left); the session ends |
@@ -184,7 +190,7 @@ zero stale.
 | `SWP.LIST.USE` | DISARMED, ARMED | Selects the list as the sweep: `OK SWP kind=list points=<N> est_s=<s>` |
 | `SWP?` | any | `OK SWP kind=<none\|wp\|list> points=<N> est_s=<s>` |
 | `SWP.RUN` | ARMED | Validates the definition against the current `v_limit` and calibration, then `OK id=<sweep_id> points=<N> est_s=<s>`, then `EVT SWEEP_BEGIN ...`, `PT` lines, and `EVT SWEEP_END ...`. `ERR BUSY ramp in progress` while an `SRC` ramp runs (wait for its `SRC_DONE`) |
-| `SWP.ABORT` | SWEEPING | `OK`; the sweep ends at once (the point in progress is discarded, no partial record), ramps to 0 V and reports `status=aborted` |
+| `SWP.ABORT` | SWEEPING | `OK`; the sweep ends at once (the point in progress is discarded, no partial record), ramps to 0 V and reports `status=aborted`. Takes effect on arrival even when earlier commands wait (§2); it is then answered `OK` in its place even though the state is no longer SWEEPING |
 | `DATA.FETCH FROM=<seq>` | any | Re-sends retained records from `seq`: `OK first=<seq> last=<seq>` (`first > last` when none are retained) |
 
 Sweep execution: pre-ramp from the present output to the first point at
@@ -291,8 +297,9 @@ for `SWEEP_BEGIN`/`SWEEP_END`/`STATE` waiting behind records, the ordered
 queue) is full, an event is dropped and counted; `EVT WARN EVT_LOST n=<k>`
 reports the loss once space is available. Because commands wait while the
 ordered queue lacks room for their events, a stalled host loses none of the
-events its own commands cause. `EVT FAULT` and `EVT WARN` are sent at once
-and can precede records measured before them. Measurement records are never dropped: if the
+events its own commands cause. Only `SWEEP_BEGIN`, `SWEEP_END` and `STATE`
+are ordered behind records; every other event (`FAULT`, `WARN`, `SRC_DONE`,
+...) is sent at once and can precede records measured before it. Measurement records are never dropped: if the
 host falls 1024 records behind, the sweep ends with `status=overflow`.
 
 ## 8. Example session
