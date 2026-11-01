@@ -153,6 +153,22 @@ static void set_clock_state(uint32_t hclk, uint32_t pclk1, uint32_t pclk2)
     SystemCoreClock = hclk;
 }
 
+/* Any failure ends on HSI 16 MHz with every bus at /1 and the PLL and HSE
+ * stopped, so that the recorded state (timer prescalers, SPI dividers) is the
+ * real one, even after a PLL switch that timed out (RM0383 §6.3.1: PLLON and
+ * HSEON cannot be cleared while they feed SYSCLK, so the order is fixed). */
+static bool clock_fallback_hsi(void)
+{
+    RCC->CFGR = (RCC->CFGR & ~RCC_CFGR_SW) | RCC_CFGR_SW_HSI;
+    (void)stm32_wait_reg(&RCC->CFGR, RCC_CFGR_SWS, RCC_CFGR_SWS_HSI, 10000u);
+    RCC->CFGR &= ~(RCC_CFGR_HPRE | RCC_CFGR_PPRE1 | RCC_CFGR_PPRE2);   /* all /1 */
+    RCC->CR &= ~RCC_CR_PLLON;
+    RCC->CR &= ~RCC_CR_HSEON;
+    s_hse_ok = false;
+    set_clock_state(16000000u, 16000000u, 16000000u);
+    return false;
+}
+
 bool stm32_clock_init(void)
 {
     /* Voltage scale 1 for 96 MHz */
@@ -162,18 +178,13 @@ bool stm32_clock_init(void)
 
     RCC->CR |= RCC_CR_HSEON;
     if (!stm32_wait_reg(&RCC->CR, RCC_CR_HSERDY, RCC_CR_HSERDY, 100000u)) {
-        RCC->CR &= ~RCC_CR_HSEON;
-        s_hse_ok = false;
-        set_clock_state(16000000u, 16000000u, 16000000u);
-        return false;
+        return clock_fallback_hsi();
     }
 
     /* flash: 3 wait states, prefetch and caches, before raising the clock */
     FLASH->ACR = FLASH_ACR_LATENCY_3WS | FLASH_ACR_PRFTEN | FLASH_ACR_ICEN | FLASH_ACR_DCEN;
     if ((FLASH->ACR & FLASH_ACR_LATENCY) != FLASH_ACR_LATENCY_3WS) {
-        s_hse_ok = false;
-        set_clock_state(16000000u, 16000000u, 16000000u);
-        return false;
+        return clock_fallback_hsi();
     }
 
     RCC->CR &= ~RCC_CR_PLLON;
@@ -186,9 +197,7 @@ bool stm32_clock_init(void)
     RCC->CR |= RCC_CR_PLLON;
     if (!stm32_wait_reg(&RCC->CR, RCC_CR_PLLRDY, RCC_CR_PLLRDY, 10000u)
         || !stm32_wait_reg(&PWR->CSR, PWR_CSR_VOSRDY, PWR_CSR_VOSRDY, 10000u)) {
-        s_hse_ok = false;
-        set_clock_state(16000000u, 16000000u, 16000000u);
-        return false;
+        return clock_fallback_hsi();
     }
 
     /* AHB /1, APB1 /2, APB2 /1, then switch */
@@ -196,9 +205,7 @@ bool stm32_clock_init(void)
               | RCC_CFGR_HPRE_DIV1 | RCC_CFGR_PPRE1_DIV2 | RCC_CFGR_PPRE2_DIV1;
     RCC->CFGR = (RCC->CFGR & ~RCC_CFGR_SW) | RCC_CFGR_SW_PLL;
     if (!stm32_wait_reg(&RCC->CFGR, RCC_CFGR_SWS, RCC_CFGR_SWS_PLL, 10000u)) {
-        s_hse_ok = false;
-        set_clock_state(16000000u, 16000000u, 16000000u);
-        return false;
+        return clock_fallback_hsi();
     }
     RCC->CR |= RCC_CR_CSSON;
     set_clock_state(96000000u, 48000000u, 96000000u);
@@ -222,6 +229,24 @@ void stm32_core_init(void)
     NVIC_SetPriority(MemoryManagement_IRQn, PRIO_FAULTS);
     NVIC_SetPriority(BusFault_IRQn, PRIO_FAULTS);
     NVIC_SetPriority(UsageFault_IRQn, PRIO_FAULTS);
+
+    /* MPU guard (PM0214 §4.5): region 0 = the lowest 32 B of the thread stack,
+     * no access, execute never. A thread-stack overflow (a push, or exception
+     * stacking: MSTKERR) raises MemManage there instead of a bus error below
+     * SRAM. PRIVDEFENA keeps the default map everywhere else; HFNMIENA = 0
+     * leaves the MPU off in HardFault/NMI. */
+    MPU->CTRL = 0u;
+    __DSB();
+    __ISB();
+    MPU->RNR = 0u;
+    MPU->RBAR = (uint32_t)__thread_stack_bottom;
+    MPU->RASR = MPU_RASR_XN_Msk
+              | (0u << MPU_RASR_AP_Pos)                                /* no access */
+              | ((uint32_t)(__builtin_ctz(STM32_MPU_GUARD_BYTES) - 1) << MPU_RASR_SIZE_Pos)
+              | MPU_RASR_ENABLE_Msk;
+    MPU->CTRL = MPU_CTRL_PRIVDEFENA_Msk | MPU_CTRL_ENABLE_Msk;
+    __DSB();
+    __ISB();
 }
 
 bool port_in_exception(void)
@@ -231,7 +256,7 @@ bool port_in_exception(void)
 
 bool port_stack_ok(void)
 {
-    return __thread_stack_bottom[0] == STM32_STACK_CANARY;
+    return __thread_stack_bottom[STM32_CANARY_WORD] == STM32_STACK_CANARY;
 }
 
 int port_bor_level(void)

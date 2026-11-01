@@ -55,6 +55,10 @@ uint32_t tp_rand(uint32_t lo, uint32_t hi);
 void     tp_fail_xfers(uint32_t n);               /* next n transfers time out  */
 void     tp_set_arm_clears_pending(bool clears);  /* false: EXTI PR not cleared */
 void     tp_inject_edge(void);                    /* glitch on /DRDY now        */
+/* interrupt emulation: delay before the RDATA data bytes (preemption mid-read)
+ * and between a /DRDY edge and its latched timestamp (EXTI latency) */
+void     tp_set_read_preempt_us(uint32_t us);
+void     tp_set_drdy_latency_us(uint32_t us);
 bool     tp_edge_latched(uint64_t *t);            /* peek at the EXTI latch     */
 void     tp_observe(tp_obs_t *o);
 

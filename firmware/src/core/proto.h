@@ -80,7 +80,8 @@ bool         tok_eq(tok_t t, const char *s);
 
 /* ---- service -------------------------------------------------------------- */
 #define PROTO_HOLD_MAX     1024u   /* events held during one command          */
-#define PROTO_AFTER_MAX    1024u   /* events waiting for pending PT records   */
+#define PROTO_AFTER_MAX    1536u   /* events waiting for pending PT records   */
+#define PROTO_AFTER_EVENTS 16u     /* ... at most this many                    */
 #define PROTO_PT_LINE_MAX  200u
 #define PROTO_EVT_RESERVE  256u
 

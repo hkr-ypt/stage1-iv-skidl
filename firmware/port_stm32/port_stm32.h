@@ -30,8 +30,10 @@
 /* ---- NVIC priorities (4 bits, all preemption: PRIGROUP = 3) ------------------ */
 #define PRIO_FAULTS      0u   /* MemManage/BusFault/UsageFault (configurable)   */
 #define PRIO_DEADMAN     0u   /* TIM5: highest configurable priority            */
-#define PRIO_USB         1u   /* OTG_FS                                         */
-#define PRIO_DRDY        2u   /* EXTI9_5 (PA8 /DRDY)                            */
+/* /DRDY above USB: its timestamp bounds the ADS1256 read window, and the
+ * ISR is < 1 us, while an OTG_FS FIFO copy can take several us. */
+#define PRIO_DRDY        1u   /* EXTI9_5 (PA8 /DRDY)                            */
+#define PRIO_USB         2u   /* OTG_FS                                         */
 
 /* ---- clocks (system.c) ------------------------------------------------------- */
 typedef struct {
@@ -94,7 +96,7 @@ void     stm32_adc1_poll(uint64_t now_us);
 void     stm32_dac_spi_retune(void);
 
 /* Linker-script symbols (stm32f411re.ld). */
-extern uint32_t __thread_stack_bottom[];  /* canary word lives here         */
+extern uint32_t __thread_stack_bottom[];  /* 0x20000000: the MPU guard       */
 extern uint32_t __thread_stack_top[];
 extern uint32_t __handler_stack_top[];
 extern uint32_t __fault_stack_top[];
@@ -102,6 +104,11 @@ extern const uint8_t __cal_flash_start[]; /* 0x08004000, sectors 1 and 2    */
 extern const uint8_t __cal_sector_bytes[];/* absolute symbol: 16 KiB        */
 
 #define STM32_STACK_CANARY  0x5AFEC0DEu
+/* The lowest 32 B of the thread stack are an MPU no-access region (system.c),
+ * so an overflow faults (MemManage) before it leaves SRAM; the canary is the
+ * first word above it. */
+#define STM32_MPU_GUARD_BYTES 32u
+#define STM32_CANARY_WORD     (STM32_MPU_GUARD_BYTES / 4u)
 
 /* ---- exception and interrupt handlers (startup.c vector table) ------------------ */
 void Reset_Handler(void);

@@ -307,10 +307,15 @@ static struct {
     bool          in_cmd;
     char          hold[PROTO_HOLD_MAX];
     size_t        hold_len;
-    /* events ordered after the records pushed before them */
+    /* events ordered after the records pushed before them: text in after[],
+     * one entry per event with its own watermark, released in FIFO order */
     char          after[PROTO_AFTER_MAX];
     size_t        after_len;
-    uint32_t      after_until;     /* results_next_seq() when the first was queued */
+    struct {
+        uint16_t  len;
+        uint32_t  until;           /* results_next_seq() when it was queued */
+    }             after_ev[PROTO_AFTER_EVENTS];
+    uint8_t       after_n;
     /* a finished deferred response waiting for TX space */
     char          resp[PROTO_RESP_MAX];
     size_t        resp_len;
@@ -340,6 +345,7 @@ static void reset_io(void)
     s_p.line_bad = false;
     s_p.hold_len = 0;
     s_p.after_len = 0;
+    s_p.after_n = 0;
     s_p.resp_pending = false;
     s_p.resp_len = 0;
     s_p.evt_lost_pending = 0;
@@ -371,7 +377,7 @@ void proto_clear_stats(void)
 
 bool proto_tx_empty(void)
 {
-    return s_tx.used == 0 && !s_p.resp_pending && s_p.after_len == 0;
+    return s_tx.used == 0 && !s_p.resp_pending && s_p.after_n == 0;
 }
 
 /* ---- output ---------------------------------------------------------------------- */
@@ -428,42 +434,48 @@ void proto_event_ordered(const lb_t *b)
     if (!s_p.session) {
         return;
     }
-    if (s_p.after_len == 0 && !records_pending_before(results_next_seq())) {
+    uint32_t until = results_next_seq();
+    if (s_p.after_n == 0 && !records_pending_before(until)) {
         proto_event(b->buf, b->len);
         return;
     }
-    if (s_p.after_len == 0) {
-        s_p.after_until = results_next_seq();
-    }
-    if (s_p.after_len + b->len + 1u <= sizeof s_p.after) {
+    if (s_p.after_n < PROTO_AFTER_EVENTS && s_p.after_len + b->len <= sizeof s_p.after) {
         memcpy(s_p.after + s_p.after_len, b->buf, b->len);
         s_p.after_len += b->len;
-        s_p.after[s_p.after_len++] = '\n';
+        s_p.after_ev[s_p.after_n].len = (uint16_t)b->len;
+        s_p.after_ev[s_p.after_n].until = until;
+        s_p.after_n++;
     } else {
         event_lost();
     }
 }
 
+/* Send queued ordered events, oldest first, each once every record pushed
+ * before it has been sent. */
 static void flush_after(void)
 {
-    if (s_p.after_len == 0 || records_pending_before(s_p.after_until)) {
+    size_t off = 0;
+    uint8_t k = 0;
+    while (k < s_p.after_n && !records_pending_before(s_p.after_ev[k].until)) {
+        if (!tx_line(s_p.after + off, s_p.after_ev[k].len)) {
+            break;   /* keep it and the rest for the next pass (order matters) */
+        }
+        off += s_p.after_ev[k].len;
+        k++;
+    }
+    if (k == 0) {
         return;
     }
-    size_t i = 0;
-    while (i < s_p.after_len) {
-        size_t j = i;
-        while (j < s_p.after_len && s_p.after[j] != '\n') {
-            j++;
-        }
-        if (!tx_line(s_p.after + i, j - i)) {
-            /* keep the rest for the next pass (order matters) */
-            memmove(s_p.after, s_p.after + i, s_p.after_len - i);
-            s_p.after_len -= i;
-            return;
-        }
-        i = j + 1u;
-    }
-    s_p.after_len = 0;
+    memmove(s_p.after, s_p.after + off, s_p.after_len - off);
+    s_p.after_len -= off;
+    memmove(&s_p.after_ev[0], &s_p.after_ev[k], (size_t)(s_p.after_n - k) * sizeof s_p.after_ev[0]);
+    s_p.after_n = (uint8_t)(s_p.after_n - k);
+}
+
+/* true while a queued ordered event must go out before record `seq` */
+static bool event_due_before(uint32_t seq)
+{
+    return s_p.after_n > 0 && seq >= s_p.after_ev[0].until;
 }
 
 static void flush_hold(void)
@@ -567,6 +579,12 @@ static void stream_records(void)
         pt_rec_t r;
         if (!results_peek_unsent(&r)) {
             return;
+        }
+        if (event_due_before(r.seq)) {
+            flush_after();   /* e.g. SWEEP_END of the previous sweep first */
+            if (event_due_before(r.seq)) {
+                return;
+            }
         }
         size_t n = proto_format_pt(&r, buf, sizeof buf);
         if (n == 0 || !tx_line(buf, n)) {

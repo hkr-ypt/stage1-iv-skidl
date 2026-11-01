@@ -23,13 +23,15 @@ static uint32_t g_pass_lo = 5, g_pass_hi = 150;
 static uint64_t g_rng = 1;
 static uint64_t g_reset_low_t;
 static tp_obs_t g_obs;
+static uint32_t g_read_preempt_us;
+static uint32_t g_drdy_latency_us;
 
 static void edge(uint64_t t)
 {
     g_pending = true;
     if (g_armed && !g_latched) {
         g_latched = true;           /* ISR: timestamp, mask, clear pending */
-        g_latched_t = t;
+        g_latched_t = t + g_drdy_latency_us;
         g_armed = false;
         g_pending = false;
     }
@@ -54,6 +56,8 @@ void tp_setup(adsm_input_fn fn, void *ctx)
     g_pending = g_armed = g_latched = false;
     g_arm_clears = true;
     g_fail = 0;
+    g_read_preempt_us = 0;
+    g_drdy_latency_us = 0;
     memset(&g_obs, 0, sizeof g_obs);
     g_obs.min_reset_low_us = UINT64_MAX;
     adsm_power_on(g_m, 0);
@@ -128,6 +132,16 @@ void tp_set_arm_clears_pending(bool clears)
     g_arm_clears = clears;
 }
 
+void tp_set_read_preempt_us(uint32_t us)
+{
+    g_read_preempt_us = us;
+}
+
+void tp_set_drdy_latency_us(uint32_t us)
+{
+    g_drdy_latency_us = us;
+}
+
 void tp_inject_edge(void)
 {
     edge(g_now);
@@ -183,6 +197,10 @@ bool port_adc_xfer(const uint8_t *tx, uint8_t *rx, size_t n, uint32_t timeout_us
         g_now += timeout_us;
         sync_model();
         return false;
+    }
+    if (n == 3u && rx != NULL && g_read_preempt_us > 0u) {
+        g_now += g_read_preempt_us;   /* an ISR between RDATA and the data bytes */
+        sync_model();
     }
     double t0 = (double)g_now;
     for (size_t i = 0; i < n; i++) {

@@ -58,9 +58,11 @@ command, field or error code is a protocol change and increments
   commands wait in the receive buffer meanwhile. `EVT` and `PT` lines may
   appear between a command and its response.
 - **Ordering guarantees.** Events a command causes always follow its `OK`
-  (for example `OK`, then `EVT STATE ARMING`). `EVT SWEEP_END` and
-  `EVT STATE` are never sent before the `PT` records pushed before them: a
-  host may stop reading a sweep at `SWEEP_END`.
+  (for example `OK`, then `EVT STATE ARMING`). `EVT SWEEP_BEGIN`,
+  `EVT SWEEP_END` and `EVT STATE` are never sent before the `PT` records
+  pushed before them, and no record pushed after one of them is sent before
+  it, even while the host is not reading: a host may stop reading a sweep at
+  `SWEEP_END`.
 - **Flow control.** The device never stops measuring for the host. It parses
   a command only when its transmit buffer has room for the response, so a
   host that does not read will not get answers either; records are kept in
@@ -111,7 +113,7 @@ States: `BOOT`, `DISARMED`, `ARMING`, `ARMED`, `SWEEPING`, `DISARMING`,
 | `*IDN?` | any | `OK IDN model=stage1-iv fw=<ver> rev=<git> proto=1 hw=<rev> build=<release\|debug\|bringup> serial=<24 hex> usb_vid=0x1209 usb_pid=<0xNNNN> usb_pid_status=<dev-test\|registered> planned_pid=500S` |
 | `PING` | any | `OK PONG t_us=<uptime µs>` |
 | `STAT?` | any | `OK STAT state=<S> fault=<F> warn=0x<hex> disarm_reason=<R> vset_v=<V> dac=<code> vk_v=<V\|-> i_a=<A\|-> mon_age_ms=<n\|-> cal=<stored\|nominal\|ram> cal_seq=<n> zero=<valid\|none\|stale> zero_age_s=<n\|-> afe=<ok\|fail\|unknown> bor=<0..3> vbus_mv=<n> session=<0\|1> host_timeout_s=<n> reset=<causes> crash=<0\|1> sweep_id=<n> sweep_pts=<n> sweep_status=<none\|running\|complete\|aborted\|compliance\|overflow\|session_lost\|host_timeout\|fault> hb_edges=<n> mcu_temp_c=<x.xx\|na> uptime_s=<n>` |
-| `DIAG?` | any | `OK DIAG passes=<n> pass_max_us=<n> pass_overruns=<n> hb_max_spacing_us=<n> hb_late=<n> hb_resyncs=<n> adc_state=<off\|init\|idle\|converting\|error> adc_err=<none\|timeout\|readback\|spi\|stuck> adc_conversions=<n> adc_late=<n> adc_stale_edges=<n> adc_scrubs=<n> adc_timeouts=<n> adc_inits=<n> adc_id=0x<h> dac_updates=<n> dac_scrubs=<n> dac_failures=<n> dac_zero_safe=<n> evt_lost=<n> rx_overflows=<n> points=<n> late_points=<n> compliance_trips=<n> ramp_resyncs=<n> sessions=<n> crash=<cause\|none> crash_pc=0x<hex> crash_lr=0x<hex> crash_cfsr=0x<hex>` |
+| `DIAG?` | any | `OK DIAG passes=<n> pass_max_us=<n> pass_overruns=<n> hb_max_spacing_us=<n> hb_late=<n> hb_resyncs=<n> adc_state=<off\|init\|idle\|converting\|error> adc_err=<none\|timeout\|readback\|spi\|stuck> adc_conversions=<n> adc_late=<n> adc_stale_edges=<n> adc_read_overruns=<n> adc_scrubs=<n> adc_timeouts=<n> adc_inits=<n> adc_id=0x<h> dac_updates=<n> dac_scrubs=<n> dac_failures=<n> dac_zero_safe=<n> evt_lost=<n> rx_overflows=<n> points=<n> late_points=<n> compliance_trips=<n> ramp_resyncs=<n> sessions=<n> crash=<cause\|none> crash_pc=0x<hex> crash_lr=0x<hex> crash_cfsr=0x<hex>` |
 | `DIAG.CLR` | any | `OK` — clears the counters (details below) and the crash record |
 
 `warn=` bits: 0 BOR_OFF, 1 CAL_NOMINAL, 2 ZERO_STALE, 3 CRASH, 4 KELVIN,
@@ -135,7 +137,7 @@ also pulses NRST), or `none`. `crash=` names: `hardfault`, `memmanage`,
 |---|---|---|
 | `ARM` | DISARMED | Checks the preconditions (session, POST passed, ADC idle-able, a gate-open front-end check within 1 s, BOR level 3, valid configuration). `OK`, then `EVT STATE ARMING`, then `EVT STATE ARMED` 100 ms after the first heartbeat edge. Errors: `ERR STATE`, `ERR FAULT`, `ERR PRECOND <name>` |
 | `DISARM` | ARMING, ARMED, SWEEPING; DISARMED, DISARMING (no-op) | `OK`; aborts any sweep (`status=aborted`), ramps to 0 V at ≥ 10 V/s, zero pair, heartbeat off, `EVT STATE DISARMING reason=command` ... `EVT STATE DISARMED reason=command` (100 ms after the last edge) |
-| `SRC V=<volts>` | ARMED | Ramps the output to the level at `ramp_rate`; `OK`, then `EVT SRC_DONE v_v=<V>` when reached. `ERR RANGE` beyond `v_limit` or the DAC range. A new `SRC` replaces the target of a ramp in progress |
+| `SRC V=<volts>` | ARMED | Ramps the output to the level at `ramp_rate`; `OK`, then `EVT SRC_DONE v_v=<V> status=reached` when reached. A compliance trip during the ramp zeroes the output and ends it with `EVT SRC_DONE v_v=0.000000 status=compliance` (and `EVT WARN COMPLIANCE`). `ERR RANGE` beyond `v_limit` or the DAC range. A new `SRC` replaces the target of a ramp in progress |
 | `FAULT.CLR` | FAULT (`ERR STATE` otherwise) | Clears the latched fault if its cause is gone and `T_DISARM` (100 ms) has elapsed since the last edge: `OK`, then `EVT STATE DISARMED`. Otherwise `ERR PRECOND <reason>`: `wait` (T_DISARM), `adc` (ADC not re-initialised and self-tested yet; the check is started, retry), `dac` (SPI1 still failing), `invariant`, `stack` and `clock` (these two need `RESET`) |
 | `RESET` | DISARMED, FAULT | `OK`, then a software reset 50–200 ms later (after the `OK` has left); the session ends |
 
@@ -179,7 +181,7 @@ zero stale.
 | `SWP.LIST.ADD <v>[:<settle_us>] ...` | DISARMED, ARMED | Appends 1–8 points (≤ 2048 total; `ERR RANGE list full`, nothing appended): `OK n=<total>`. `settle_us` 100–60 000 000; omitted = `settle_us` of the configuration |
 | `SWP.LIST.USE` | DISARMED, ARMED | Selects the list as the sweep: `OK SWP kind=list points=<N> est_s=<s>` |
 | `SWP?` | any | `OK SWP kind=<none\|wp\|list> points=<N> est_s=<s>` |
-| `SWP.RUN` | ARMED | Validates the definition against the current `v_limit` and calibration, then `OK id=<sweep_id> points=<N> est_s=<s>`, then `EVT SWEEP_BEGIN ...`, `PT` lines, and `EVT SWEEP_END ...` |
+| `SWP.RUN` | ARMED | Validates the definition against the current `v_limit` and calibration, then `OK id=<sweep_id> points=<N> est_s=<s>`, then `EVT SWEEP_BEGIN ...`, `PT` lines, and `EVT SWEEP_END ...`. `ERR BUSY ramp in progress` while an `SRC` ramp runs (wait for its `SRC_DONE`) |
 | `SWP.ABORT` | SWEEPING | `OK`; the sweep ends at once (the point in progress is discarded, no partial record), ramps to 0 V and reports `status=aborted` |
 | `DATA.FETCH FROM=<seq>` | any | Re-sends retained records from `seq`: `OK first=<seq> last=<seq>` (`first > last` when none are retained) |
 
@@ -232,7 +234,7 @@ verbs return `ERR UNKNOWN`. They exist for `docs/bringup_checklist.md` §6–§8
 | `DAC.RAW <a> <b> CONFIRM=UNSAFE` | ARMED | **Unsafe:** loads arbitrary codes into both channels. With `b < 65535` the positive output bound no longer holds. Suspends the channel-B invariant and the DAC scrub until `DAC.RAW OFF`, which reloads the zero pair |
 | `ADC.PGA <1\|2\|4\|8\|16\|32\|64>` | DISARMED | Sets the ADC PGA (self-calibrates); the scaling constants are NOT adjusted (noise characterisation only) |
 | `ADC.RESETPULSE` | DISARMED | Pulses the ADS1256 /RESET without informing the driver (tests the register scrub) |
-| `CRASH <HARDFAULT\|HANG\|HANG_IRQOFF>` | any | Provokes the named failure to test the fault handler, dead-man and IWDG paths |
+| `CRASH <HARDFAULT\|HANG\|HANG_IRQOFF\|STACK>` | any | Provokes the named failure to test the fault handler, dead-man and IWDG paths; `STACK` overflows the thread stack into its MPU guard (MemManage) |
 
 ## 6. Measurement records
 
@@ -277,8 +279,8 @@ PT <sweep_id>,<seq>,<idx>,<seg>,<t_set_us>,<t_i_us>,<t_v_us>,<dac_code>,<v_set_V
 | `EVT HELLO model=... fw=... proto=1 build=... serial=... state=<S> fault=<F> disarm_reason=<R> reset=<causes> crash=<0\|1>` | session start |
 | `EVT STATE <S> [fault=<F>] [reason=<R>]` | every state change |
 | `EVT FAULT <F> detail=<word>` | a fault is latched; `detail` names the check (`hb_gap`, `dac_spi`, `dac_scrub`, `adc_timeout`, `adc_readback`, `adc_stuck`, `adc_spi`, `stale`, `clip_i`, `clip_v`, `b_shadow`, `tim2_frozen`, `hb_state`, `hb_thread`, `canary`, `deadline`, `compliance`, `hse`, `post_init`, `post_negref`, `post_zero`, `post_adc`, `post_timeout`, `setpoint`) |
-| `EVT WARN <W> ...` | `KELVIN idx=<i>` (3 consecutive points, once per sweep), `NO_OUTPUT idx=<i>`, `LATE idx=<i>` (first in a sweep), `COMPLIANCE i_a=<A>` (output zeroed outside a sweep), `HOST_TIMEOUT`, `SESSION_LOST` (dropped: no session), `AFE` (front-end check failed), `EVT_LOST n=<k>` |
-| `EVT SRC_DONE v_v=<V>` | an `SRC` ramp reached its target |
+| `EVT WARN <W> ...` | `KELVIN idx=<i>` (3 consecutive points, once per sweep), `NO_OUTPUT idx=<i>`, `LATE idx=<i>` (first in a sweep), `COMPLIANCE i_a=<A>` (output zeroed outside a sweep; with the output already at 0 V only the first trip, until the output is driven again), `HOST_TIMEOUT`, `SESSION_LOST` (dropped: no session), `AFE` (front-end check failed), `EVT_LOST n=<k>` |
+| `EVT SRC_DONE v_v=<V> status=<reached\|compliance>` | an `SRC` ramp ended: at its target, or at 0 V after a compliance trip |
 | `EVT SWEEP_BEGIN id=<n> kind=<wp\|list> points=<N> t0_us=<µs> adc_rate=... n_avg=... settle_us=... first_settle_us=... ramp_rate=... v_limit=... i_compliance=... on_compliance=... end=... cal_source=... cal_seq=... g_dac_uv=... c_dac=... g_v_uv=... g_i_na=... r_s=... r_top=... i_plateau=... zero=<valid\|none\|stale> o_v=... o_i=... zero_sps=... zero_age_s=...` | sweep start |
 | `EVT SWEEP_END id=<n> status=<complete\|aborted\|compliance\|overflow\|session_lost\|host_timeout\|fault> points=<n> [fault=<F>] [trip_idx=<i> trip_i_a=<A>]` | sweep end, after every record of the sweep |
 

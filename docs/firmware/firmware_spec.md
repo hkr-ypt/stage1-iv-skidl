@@ -547,6 +547,11 @@ take 0.2–400 ms, USB is event-driven, and the CPU is mostly idle.
 | `TIM5_IRQHandler` — **dead-man** (highest priority; armed states only) | fires if no pass has completed for 2 ms: PC5 low, `dac_zero_safe()`, crash record (cause `DEADMAN`, with the interrupted PC), reset | anything that could keep the output on |
 | `NMI` (incl. CSS), `HardFault`, `MemManage`, `BusFault`, `UsageFault` | the fault handler of §7.9 | return |
 
+Priorities (all preemption): the dead-man and the configurable faults 0,
+`EXTI9_5` 1, `OTG_FS` 2. /DRDY sits above USB so that a USB FIFO copy never
+delays the edge timestamp the read window is measured from; its handler runs
+for well under 1 µs.
+
 TIM2 runs free with no interrupt. The main loop extends it to 64 bits each
 pass, and all gap arithmetic uses raw 32-bit unsigned differences.
 
@@ -780,6 +785,9 @@ void ads_service(void);                       // ≤ 1 SPI transaction per call;
   `now − t_drdy ≤ 1/DR − (t6 + 24 SCLK + t17 + 10 µs)`. Otherwise the
   engine waits for the next edge and marks the sample `late`. This keeps
   reads out of the t17 update window, where SBAS288K says data are invalid.
+  The check is repeated when the read ends: an interrupt during the read can
+  still push it into t17, and such a read is discarded the same way
+  (`DIAG? adc_read_overruns`).
 - **Data rates.** v1 accepts 2.5, 5, 10, 15, 25, 30, 50, 60, 100, 500, 1000,
   2000 and 3750 SPS. At 3750 SPS the read deadline (≈ 232 µs) exceeds the
   150 µs pass budget, so `late` occurs only on a budget violation. 7500 SPS
@@ -1096,7 +1104,9 @@ A future DUT-voltage servo changes that (§13).
   - debug builds set `DBG_IWDG_STOP`, never `DBG_TIM2_STOP`.
 - **Fault handlers.** HardFault, MemManage, BusFault, UsageFault and NMI
   (including **CSS**) share one naked entry. It runs on MSP's reserved
-  region, so a thread-stack overflow still reaches it. In order:
+  region, so a thread-stack overflow still reaches it. The lowest 32 B of the
+  thread stack are an MPU no-access region, so an overflow raises MemManage
+  at once; the canary is the word above it. In order:
   1. PC5 low;
   2. `dac_zero_safe()` (§7.4), frame-aligned with SPI-reset and bit-bang
      fallbacks;
@@ -1637,9 +1647,12 @@ here. Each item says what the code does and why; the code and
     saved). `CAL.SET`/`CAL?` resolutions are fixed (protocol.md §5.6) so that
     `CAL?` output round-trips exactly.
 11. *Output ordering.* Events a command causes are held and sent after its
-    `OK`; `SWEEP_END` and `STATE` events wait until every earlier `PT` record
-    has been formatted. A command is parsed only while the TX ring has room
-    for its response and events (spec §7.1 did not define the priorities).
+    `OK`. `SWEEP_BEGIN`, `SWEEP_END` and `STATE` events each carry their own
+    watermark: each waits until every `PT` record pushed before it has been
+    sent, and records pushed after it wait for it, so a stalled host still
+    reads every sweep between its `SWEEP_BEGIN` and `SWEEP_END`. A command is
+    parsed only while the TX ring has room for its response and events (spec
+    §7.1 did not define the priorities).
 12. *Ramps* step on a 1 ms **grid** (`next += 1 ms`, resynchronised when more
     than a period late) so that the 10 V/s disarm ramp finishes ±10 V in
     1.0 s, inside the 1.1 s deadline whatever the pass jitter. An individual
@@ -1648,7 +1661,10 @@ here. Each item says what the code does and why; the code and
 13. *`RESET` and `CRASH`* run 50–200 ms after their `OK` is queued, so the
     response reaches the host before the USB device disappears.
 14. *Monitor.* In `DISARMED` every monitor pair runs the gate-open front-end
-    check (the ARM precondition needs one within 1 s). During a settle the
+    check (the ARM precondition needs one within 1 s). The pair is two
+    consecutive conversions, I then V, at most t18 + 100 ms apart, so the
+    check also runs at 2.5–10 SPS, where one conversion outlasts the 100 ms
+    monitor period. During a settle the
     monitor starts an I conversion only if the remaining settle exceeds
     t18 + 1 ms (it would be preempted otherwise).
 15. *Session zero.* A stale zero (older than 1 h, taken in an earlier
@@ -1665,7 +1681,32 @@ here. Each item says what the code does and why; the code and
     the heartbeat runs, 4 Hz in FAULT.
 18. *`CRASH HARDFAULT`* executes an undefined instruction with UsageFault
     disabled, so it escalates to HardFault; unused vectors also enter the
-    HardFault path. A CSS NMI is recorded with cause `css`.
+    HardFault path. A CSS NMI is recorded with cause `css`. `CRASH STACK`
+    (bring-up) overflows the thread stack into the MPU guard (item 21).
+19. *Compliance during a ramp.* A trip during the disarm ramp loads the zero
+    code, which completes the disarm (it is not left to `DISARM_TIMEOUT`); a
+    trip during an `SRC` ramp ends it with `SRC_DONE status=compliance`.
+    `SWP.RUN` is refused (`ERR BUSY`) while an `SRC` ramp runs, so that no
+    `SRC_DONE` is ever lost. With the output already at 0 V, the first trip
+    is reported (`WARN COMPLIANCE`) and later ones are not, until the output
+    is driven again.
+20. *A fault during a sweep* goes from `SWEEPING` straight to `FAULT`:
+    `SWEEP_END status=fault`, `EVT FAULT`, `EVT STATE FAULT`, with no
+    intermediate `STATE ARMED`.
+21. *Stack guard.* The lowest 32 B of the thread stack are an MPU no-access
+    region (region 0, `PRIVDEFENA`), so an overflow raises MemManage at once;
+    the canary is the word above it, and the fault handler does not read a
+    stacked frame that lies in the guard.
+22. *ADC read window* is checked again when the read ends (§7.4); an
+    overrun read is discarded like a missed deadline
+    (`DIAG? adc_read_overruns`). `EXTI9_5` has priority over `OTG_FS`.
+23. *Numbers and keys.* Integer keys accept the whole number grammar of
+    protocol.md §3 (`1e3`, `+4`, `30.0`; `2.5` is inexact). Duplicate keys
+    are detected case-insensitively, as keys are matched.
+24. *Clocks and VBUS.* Any clock-initialisation failure ends on HSI with all
+    buses at /1 and the PLL and HSE off, so the recorded clock state is the
+    real one. A VBUS conversion without EOC within 5 ms reads as VBUS absent.
+    The configuration descriptor is self-powered, 2 mA.
 
 **Hardware documentation updated with this work:** `bringup_checklist.md`
 (§3 REF5025AI tolerance; §6 disarm limits 70/85 ms with rationale, the

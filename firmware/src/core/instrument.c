@@ -333,7 +333,8 @@ void inst_sweep_started(void)
 
 void inst_sweep_finished(void)
 {
-    if (s_i.st == ST_SWEEPING) {
+    /* a fault ends the sweep from inst_fault(): SWEEPING -> FAULT directly */
+    if (s_i.st == ST_SWEEPING && s_i.fault == F_NONE) {
         set_state(ST_ARMED);
     }
 }

@@ -13,11 +13,15 @@
  *    TS_CAL2 (110 degC) at 0x1FFF7A2C / 0x1FFF7A2E, taken at VDDA = 3.3 V
  *    (DS10314 Table 81). The value is an ambient proxy only.
  *  - One conversion at a time, started by SWSTART and collected on a later
- *    pass (EOC); nothing here blocks.
+ *    pass (EOC); nothing here blocks. A conversion takes < 200 us even on
+ *    HSI; one without EOC after ADC_EOC_TIMEOUT_US is abandoned, and VBUS
+ *    then reads 0 (absent: the session ends and the output disarms) until a
+ *    later conversion completes, never a frozen "present".
  */
 #include "port_stm32.h"
 
 #define ADC_PERIOD_US   10000u
+#define ADC_EOC_TIMEOUT_US 5000u
 #define TS_CAL1_ADDR    0x1FFF7A2Cu
 #define TS_CAL2_ADDR    0x1FFF7A2Eu
 #define VDDA_MV         3300u
@@ -26,6 +30,7 @@ typedef enum { A_IDLE = 0, A_VBUS, A_TEMP } adc_phase_t;
 
 static adc_phase_t s_phase;
 static uint64_t    s_next;
+static uint64_t    s_started;
 static uint32_t    s_vbus_mv;
 static int32_t     s_temp_cdeg = INT32_MIN;
 static bool        s_ok;
@@ -73,6 +78,7 @@ void stm32_adc1_poll(uint64_t now_us)
         if (now_us >= s_next) {
             start(0u);
             s_phase = A_VBUS;
+            s_started = now_us;
             s_next = now_us + ADC_PERIOD_US;
         }
         break;
@@ -82,11 +88,18 @@ void stm32_adc1_poll(uint64_t now_us)
             s_vbus_mv = raw * VDDA_MV * 2u / 4095u;
             start(18u);
             s_phase = A_TEMP;
+            s_started = now_us;
+        } else if (now_us - s_started > ADC_EOC_TIMEOUT_US) {
+            s_vbus_mv = 0u;   /* unknown counts as absent */
+            s_phase = A_IDLE;
         }
         break;
     case A_TEMP:
         if (ADC1->SR & ADC_SR_EOC) {
             s_temp_cdeg = temp_cdeg(ADC1->DR & 0xFFFu);
+            s_phase = A_IDLE;
+        } else if (now_us - s_started > ADC_EOC_TIMEOUT_US) {
+            s_temp_cdeg = INT32_MIN;
             s_phase = A_IDLE;
         }
         break;

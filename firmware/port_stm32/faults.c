@@ -84,10 +84,13 @@ void port_crash_clear(void)
     memset(&s_crash, 0, sizeof s_crash);
 }
 
+/* Readable stacked frame: in SRAM and above the MPU guard (a frame pushed
+ * into the guard by a stack overflow is not read: that would fault again). */
 static bool in_sram(const uint32_t *p, size_t words)
 {
     uintptr_t a = (uintptr_t)p;
-    return a >= SRAM_START && a + words * 4u <= SRAM_END && (a & 3u) == 0u;
+    return a >= SRAM_START + STM32_MPU_GUARD_BYTES && a + words * 4u <= SRAM_END
+           && (a & 3u) == 0u;
 }
 
 void stm32_fault_c(const uint32_t *frame, uint32_t exc_return, uint32_t cause)
@@ -165,6 +168,19 @@ void port_crash_test(int kind)
         for (;;) {          /* hang, interrupts on: the dead-man (if armed) or IWDG */
             __NOP();
         }
+    case 3: {
+        /* thread-stack overflow: SP to the top of the MPU guard, then a push
+         * into it (DACCVIOL), whose exception stacking also lands in the
+         * guard (MSTKERR): MemManage */
+        uint32_t guard_top = (uint32_t)__thread_stack_bottom + STM32_MPU_GUARD_BYTES;
+        __asm volatile("mov  sp, %0      \n"
+                       "push {r0-r3}     \n"
+                       :
+                       : "r"(guard_top)
+                       : "memory");
+        for (;;) {
+        }
+    }
     case 2:
     default:
         __disable_irq();    /* hang, interrupts off: only the IWDG */

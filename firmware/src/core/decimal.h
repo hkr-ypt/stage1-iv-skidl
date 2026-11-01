@@ -29,7 +29,8 @@ typedef enum {
 dec_status_t dec_parse_scaled(const char *s, size_t len, int scale,
                               int64_t min, int64_t max, int64_t *out);
 
-/* Unsigned decimal integer (no sign, no point, no exponent). */
+/* Unsigned integer in [min, max]: dec_parse_scaled() with scale 0, so the
+ * full number grammar applies and fractional values are DEC_INEXACT. */
 dec_status_t dec_parse_u32(const char *s, size_t len, uint32_t min, uint32_t max,
                            uint32_t *out);
 

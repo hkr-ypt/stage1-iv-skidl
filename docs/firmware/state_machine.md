@@ -93,7 +93,7 @@ stops responding blocks the next `ARM` (spec §6.4).
 
 | Condition | Reaction | Reported as |
 |---|---|---|
-| compliance, `on_compliance=stop` | zero code at once, stay `ARMED`; a sweep ends | `SWEEP_END status=compliance trip_idx= trip_i_a=` or `EVT WARN COMPLIANCE i_a=` |
+| compliance, `on_compliance=stop` | zero code at once, stay `ARMED`; a sweep ends; an `SRC` ramp ends (`SRC_DONE status=compliance`); in `DISARMING` the disarm is then complete (no `DISARM_TIMEOUT`) | `SWEEP_END status=compliance trip_idx= trip_i_a=` or `EVT WARN COMPLIANCE i_a=` (at 0 V once, until the output is driven again) |
 | `SWP.ABORT` | sweep ends, ramp to 0 V | `status=aborted` |
 | ring full of never-sent records | sweep ends, ramp to 0 V | `status=overflow` |
 | session loss / host timeout | `DISARMING` | `disarm_reason`, `EVT WARN HOST_TIMEOUT`, next `HELLO` |

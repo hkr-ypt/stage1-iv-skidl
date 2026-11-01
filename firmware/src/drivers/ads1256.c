@@ -69,7 +69,8 @@
 #define ADS_SCRUB_INTERVAL_US     (ADC_SCRUB_PERIOD_US / 2u)
 #define ADS_SCRUB_GUARD_US        100u
 /* read deadline budget: t6 + 24 SCLK @ 1.5 MHz + t17 + margin */
-#define ADS_READ_BUDGET_US        (ADS_T6_US + 16u + 3u + 10u)
+#define ADS_T17_US                3u
+#define ADS_READ_BUDGET_US        (ADS_T6_US + 16u + ADS_T17_US + 10u)
 
 /* ---- v1 data-rate table: SBAS288K p.31 codes, Table 13 t18, Table 21 SELFCAL */
 static const ads_rate_t k_rates[] = {
@@ -449,11 +450,27 @@ static void service_init(void)
 
 /* ---- conversion ------------------------------------------------------------------ */
 
+static void missed_edge(void);
+
+/* The deadline is checked when RDATA starts; an interrupt during the read can
+ * still push its end into t17 before the next update, where the output
+ * register changes: such a read is discarded like a missed deadline. */
+static bool read_ended_in_window(uint64_t t_end)
+{
+    uint32_t period_floor = 10000000u / s.rate->sps_x10;
+    return elapsed(t_end, s.t_drdy) + ADS_T17_US <= period_floor;
+}
+
 static void do_read(void)
 {
     uint32_t raw = 0;
     uint64_t t_read = port_now_us();
     if (!txn_rdata(&raw)) {
+        return;
+    }
+    if (!read_ended_in_window(port_now_us())) {
+        s.stats.read_overruns++;
+        missed_edge();
         return;
     }
     if (stuck_update(raw, s.mux)) {
@@ -472,6 +489,22 @@ static void do_read(void)
         s.stats.late++;
     }
     s.ph = PH_SAMPLE_READY;
+}
+
+/* missed (or overrun) read: the next edge comes one data period later
+ * (free-running) */
+static void missed_edge(void)
+{
+    s.late = true;
+    s.edge_ok = false;
+    if (++s.late_count > ADS_MAX_LATE) {
+        fail(ADS_ERR_TIMEOUT);
+        return;
+    }
+    s.t_wait_from = s.t_drdy;
+    s.wait_limit_us = ads_period_us(s.rate) * 3u / 2u + ADS_CONV_TIMEOUT_EXTRA_US;
+    s.t_next_edge_min = s.t_drdy + ads_period_us(s.rate) * 9u / 10u;
+    port_adc_drdy_arm();
 }
 
 static void wait_edge(void)
@@ -494,17 +527,7 @@ static void wait_edge(void)
             do_read();
             return;
         }
-        /* missed: the next edge comes one data period later (free-running) */
-        s.late = true;
-        s.edge_ok = false;
-        if (++s.late_count > ADS_MAX_LATE) {
-            fail(ADS_ERR_TIMEOUT);
-            return;
-        }
-        s.t_wait_from = s.t_drdy;
-        s.wait_limit_us = ads_period_us(s.rate) * 3u / 2u + ADS_CONV_TIMEOUT_EXTRA_US;
-        s.t_next_edge_min = s.t_drdy + ads_period_us(s.rate) * 9u / 10u;
-        port_adc_drdy_arm();
+        missed_edge();
         return;
     }
 

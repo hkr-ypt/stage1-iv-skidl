@@ -278,7 +278,7 @@ void stm32_reset_c(void)
     }
     /* .noinit is deliberately left alone. */
 
-    __thread_stack_bottom[0] = STM32_STACK_CANARY;
+    __thread_stack_bottom[STM32_CANARY_WORD] = STM32_STACK_CANARY;
 
     /* DWT cycle counter: the only time base before TIM2 (and in fault paths). */
     CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;

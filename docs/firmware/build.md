@@ -58,7 +58,11 @@ told otherwise (`--allow-bringup`).
 **Reproducibility.** `-ffile-prefix-map` removes the source path from the
 objects; two builds of the same commit in different directories give
 byte-identical `.bin` and `.hex` (checked in CI). The revision string
-(`git describe --always --dirty`) is part of the image.
+(`git describe --always --dirty`) is part of the image (`*IDN? rev=`). It is
+re-evaluated at every build (`cmake/fw_revision.cmake` rewrites
+`fw_revision.h` in the build tree's `generated` directory only when it
+changed), so an incremental
+build never reports the revision of an earlier configure.
 
 **Bring-up variant guard.** `FW_BRINGUP` is derived in `fw_config.h` from
 exactly one `FW_VARIANT_*` macro; any other combination is a compile error.

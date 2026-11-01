@@ -13,8 +13,9 @@
  *    serial = the 96-bit UID as 24 upper-case hex characters, in the same
  *    word order as *IDN? serial=.
  *  - One configuration, one CDC-ACM function (notification EP 0x81, data
- *    OUT 0x02 / IN 0x82, 64-byte full-speed packets), bus powered 100 mA
- *    nominal (the board is self-powered; the D+ pull-up follows VBUS).
+ *    OUT 0x02 / IN 0x82, 64-byte full-speed packets). Self-powered (the
+ *    board runs from the bench supply at J1, never from VBUS), 2 mA from the
+ *    bus at most (the 200 k VBUS divider); the D+ pull-up follows VBUS.
  */
 #include "port_stm32.h"
 
@@ -65,7 +66,7 @@ const uint8_t *tud_descriptor_device_cb(void)
 #define CONFIG_TOTAL_LEN (TUD_CONFIG_DESC_LEN + TUD_CDC_DESC_LEN)
 
 static const uint8_t k_config[] = {
-    TUD_CONFIG_DESCRIPTOR(1, ITF_TOTAL, 0, CONFIG_TOTAL_LEN, 0x00, 100),
+    TUD_CONFIG_DESCRIPTOR(1, ITF_TOTAL, 0, CONFIG_TOTAL_LEN, TUSB_DESC_CONFIG_ATT_SELF_POWERED, 2),
     TUD_CDC_DESCRIPTOR(ITF_CDC, STR_CDC, EP_NOTIF, 8, EP_OUT, EP_IN, 64),
 };
 

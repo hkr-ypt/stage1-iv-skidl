@@ -19,6 +19,13 @@ Specific items to confirm on the bench:
 * the naked fault entry (stack switch, frame decode) and the dead-man ISR
   on real exceptions;
 * the bit-banged DAC fallback timing (~1 MHz on PA5/PA7);
+* the MPU stack guard: `CRASH STACK` (bring-up) must give `crash=memmanage`
+  and a zeroed output;
+* ADS1256 init and reconfiguration send SELFCAL right after SYNC, with no
+  WAKEUP between them. The simulator assumes SELFCAL runs from that state;
+  if the silicon ignores it, every init times out (safe, but it blocks
+  bring-up). Confirm on the analyser that /DRDY falls after the Table 21
+  calibration time;
 * ADC1 VBUS scaling (VDDA assumed 3.3 V) and the temperature reading;
 * flash erase/program on sectors 1–2 and the D-cache reset;
 * the pass-time budget (≤ 150 µs design, overruns counted above 400 µs):
@@ -52,6 +59,8 @@ The user-visible ones:
   index and current are in `SWEEP_END`.
 * ADC errors latch a fault in every state, `DISARMED` included.
 * `CAL.SAVE` is a deferred command (it waits for an idle ADC).
+* `SRC_DONE` carries `status=reached|compliance`; `SWP.RUN` answers
+  `ERR BUSY` while an `SRC` ramp runs.
 * The session zero is marked stale at the start of every new host session.
 
 ## 4. Residual risks (unchanged from spec §3.3)

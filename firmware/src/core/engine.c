@@ -350,8 +350,11 @@ static bool out_load(int32_t v_uv, int32_t limit_uv, bool fault_on_fail)
     return true;
 }
 
+static bool s_zero_trip_reported;   /* a trip at 0 V was reported (once) */
+
 static void ramp_start(ramp_kind_t kind, int32_t to_uv, uint32_t rate_uv_s, int32_t limit_uv)
 {
+    s_zero_trip_reported = false;
     s_out.ramp = kind;
     s_out.from = s_out.uv;
     s_out.to = to_uv;
@@ -364,13 +367,15 @@ static void ramp_start(ramp_kind_t kind, int32_t to_uv, uint32_t rate_uv_s, int3
     }
 }
 
-static void emit_src_done(void)
+/* status: "reached", or "compliance" when a trip ended the ramp at 0 V */
+static void emit_src_done(const char *status)
 {
-    char buf[48];
+    char buf[64];
     lb_t b;
     lb_init(&b, buf, sizeof buf);
     lb_puts(&b, "EVT SRC_DONE");
     lb_kv_fix(&b, "v_v", s_out.uv, 6);
+    lb_kv_s(&b, "status", status);
     proto_event_lb(&b);
 }
 
@@ -378,7 +383,7 @@ static void ramp_finished(ramp_kind_t kind)
 {
     s_out.ramp = RAMP_NONE;
     if (kind == RAMP_SRC) {
-        emit_src_done();
+        emit_src_done("reached");
     } else if (kind == RAMP_DISARM) {
         s_out.disarm_done = true;
     }
@@ -442,6 +447,7 @@ err_t engine_src(int32_t v_uv)
 
 bool engine_arm_prepare(void)
 {
+    s_zero_trip_reported = false;
     s_out.ramp = RAMP_NONE;
     s_out.disarm_done = false;
     return out_load(0, V_LIMIT_MAX_UV, false);
@@ -449,8 +455,17 @@ bool engine_arm_prepare(void)
 
 void engine_zero_output_now(void)
 {
+    ramp_kind_t was = s_out.ramp;
     s_out.ramp = RAMP_NONE;
-    (void)out_load(0, V_LIMIT_MAX_UV, true);
+    if (!out_load(0, V_LIMIT_MAX_UV, true)) {
+        return;   /* out_load latched F_DAC_SPI */
+    }
+    /* a ramp cut short still ends with its event */
+    if (was == RAMP_DISARM) {
+        s_out.disarm_done = true;   /* the zero code is loaded: the disarm is complete */
+    } else if (was == RAMP_SRC) {
+        emit_src_done("compliance");
+    }
 }
 
 /* ================================================================================== */
@@ -522,7 +537,10 @@ static void compliance_trip(int64_t i_pa)
     if (s_sw.active) {
         sweep_end(SWS_COMPLIANCE, true, i_pa);
     }
-    if (!was_zero) {
+    /* At 0 V nothing changes, but the host is told once per episode (until
+     * the output is driven again), not at every conversion. */
+    if (!was_zero || !s_zero_trip_reported) {
+        s_zero_trip_reported = true;
         char buf[64];
         lb_t b;
         lb_init(&b, buf, sizeof buf);
@@ -985,6 +1003,10 @@ err_t engine_sweep_run(uint16_t *id, uint32_t *points, uint64_t *est_us, const c
 #endif
     if (s_job.kind != JOB_NONE) {
         *why = "measurement in progress";
+        return E_BUSY;
+    }
+    if (s_out.ramp == RAMP_SRC) {
+        *why = "ramp in progress";   /* it would never report SRC_DONE */
         return E_BUSY;
     }
     const cfg_t *c = cfg_get();
@@ -1665,6 +1687,7 @@ void engine_init(void)
     s_mon_due = 0;
     s_mon_v_next = false;
     s_mon_pair_open = false;
+    s_zero_trip_reported = false;
     s_last_conv = 0;
     s_afe = AFE_UNKNOWN;
     s_afe_t = 0;
@@ -1710,7 +1733,9 @@ void engine_service(uint64_t now_us)
     raw = dac_raw_active();
 #endif
     if (hb_enabled() && !raw && s_out.known
-        && now_us - s_out.t_last_write >= DAC_SCRUB_PERIOD_US) {
+        && now_us >= s_out.t_last_write + DAC_SCRUB_PERIOD_US) {
+        /* t_last_write can be later than this pass's now_us (a load earlier in
+         * the pass): compare without subtracting */
         s_out.t_last_write = now_us;
         if (!dac_scrub()) {
             inst_fault(F_DAC_SPI, "dac_scrub");

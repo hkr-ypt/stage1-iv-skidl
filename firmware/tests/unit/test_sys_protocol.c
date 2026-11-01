@@ -562,6 +562,74 @@ static void test_compliance_ends_sweep(void)
     TEST_ASSERT_TRUE(fabs(h_vsweep()) < 0.01);
 }
 
+static void test_events_never_overtake_earlier_records(void)
+{
+    /* The host stops reading while sweeps keep being run. Each SWEEP_END must
+     * still follow every record of its sweep, and the next SWEEP_BEGIN the
+     * previous SWEEP_END (protocol.md §2). */
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("CFG settle_us=100"));
+    TEST_ASSERT_EQUAL(0, strncmp(h_cmd("SWP.WP 0 1 STEP=0.01"), "OK SWP kind=wp points=101", 25));
+    arm();
+    size_t from = h_lines();
+    psim_set_tx_space_limit(0);
+    h_send("SWP.RUN");
+    TEST_ASSERT_TRUE(h_run_until_state(ST_SWEEPING, 1000000));
+    TEST_ASSERT_TRUE(h_run_until_state(ST_ARMED, 10000000));
+    h_send("SWP.RUN");
+    TEST_ASSERT_TRUE(h_run_until_state(ST_SWEEPING, 1000000));
+    TEST_ASSERT_TRUE(h_run_until_state(ST_ARMED, 10000000));
+    psim_set_tx_space_limit(PSIM_TX_NO_LIMIT);
+    h_run_us(3000000);
+
+    size_t begin2 = h_find("EVT SWEEP_BEGIN id=2", from);
+    size_t end1 = h_find("EVT SWEEP_END id=1", from);
+    size_t end2 = h_find("EVT SWEEP_END id=2", from);
+    TEST_ASSERT_NOT_EQUAL(SIZE_MAX, end1);
+    TEST_ASSERT_NOT_EQUAL(SIZE_MAX, end2);
+    TEST_ASSERT_NOT_EQUAL(SIZE_MAX, begin2);
+    TEST_ASSERT_TRUE_MESSAGE(begin2 > end1, "SWEEP_BEGIN 2 overtook SWEEP_END 1");
+    size_t n1 = 0, n2 = 0;
+    for (size_t i = from; i < h_lines(); i++) {
+        if (starts(h_line(i), "PT 1,")) {
+            TEST_ASSERT_TRUE_MESSAGE(i < end1, "a sweep-1 record after its SWEEP_END");
+            n1++;
+        } else if (starts(h_line(i), "PT 2,")) {
+            TEST_ASSERT_TRUE_MESSAGE(i > begin2 && i < end2, "a sweep-2 record outside BEGIN..END");
+            n2++;
+        }
+    }
+    TEST_ASSERT_EQUAL_UINT32(101, n1);
+    TEST_ASSERT_EQUAL_UINT32(101, n2);
+    /* each STATE event follows its sweep's records too */
+    size_t armed2 = SIZE_MAX;
+    for (size_t i = end2; i < h_lines(); i++) {
+        if (starts(h_line(i), "EVT STATE ARMED")) {
+            armed2 = i;
+            break;
+        }
+    }
+    TEST_ASSERT_NOT_EQUAL(SIZE_MAX, armed2);
+}
+
+static void test_duplicate_keys_differing_in_case_rejected(void)
+{
+    TEST_ASSERT_EQUAL(0, strncmp(h_cmd("CFG n_avg=2 N_AVG=7"), "ERR ARG duplicate key", 21));
+    TEST_ASSERT_EQUAL(0, strncmp(h_cmd("CAL.SET r_s=10 R_S=11"), "ERR ARG duplicate key", 21));
+    TEST_ASSERT_EQUAL(0, strncmp(h_cmd("MEAS? N=2 n=3"), "ERR ARG duplicate key", 21));
+}
+
+static void test_integer_keys_accept_the_number_grammar(void)
+{
+    /* exact values in any strict-decimal form; inexact ones rejected */
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("CFG settle_us=1e3 n_avg=+4 host_timeout_s=30.0"));
+    const char *r = h_cmd("CFG?");
+    TEST_ASSERT_NOT_NULL(strstr(r, " settle_us=1000"));
+    TEST_ASSERT_NOT_NULL(strstr(r, " n_avg=4"));
+    TEST_ASSERT_EQUAL(0, strncmp(h_cmd("CFG settle_us=1000.5"), "ERR ARG", 7));
+    TEST_ASSERT_EQUAL(0, strncmp(h_cmd("CFG n_avg=-1"), "ERR RANGE", 9));
+    TEST_ASSERT_EQUAL(0, strncmp(h_cmd("CFG n_avg=2.5e0"), "ERR ARG", 7));
+}
+
 static void test_session_loss_during_deferred_job_frees_the_slot(void)
 {
     /* SELFTEST runs for a while; the host disconnects mid-way */
@@ -602,5 +670,8 @@ int main(void)
     RUN_TEST(test_current_limit_flags_clim);
     RUN_TEST(test_compliance_ends_sweep);
     RUN_TEST(test_session_loss_during_deferred_job_frees_the_slot);
+    RUN_TEST(test_events_never_overtake_earlier_records);
+    RUN_TEST(test_duplicate_keys_differing_in_case_rejected);
+    RUN_TEST(test_integer_keys_accept_the_number_grammar);
     return UNITY_END();
 }

@@ -27,6 +27,17 @@
 #include <math.h>
 #include <string.h>
 
+/* FW_GIT_REV: generated at every build (cmake/fw_revision.cmake); a build
+ * without it (e.g. static analysis alone) reports "unknown" */
+#if defined(__has_include)
+#if __has_include("fw_revision.h")
+#include "fw_revision.h"
+#endif
+#endif
+#ifndef FW_GIT_REV
+#define FW_GIT_REV "unknown"
+#endif
+
 #define S_(st)   (1u << (st))
 #define S_ANY    0xFFu
 #define S_DISARMED_ARMED (S_(ST_DISARMED) | S_(ST_ARMED))
@@ -107,6 +118,28 @@ static const tok_t *kv_get(const ctx_t *c, const char *key)
 }
 
 /* Unknown or duplicate keys -> E_ARG. */
+/* key names are case-insensitive (protocol.md §3), so are duplicates */
+static bool key_eq(tok_t a, tok_t b)
+{
+    if (a.n != b.n) {
+        return false;
+    }
+    for (uint16_t i = 0; i < a.n; i++) {
+        char x = a.s[i];
+        char y = b.s[i];
+        if (x >= 'A' && x <= 'Z') {
+            x = (char)(x - 'A' + 'a');
+        }
+        if (y >= 'A' && y <= 'Z') {
+            y = (char)(y - 'A' + 'a');
+        }
+        if (x != y) {
+            return false;
+        }
+    }
+    return true;
+}
+
 static err_t check_keys(ctx_t *c, const char *const *allowed, size_t n)
 {
     for (unsigned i = 0; i < c->cl->nkv; i++) {
@@ -124,8 +157,7 @@ static err_t check_keys(ctx_t *c, const char *const *allowed, size_t n)
             return E_ARG;
         }
         for (unsigned j = 0; j < i; j++) {
-            if (c->cl->key[j].n == c->cl->key[i].n
-                && strncmp(c->cl->key[j].s, c->cl->key[i].s, c->cl->key[i].n) == 0) {
+            if (key_eq(c->cl->key[j], c->cl->key[i])) {
                 lb_reset(&c->msg);
                 lb_puts(&c->msg, "duplicate key ");
                 lb_putn(&c->msg, c->cl->key[i].s, c->cl->key[i].n);
@@ -440,6 +472,7 @@ static err_t h_diag(ctx_t *c)
     lb_kv_u(b, "adc_conversions", ds.conversions - s_c.ads0.conversions);
     lb_kv_u(b, "adc_late", ds.late - s_c.ads0.late);
     lb_kv_u(b, "adc_stale_edges", ds.stale_edges - s_c.ads0.stale_edges);
+    lb_kv_u(b, "adc_read_overruns", ds.read_overruns - s_c.ads0.read_overruns);
     lb_kv_u(b, "adc_scrubs", ds.scrubs - s_c.ads0.scrubs);
     lb_kv_u(b, "adc_timeouts", ds.timeouts - s_c.ads0.timeouts);
     lb_kv_u(b, "adc_inits", ds.inits - s_c.ads0.inits);
@@ -985,7 +1018,7 @@ static void emit_sweep_begin(uint16_t id, uint32_t points)
     lb_kv_u(&b, "cal_seq", engine_cal_seq());
     put_cal_values(&b);
     put_zero_fields(&b, now);
-    proto_event_lb(&b);
+    proto_event_ordered(&b);   /* never ahead of the previous sweep's records */
 }
 
 static err_t h_swp_run(ctx_t *c)
@@ -1281,7 +1314,7 @@ static err_t h_adc_resetpulse(ctx_t *c)
 static err_t h_crash(ctx_t *c)
 {
     if (c->cl->npos != 1 || c->cl->nkv != 0) {
-        return fail(c, E_ARG, "usage: CRASH HARDFAULT|HANG|HANG_IRQOFF");
+        return fail(c, E_ARG, "usage: CRASH HARDFAULT|HANG|HANG_IRQOFF|STACK");
     }
     tok_t t = c->cl->pos[0];
     int kind;
@@ -1291,8 +1324,10 @@ static err_t h_crash(ctx_t *c)
         kind = 1;
     } else if (tok_eq(t, "HANG_IRQOFF")) {
         kind = 2;
+    } else if (tok_eq(t, "STACK")) {
+        kind = 3;
     } else {
-        return fail(c, E_ARG, "HARDFAULT, HANG or HANG_IRQOFF");
+        return fail(c, E_ARG, "HARDFAULT, HANG, HANG_IRQOFF or STACK");
     }
     s_c.action = ACT_CRASH;
     s_c.crash_kind = kind;

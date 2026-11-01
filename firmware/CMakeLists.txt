@@ -38,13 +38,16 @@ if(NOT FW_USB_PID MATCHES "^0x[0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f]$")
     message(FATAL_ERROR "FW_USB_PID must be a 4-digit hex number such as 0x0001")
 endif()
 
-# ---- source revision ----------------------------------------------------------------
-execute_process(
-    COMMAND git -C "${CMAKE_SOURCE_DIR}" describe --always --dirty --abbrev=12
-    OUTPUT_VARIABLE FW_GIT_REV OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
-if(NOT FW_GIT_REV)
-    set(FW_GIT_REV "unknown")
-endif()
+# ---- source revision: generated/fw_revision.h, re-evaluated at every build ------------
+set(FW_GENERATED_DIR "${CMAKE_BINARY_DIR}/generated")
+file(MAKE_DIRECTORY "${FW_GENERATED_DIR}")
+add_custom_target(fw_revision
+    COMMAND "${CMAKE_COMMAND}" "-DSRC=${CMAKE_SOURCE_DIR}"
+            "-DOUT=${FW_GENERATED_DIR}/fw_revision.h"
+            -P "${CMAKE_SOURCE_DIR}/cmake/fw_revision.cmake"
+    BYPRODUCTS "${FW_GENERATED_DIR}/fw_revision.h"
+    COMMENT "Source revision"
+    VERBATIM)
 set(FW_VERSION "0.1.0")
 
 # ---- third-party sources -------------------------------------------------------------
@@ -62,7 +65,6 @@ set(FW_WARNINGS
 set(FW_DEFINES
     FW_VARIANT_${FW_VARIANT_UPPER}=1
     FW_VERSION_STRING="${FW_VERSION}"
-    FW_GIT_REV="${FW_GIT_REV}"
     FW_USB_PID=${FW_USB_PID}
     FW_USB_PID_REGISTERED=$<IF:$<BOOL:${FW_USB_PID_REGISTERED}>,1,0>)
 
@@ -80,6 +82,8 @@ set(FW_PORTABLE_INCLUDES
 
 add_library(fw_portable STATIC ${FW_PORTABLE_SRC})
 target_include_directories(fw_portable PUBLIC ${FW_PORTABLE_INCLUDES})
+target_include_directories(fw_portable PRIVATE "${FW_GENERATED_DIR}")
+add_dependencies(fw_portable fw_revision)
 target_compile_definitions(fw_portable PUBLIC ${FW_DEFINES})
 target_compile_options(fw_portable PRIVATE ${FW_WARNINGS})
 

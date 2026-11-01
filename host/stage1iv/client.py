@@ -747,7 +747,8 @@ class Instrument:
         """``SRC V=<volts>``; with ``wait`` block until ``EVT SRC_DONE``.
 
         The default timeout is the worst-case 20 V ramp at the configured
-        ``ramp_rate`` plus 3 s.
+        ``ramp_rate`` plus 3 s. A compliance trip ends the ramp at 0 V
+        (``SRC_DONE status=compliance``): :class:`StateChangeFailed`.
         """
         v = P.format_volts(volts)
 
@@ -774,6 +775,8 @@ class Instrument:
                 if index < after:
                     continue
                 if ev.type == "SRC_DONE":
+                    if str(ev.get("status", "reached")).lower() != "reached":
+                        raise StateChangeFailed(f"SRC V={v}: {ev.line}", ev)
                     return ev
                 if ev.type == "STATE" and (ev.arg or "").upper() != "ARMED":
                     raise StateChangeFailed(f"SRC V={v}: {ev.line}", ev)

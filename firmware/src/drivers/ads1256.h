@@ -139,6 +139,7 @@ typedef struct {
     uint32_t conversions;   /* samples delivered                              */
     uint32_t late;          /* samples read after the first-edge deadline     */
     uint32_t stale_edges;   /* /DRDY edges rejected as too early              */
+    uint32_t read_overruns; /* reads that ran into t17 (preempted): discarded */
     uint32_t scrubs;        /* register scrubs performed                      */
     uint32_t timeouts;      /* conversion / calibration timeouts              */
     uint32_t inits;         /* full init sequences started                    */

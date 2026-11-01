@@ -29,9 +29,6 @@
 #ifndef FW_VERSION_STRING
 #define FW_VERSION_STRING "0.1.0-dev"
 #endif
-#ifndef FW_GIT_REV
-#define FW_GIT_REV "unknown"
-#endif
 #define FW_PROTOCOL_VERSION 1
 #define FW_HW_REV "stage1-iv@8a84b55"
 

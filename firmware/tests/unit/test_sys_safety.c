@@ -121,6 +121,128 @@ static void test_arm_at_slow_data_rates(void)
     }
 }
 
+static void disarm_with_compliance_trip(void (*during)(void))
+{
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("CFG i_compliance=0.006"));
+    arm();
+    size_t from = h_lines();
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("SRC V=5"));
+    TEST_ASSERT_TRUE(h_wait_line("EVT SRC_DONE", from, 2000000));
+    from = h_lines();
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("DISARM"));
+    during();
+    TEST_ASSERT_TRUE(h_wait_line("EVT WARN COMPLIANCE", from, 1000000));
+    /* the zero code is loaded at the trip: the disarm completes normally */
+    TEST_ASSERT_TRUE(h_run_until_state(ST_DISARMED, 1000000));
+    TEST_ASSERT_EQUAL(SIZE_MAX, h_find("EVT FAULT", from));
+    TEST_ASSERT_EQUAL_HEX16(engine_zero_code(), h_dac_a());
+    TEST_ASSERT_FALSE(h_gate());
+}
+
+static void dut_shorts(void)
+{
+    psim_board()->dut.r_ohm = 10.0;
+}
+
+static void dut_is_cell(void)
+{
+    board_model_t *b = psim_board();
+    b->dut.kind = DUT_CELL;
+    b->dut.v_cell = 5.0;
+    b->dut.r_ohm = 200.0;
+}
+
+static void test_compliance_trip_during_disarm_ramp_completes_disarm(void)
+{
+    disarm_with_compliance_trip(dut_shorts);
+}
+
+static void test_cell_tripping_compliance_on_disarm_completes_disarm(void)
+{
+    /* a source DUT near Voc draws more current as the disarm ramps down */
+    disarm_with_compliance_trip(dut_is_cell);
+}
+
+static void test_compliance_during_src_ramp_is_reported(void)
+{
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("CFG i_compliance=0.001"));
+    arm();
+    size_t from = h_lines();
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("SRC V=3"));
+    TEST_ASSERT_TRUE(h_wait_line("EVT WARN COMPLIANCE", from, 2000000));
+    /* the ramp ends there: SRC_DONE reports the level actually held */
+    TEST_ASSERT_TRUE(h_wait_line("EVT SRC_DONE", from, 100000));
+    size_t d = h_find("EVT SRC_DONE", from);
+    TEST_ASSERT_NOT_NULL(strstr(h_line(d), "status=compliance"));
+    TEST_ASSERT_NOT_NULL(strstr(h_line(d), "v_v=0"));
+    TEST_ASSERT_FALSE(engine_ramping());
+}
+
+static void test_fault_during_sweep_goes_straight_to_fault(void)
+{
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("CFG settle_us=100000"));
+    TEST_ASSERT_EQUAL(0, strncmp(h_cmd("SWP.WP 0 2 STEP=0.5"), "OK SWP", 6));
+    arm();
+    TEST_ASSERT_EQUAL(0, strncmp(h_cmd("SWP.RUN"), "OK id=", 6));
+    TEST_ASSERT_TRUE(h_run_until_state(ST_SWEEPING, 1000000));
+    h_run_us(200000);
+    size_t from = h_lines();
+    psim_set_stack_ok(false);
+    TEST_ASSERT_TRUE(h_run_until_state(ST_FAULT, 100000));
+    h_run_us(50000);
+    TEST_ASSERT_NOT_EQUAL(SIZE_MAX, h_find("EVT SWEEP_END", from));
+    /* SWEEPING -> FAULT, never through ARMED */
+    TEST_ASSERT_EQUAL(SIZE_MAX, h_find("EVT STATE ARMED", from));
+    TEST_ASSERT_NOT_EQUAL(SIZE_MAX, h_find("EVT STATE FAULT", from));
+}
+
+static void test_sweep_refused_during_src_ramp(void)
+{
+    TEST_ASSERT_EQUAL(0, strncmp(h_cmd("SWP.WP 0 1 STEP=0.5"), "OK SWP", 6));
+    arm();
+    size_t from = h_lines();
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("SRC V=5"));   /* 0.5 s ramp */
+    TEST_ASSERT_EQUAL_STRING("ERR BUSY ramp in progress", h_cmd("SWP.RUN"));
+    TEST_ASSERT_TRUE(h_wait_line("EVT SRC_DONE", from, 2000000));
+    TEST_ASSERT_EQUAL(0, strncmp(h_cmd("SWP.RUN"), "OK id=", 6));
+}
+
+static void test_dac_scrub_only_after_the_scrub_period(void)
+{
+    /* a ramp step is one frame pair; the scrub adds a pair only every 100 ms */
+    arm();
+    uint32_t f0 = psim_dac()->frames_executed;
+    size_t from = h_lines();
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("SRC V=1"));   /* 100 steps of 10 mV, 100 ms */
+    TEST_ASSERT_TRUE(h_wait_line("EVT SRC_DONE", from, 1000000));
+    uint32_t frames = psim_dac()->frames_executed - f0;
+    TEST_ASSERT_TRUE_MESSAGE(frames >= 200u, "fewer frames than ramp steps");
+    TEST_ASSERT_TRUE_MESSAGE(frames <= 2u * 100u + 2u * 3u, "scrub ran after every update");
+}
+
+static void test_compliance_at_zero_is_reported_once(void)
+{
+    /* a source DUT already beyond i_compliance at 0 V: the output cannot do
+     * anything about it, but the host is told (once, not every conversion) */
+    board_model_t *b = psim_board();
+    b->dut.kind = DUT_CELL;
+    b->dut.v_cell = 1.0;
+    b->dut.r_ohm = 50.0;                  /* -20 mA at 0 V */
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("CFG i_compliance=0.005"));
+    size_t from = h_lines();
+    arm();
+    h_run_us(1000000);
+    size_t n = 0;
+    for (size_t i = from; i < h_lines(); i++) {
+        if (strncmp(h_line(i), "EVT WARN COMPLIANCE", 19) == 0) {
+            n++;
+        }
+    }
+    TEST_ASSERT_EQUAL_UINT32(1, n);
+    TEST_ASSERT_EQUAL(ST_ARMED, h_state());
+    TEST_ASSERT_EQUAL_HEX16(engine_zero_code(), h_dac_a());
+}
+
 static void test_arm_needs_session(void)
 {
     psim_set_dtr(false);
@@ -284,6 +406,29 @@ static void test_hang_fires_deadman_and_never_rearms(void)
     h_run_us(300000);
     TEST_ASSERT_FALSE(h_gate());
     TEST_ASSERT_TRUE(fabs(h_vsweep()) < 0.01);
+}
+
+static void test_bringup_stack_overflow_crash(void)
+{
+#if FW_BRINGUP
+    /* CRASH STACK: overflow into the MPU guard -> MemManage -> zero pair,
+     * crash record (frame not read), reset, DISARMED, never re-armed */
+    arm();
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("SRC V=4"));
+    h_run_us(600000);
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("CRASH STACK"));
+    TEST_ASSERT_TRUE(h_run_until_state(ST_DISARMED, 2000000));
+    crash_record_t cr;
+    TEST_ASSERT_TRUE(port_crash_get(&cr));
+    TEST_ASSERT_EQUAL_UINT32(CRASH_MEMMANAGE, cr.cause);
+    TEST_ASSERT_EQUAL_HEX32(0xFFFFFFFFu, cr.pc);
+    TEST_ASSERT_EQUAL_HEX16(0x8000, h_dac_a());
+    TEST_ASSERT_EQUAL_STRING("reset", disarm_reason_name(inst_disarm_reason()));
+    h_run_us(300000);
+    TEST_ASSERT_FALSE(h_gate());
+#else
+    TEST_ASSERT_EQUAL_STRING("ERR UNKNOWN unknown verb", h_cmd("CRASH STACK"));
+#endif
 }
 
 static void test_disarmed_hang_resets_by_watchdog(void)
@@ -507,6 +652,7 @@ int main(void)
     RUN_TEST(test_any_byte_keeps_host_alive);
     RUN_TEST(test_slow_pass_latches_loop_overrun);
     RUN_TEST(test_hang_fires_deadman_and_never_rearms);
+    RUN_TEST(test_bringup_stack_overflow_crash);
     RUN_TEST(test_disarmed_hang_resets_by_watchdog);
     RUN_TEST(test_iwdg_kicked_in_fault);
     RUN_TEST(test_dac_spi_failure_faults_and_zeroes);
@@ -523,5 +669,12 @@ int main(void)
     RUN_TEST(test_v_limit_not_below_held_level);
     RUN_TEST(test_flash_save_only_disarmed);
     RUN_TEST(test_bringup_verbs_absent);
+    RUN_TEST(test_compliance_trip_during_disarm_ramp_completes_disarm);
+    RUN_TEST(test_cell_tripping_compliance_on_disarm_completes_disarm);
+    RUN_TEST(test_compliance_during_src_ramp_is_reported);
+    RUN_TEST(test_fault_during_sweep_goes_straight_to_fault);
+    RUN_TEST(test_sweep_refused_during_src_ramp);
+    RUN_TEST(test_dac_scrub_only_after_the_scrub_period);
+    RUN_TEST(test_compliance_at_zero_is_reported_once);
     return UNITY_END();
 }

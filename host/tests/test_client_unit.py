@@ -6,7 +6,7 @@ import time
 import pytest
 
 from stage1iv.client import Instrument
-from stage1iv.errors import (BringupBuildRefused, ErrUnknown, SessionLost,
+from stage1iv.errors import (BringupBuildRefused, ErrUnknown, SessionLost, StateChangeFailed,
                              TimeoutError as S1Timeout)
 
 
@@ -35,6 +35,15 @@ def test_arm_waits_for_state_and_disarm(inst):
     assert inst.state == "ARMED"
     inst.disarm()
     assert inst.state == "DISARMED"
+
+
+def test_src_reports_a_ramp_ended_by_compliance(device, inst):
+    inst.arm()
+    assert inst.src("1.5").get("status") == "reached"
+    device.src_status = "compliance"
+    with pytest.raises(StateChangeFailed) as exc:
+        inst.src("3")
+    assert exc.value.event.get("status") == "compliance"
 
 
 def test_sweep_with_lost_lines_recovered_by_fetch(device, inst):

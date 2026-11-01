@@ -305,6 +305,54 @@ static void test_late_read_waits_for_next_edge(void)
     TEST_ASSERT_EQUAL_UINT32(0, v.read_not_ready);
 }
 
+static void test_read_running_into_the_next_update_is_discarded(void)
+{
+    /* Passes that start reads close to the deadline, plus an 8 us interrupt
+     * between RDATA and the data bytes (and up to 3 us EXTI latency, the bound
+     * with /DRDY above USB in the NVIC): a read that ends inside t17 is
+     * discarded and the next edge is used, never delivered as a valid sample. */
+    static const uint32_t lat[] = { 0u, 3u };
+    for (size_t li = 0; li < sizeof lat / sizeof lat[0]; li++) {
+        tp_setup(input, NULL);
+        init_at(37500, ADS_PGA_2);
+        tp_set_pass(150, 300, 7);
+        tp_set_read_preempt_us(8);
+        tp_set_drdy_latency_us(lat[li]);
+        adsm_violations_t v0;
+        adsm_get_violations(tp_model(), &v0);
+        uint32_t prev_bad = v0.read_not_ready;
+        uint32_t got = 0, bad_delivered = 0;
+        for (int k = 0; k < 2000; k++) {
+            ads_sample_t s;
+            ads_mux_t m = (k & 1) ? ADS_MUX_V : ADS_MUX_I;
+            if (!convert(m, &s, 100000)) {
+                TEST_ASSERT_EQUAL(ADS_ERR_TIMEOUT, ads_error());   /* > ADS_MAX_LATE misses */
+                tp_set_read_preempt_us(0);
+                init_at(37500, ADS_PGA_2);
+                tp_set_read_preempt_us(8);
+                adsm_violations_t vr;
+                adsm_get_violations(tp_model(), &vr);
+                prev_bad = vr.read_not_ready;
+                continue;
+            }
+            got++;
+            adsm_violations_t v;
+            adsm_get_violations(tp_model(), &v);
+            if (v.read_not_ready != prev_bad && !s.late) {
+                bad_delivered++;   /* this very read overlapped t17 */
+            }
+            prev_bad = v.read_not_ready;
+            int32_t e = (m == ADS_MUX_I) ? expect_code(0.3, 2.0) : expect_code(-0.7, 2.0);
+            TEST_ASSERT_INT32_WITHIN(2, e, s.code);
+        }
+        TEST_ASSERT_TRUE(got > 1900u);
+        TEST_ASSERT_EQUAL_UINT32(0, bad_delivered);
+        ads_stats_t st;
+        ads_get_stats(&st);
+        TEST_ASSERT_TRUE_MESSAGE(st.read_overruns > 0u, "the probe never overran a read");
+    }
+}
+
 static void test_preemption_by_new_start(void)
 {
     init_at(1000, ADS_PGA_2);
@@ -412,6 +460,7 @@ int main(void)
     RUN_TEST(test_stale_pending_edge_rejected);
     RUN_TEST(test_glitch_edge_rejected);
     RUN_TEST(test_late_read_waits_for_next_edge);
+    RUN_TEST(test_read_running_into_the_next_update_is_discarded);
     RUN_TEST(test_preemption_by_new_start);
     RUN_TEST(test_drdy_dead_times_out);
     RUN_TEST(test_spi_failure_reported);

@@ -35,6 +35,7 @@ class FakeDevice:
         self.ring: list[str] = []
         self.drop_seqs: set[int] = set()       # PT lines "lost" on first send
         self.meas_delay = 0.0
+        self.src_status = "reached"             # "compliance": the ramp ends at 0 V
         self.chatter = False                   # EVT/PT noise before responses
         self.received: list[str] = []
         self._stop = False
@@ -108,7 +109,11 @@ class FakeDevice:
             self.w("EVT STATE DISARMED reason=command")
         elif v == "SRC":
             self.w("OK")
-            self.w(f"EVT SRC_DONE v_v={Decimal(rest[0].split('=')[1]):.6f}")
+            if self.src_status == "reached":
+                self.w(f"EVT SRC_DONE v_v={Decimal(rest[0].split('=')[1]):.6f} status=reached")
+            else:
+                self.w("EVT WARN COMPLIANCE i_a=0.0100000000")
+                self.w(f"EVT SRC_DONE v_v=0.000000 status={self.src_status}")
         elif v == "SWP.WP":
             from stage1iv.sweeps import waypoint_sweep
             step = next(a for a in rest if a.upper().startswith("STEP=")).split("=")[1]

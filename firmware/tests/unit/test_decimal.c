@@ -274,8 +274,25 @@ static void test_parse_u32(void)
     TEST_ASSERT_EQUAL_INT(DEC_OK, dec_parse_u32("256", 3, 1, 256, &v));
     TEST_ASSERT_EQUAL_UINT32(256, v);
 
+    /* the number grammar of protocol.md §3, exact integers only */
+    static const struct { const char *s; uint32_t v; } good[] = {
+        { "+1", 1 }, { "1.0", 1 }, { "1e3", 1000 }, { "-0", 0 }, { "30.000", 30 },
+        { "4.294967295e9", UINT32_MAX }, { "12.5e1", 125 },
+    };
+    for (size_t i = 0; i < sizeof good / sizeof good[0]; i++) {
+        v = 7;
+        TEST_ASSERT_EQUAL_INT_MESSAGE(DEC_OK, dec_parse_u32(good[i].s, strlen(good[i].s), 0, UINT32_MAX, &v), good[i].s);
+        TEST_ASSERT_EQUAL_UINT32_MESSAGE(good[i].v, v, good[i].s);
+    }
+    v = 7;
+    TEST_ASSERT_EQUAL_INT(DEC_INEXACT, dec_parse_u32("2.5", 3, 0, UINT32_MAX, &v));
+    TEST_ASSERT_EQUAL_INT(DEC_INEXACT, dec_parse_u32("1e-1", 4, 0, UINT32_MAX, &v));
+    TEST_ASSERT_EQUAL_INT(DEC_RANGE, dec_parse_u32("-1", 2, 0, UINT32_MAX, &v));
+    TEST_ASSERT_EQUAL_INT(DEC_RANGE, dec_parse_u32("1e10", 4, 0, UINT32_MAX, &v));
+    TEST_ASSERT_EQUAL_UINT32(7, v);
+
     static const char *const bad[] = {
-        "", "-1", "+1", "1.0", "1e3", " 1", "1 ", "0x1", "a", "1-",
+        "", " 1", "1 ", "0x1", "a", "1-", "1e", "+", ".", "1..0", "inf", "nan",
     };
     for (size_t i = 0; i < sizeof bad / sizeof bad[0]; i++) {
         v = 7;

@@ -27,8 +27,8 @@ DAC_ARM and FORCE+; `iv-diag` from `host/`.
 | Boot zero | trigger on NRST release (SW1) | the frame pair `00 80 00`, `34 FF FF` on SPI1 within ~2 ms of reset; no PC5 edge |
 | No frame with B ≠ FFFF | decode SPI1 over a whole session | every `00 hh ll` is followed by `34 FF FF` |
 | /SYNC rises after the last SCLK | zoom on frame ends | ≥ 0 ns after the 24th falling edge, ≥ 33 ns high between frames |
-| ADC init | trigger on /RESET_ADC | RESET pulse ≥ 2 µs; WREG STATUS..IO; SYNC; SELFCAL; RREG read-back; SCLK ≤ 1.92 MHz; mode 1 |
-| ADC timing | any conversion | t6 ≥ 6.5 µs (RDATA → data), t11 after SYNC/WAKEUP ≥ 3.1 µs, /CS hold ≥ 1 µs, RDATA only while /DRDY low |
+| ADC init | trigger on /RESET_ADC | RESET pulse ≥ 2 µs; WREG STATUS..IO; SYNC; SELFCAL; /DRDY falls after the Table 21 calibration time (SELFCAL runs although no WAKEUP follows the SYNC; if it never falls, init times out: report it); RREG read-back; SCLK ≤ 1.92 MHz; mode 1 |
+| ADC timing | any conversion | t6 ≥ 6.5 µs (RDATA → data), t11 after SYNC/WAKEUP ≥ 3.1 µs, /CS hold ≥ 1 µs, RDATA only while /DRDY low; at 3750 SPS with USB traffic `DIAG? adc_read_overruns` stays at or near 0 (each one is a discarded read) |
 | Monitor | DISARMED | an I/V pair about every 100 ms |
 | Pass time | `DIAG?` after 10 min with USB traffic | `pass_max_us` ≤ 150 (design), `pass_overruns=0` |
 
@@ -57,6 +57,7 @@ ARM needs ±15 V for the AFE check; with ±15 V off, `ARM` returns
    | hang, IRQs on | `CRASH HANG` (bring-up) | dead-man after 2 ms: zero pair, reset | |V_SWEEP| < 0.2 V within ~2 ms; `crash=1`, `DIAG? crash=deadman` |
    | hang, IRQs off | `CRASH HANG_IRQOFF` (bring-up) | none until the IWDG (1.0–2.8 s) | gate decay only: ≤ 70 ms if PC5 was left low, ≤ 85 ms if left high (record which) |
    | HardFault | `CRASH HARDFAULT` (bring-up) | fault handler: zero pair, crash record, reset | < 1 ms; `DIAG? crash=hardfault` |
+   | stack overflow | `CRASH STACK` (bring-up) | MPU guard → MemManage: zero pair, crash record, reset | < 1 ms; `DIAG? crash=memmanage` |
    | debugger halt | halt from OpenOCD | none while halted | gate decay: ≤ 70 / ≤ 85 ms; on resume the dead-man (TIM5 kept counting) fires at once: zero pair, crash record `deadman`, reset (if it did not, the heartbeat gap check would latch `LOOP_OVERRUN`). TIM2 is never frozen (`DBG_TIM2_STOP` → `FAULT INVARIANT`) |
    | SW1 reset | press and hold SW1 | pins float (PC5 low/undriven) | gate decay ≤ 70 ms; after release the boot writes the zero pair and stays `DISARMED` |
    | +5 V removed | remove +5 V | DAC unpowered | ≈ immediate |

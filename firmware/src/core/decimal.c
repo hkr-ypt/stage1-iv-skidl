@@ -194,29 +194,17 @@ dec_status_t dec_parse_scaled(const char *s, size_t len, int scale,
 dec_status_t dec_parse_u32(const char *s, size_t len, uint32_t min, uint32_t max,
                            uint32_t *out)
 {
-    if (s == NULL || out == NULL || len == 0) {
+    /* the same grammar as every other number (protocol.md §3): "1e3", "+4",
+     * "30.0" are exact integers; "2.5" is DEC_INEXACT, "-1" below min */
+    if (out == NULL) {
         return DEC_SYNTAX;
     }
-    uint32_t v = 0;
-    bool overflow = false;
-    for (size_t i = 0; i < len; i++) {
-        if (!is_digit(s[i])) {
-            return DEC_SYNTAX;
-        }
-        uint32_t d = digit_value(s[i]);
-        if (!overflow) {
-            if (v > (UINT32_MAX - d) / 10u) {
-                overflow = true;        /* keep scanning: syntax wins */
-            } else {
-                v = v * 10u + d;
-            }
-        }
+    int64_t v = 0;
+    dec_status_t st = dec_parse_scaled(s, len, 0, (int64_t)min, (int64_t)max, &v);
+    if (st == DEC_OK) {
+        *out = (uint32_t)v;
     }
-    if (overflow || v < min || v > max) {
-        return DEC_RANGE;
-    }
-    *out = v;
-    return DEC_OK;
+    return st;
 }
 
 static size_t format_fail(char *buf, size_t cap)

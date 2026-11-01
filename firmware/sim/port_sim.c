@@ -68,6 +68,7 @@
 #define CRASH_LR_THREAD      0xFFFFFFFDu  /* EXC_RETURN: thread mode, PSP  */
 #define CRASH_XPSR           0x61000000u
 #define CRASH_CFSR_UNDEF     0x00010000u  /* UFSR.UNDEFINSTR               */
+#define CRASH_CFSR_MSTKERR   0x00000092u  /* MMFSR: MMARVALID, MSTKERR, DACCVIOL */
 #define CRASH_HFSR_FORCED    0x40000000u
 #define CRASH_RCC_CR         0x030B0083u  /* HSI, HSE, CSS, PLL on/ready   */
 #define CRASH_RCC_CFGR       0x0000100Au  /* SW = SWS = PLL, APB1 /2       */
@@ -1231,6 +1232,14 @@ void port_crash_test(int kind)
     case 2: /* hang with interrupts off: only the IWDG */
         S.hung = true;
         S.hung_irqoff = true;
+        break;
+    case 3: /* thread-stack overflow into the MPU guard: MemManage, frame unread */
+        S.in_isr = true;
+        port_hb_force_low();
+        dac_zero_safe();
+        crash_write(CRASH_MEMMANAGE, 0xFFFFFFFFu, CRASH_CFSR_MSTKERR, 0u);
+        port_system_reset();
+        S.in_isr = false;
         break;
     default:
         break;
