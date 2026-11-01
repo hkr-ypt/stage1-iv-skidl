@@ -1417,17 +1417,20 @@ urgent_t commands_urgent_kind(const char *line, size_t len)
 bool commands_urgent_act(urgent_t k)
 {
     inst_state_t st = inst_state();
-    if (k == URGENT_DISARM) {
-        if (st == ST_ARMING || st == ST_ARMED || st == ST_SWEEPING) {
-            inst_disarm(DR_COMMAND);
-        }
-        return true;   /* the in-order DISARM is then a no-op OK */
+    if (k == URGENT_DISARM && (st == ST_ARMING || st == ST_ARMED || st == ST_SWEEPING)) {
+        inst_disarm(DR_COMMAND);   /* the in-order DISARM is then a no-op OK */
+        return true;
     }
     if (k == URGENT_ABORT && st == ST_SWEEPING) {
         engine_sweep_abort(SWS_ABORTED);
         return true;
     }
     return false;
+}
+
+bool commands_urgent_settled(urgent_t k)
+{
+    return k == URGENT_ABORT && inst_state() != ST_SWEEPING;
 }
 
 bool commands_execute(const cmdline_t *cl, lb_t *out)

@@ -1722,9 +1722,15 @@ here. Each item says what the code does and why; the code and
     back (a deferred command, or no room for responses and ordered events
     because the host is not reading), a `DISARM` or `SWP.ABORT` line without
     arguments takes effect as soon as it is in the RX ring; it is answered
-    in its place in the command order (`DISARM` as a no-op, an early
-    `SWP.ABORT` with `OK`). Without this, a host that writes but does not
-    read could leave the output armed behind held commands.
+    in its place in the command order. A waiting `DISARM` is re-applied on
+    every pass, so it also disarms after a held `ARM` ahead of it runs, and
+    is then a no-op when reached. An early `SWP.ABORT` counts once per sweep
+    it actually aborted; when reached it is answered `OK`, or executed again
+    if a held `SWP.RUN` started another sweep meanwhile. Without this, a
+    host that writes but does not read could leave the output armed behind
+    held commands. Lines are seen only once they fit in the 1 KB RX ring;
+    beyond that, unread input is not host activity and the host timeout
+    disarms.
 
 **Hardware documentation updated with this work:** `bringup_checklist.md`
 (§3 REF5025AI tolerance; §6 disarm limits 70/85 ms with rationale, the

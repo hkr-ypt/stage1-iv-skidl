@@ -59,12 +59,17 @@ command, field or error code is a protocol change and increments
   appear between a command and its response.
 - **Ordering guarantees.** Events a command causes always follow its `OK`
   (for example `OK`, then `EVT STATE ARMING`), with one exception: `DISARM`
-  and `SWP.ABORT` without arguments take effect as soon as their line has
-  arrived, even while earlier commands are still waiting (a deferred
-  command, or a host that is not reading, see *Flow control*). Their
-  response keeps its place in the command order, so their events can then
-  precede it, and commands sent before them that were still waiting see the
-  disarmed (or no longer sweeping) state. `EVT SWEEP_BEGIN`,
+  and `SWP.ABORT` without arguments (blanks around the verb do not matter)
+  take effect as soon as their line is in the device's 1 KB receive buffer,
+  even while earlier commands are still waiting (a deferred command, or a
+  host that is not reading, see *Flow control*). Their response keeps its
+  place in the command order, so their events can then precede it, and
+  commands sent before them that were still waiting see the disarmed (or no
+  longer sweeping) state; a waiting `DISARM` also undoes an `ARM` that was
+  waiting ahead of it, and a sweep that a waiting `SWP.RUN` starts is ended
+  by the `SWP.ABORT` sent after it. A line behind more than 1 KB of
+  unparsed input is not seen until the input ahead of it is; unread input
+  does not count as host activity, so the host timeout still disarms. `EVT SWEEP_BEGIN`,
   `EVT SWEEP_END` and `EVT STATE` are never sent before the `PT` records
   pushed before them, and no record pushed after one of them is sent before
   it, even while the host is not reading: a host may stop reading a sweep at

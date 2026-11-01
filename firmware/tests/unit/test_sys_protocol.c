@@ -818,6 +818,136 @@ static void test_disarm_during_deferred_measurement(void)
     TEST_ASSERT_EQUAL_UINT32(2, count_responses(from));
 }
 
+static size_t count_prefix(const char *prefix, size_t from)
+{
+    size_t n = 0;
+    for (size_t i = from; i < h_lines(); i++) {
+        if (starts(h_line(i), prefix)) {
+            n++;
+        }
+    }
+    return n;
+}
+
+static void hold_tx_with_diag(void)
+{
+    for (int k = 0; k < 6; k++) {
+        h_send("DIAG?");               /* ~450 B each: the TX gate closes */
+    }
+    h_run_us(100000);
+}
+
+static void test_early_abort_never_leaves_a_later_sweep_running(void)
+{
+    /* SWP.ABORT acts on the running sweep at once; a held SWP.RUN sent before
+     * it then starts another sweep, which the in-order SWP.ABORT must end */
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("CFG settle_us=100000"));
+    TEST_ASSERT_EQUAL(0, strncmp(h_cmd("SWP.WP 0 2 STEP=0.1"), "OK SWP", 6));
+    arm();
+    size_t from = h_lines();
+    psim_set_tx_space_limit(0);
+    h_send("SWP.RUN");
+    h_run_us(500000);
+    hold_tx_with_diag();
+    h_send("SWP.RUN");
+    h_send("SWP.ABORT");
+    h_run_us(300000);
+    TEST_ASSERT_EQUAL(ST_ARMED, h_state());
+    psim_set_tx_space_limit(PSIM_TX_NO_LIMIT);
+    h_run_us(5000000);
+    TEST_ASSERT_EQUAL_UINT32(9, count_responses(from));
+    TEST_ASSERT_EQUAL_UINT32(0, count_prefix("ERR", from));
+    TEST_ASSERT_EQUAL(ST_ARMED, h_state());
+    for (size_t i = from; i < h_lines(); i++) {
+        if (starts(h_line(i), "EVT SWEEP_END")) {
+            TEST_ASSERT_NOT_NULL_MESSAGE(strstr(h_line(i), "status=aborted"), h_line(i));
+        }
+    }
+}
+
+static bool arming_or_armed(void)
+{
+    return h_state() == ST_ARMING || h_state() == ST_ARMED;
+}
+
+static void test_early_disarm_still_acts_after_a_held_arm(void)
+{
+    /* the DISARM arrives while DISARMED (nothing to do yet) behind a held ARM;
+     * once the ARM has armed and parsing is held again, it must still act */
+    size_t from = h_lines();
+    psim_set_tx_space_limit(0);
+    h_send("MEAS? N=200");
+    h_send("ARM");
+    for (int k = 0; k < 6; k++) {
+        h_send("DIAG?");
+    }
+    h_send("DISARM");
+    /* the held ARM runs once MEAS? is done; the DISARM then acts at once,
+     * already during ARMING */
+    TEST_ASSERT_TRUE(h_run_until(arming_or_armed, 10000000));
+    TEST_ASSERT_TRUE(h_run_until_state(ST_DISARMED, 3000000));
+    TEST_ASSERT_FALSE(h_gate());
+    psim_set_tx_space_limit(PSIM_TX_NO_LIMIT);
+    h_run_us(2000000);
+    TEST_ASSERT_EQUAL_UINT32(9, count_responses(from));
+}
+
+static void test_abort_and_disarm_in_one_packet(void)
+{
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("CFG settle_us=100000"));
+    TEST_ASSERT_EQUAL(0, strncmp(h_cmd("SWP.WP 0 2 STEP=0.1"), "OK SWP", 6));
+    arm();
+    size_t from = h_lines();
+    psim_set_tx_space_limit(0);
+    h_send("SWP.RUN");
+    h_run_us(500000);
+    hold_tx_with_diag();
+    psim_host_give_rx((const uint8_t *)"SWP.ABORT\nDISARM\n", 17);
+    TEST_ASSERT_TRUE(h_run_until_state(ST_DISARMED, 2000000));
+    psim_set_tx_space_limit(PSIM_TX_NO_LIMIT);
+    h_run_us(2000000);
+    TEST_ASSERT_EQUAL_UINT32(9, count_responses(from));
+    TEST_ASSERT_EQUAL_UINT32(0, count_prefix("ERR", from));
+}
+
+static void test_padded_disarm_acts_early(void)
+{
+    /* blanks around the verb do not matter: any DISARM without arguments */
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("CFG adc_rate=10"));
+    h_run_us(2000000);
+    arm();
+    size_t from = h_lines();
+    h_send("MEAS? N=40");
+    h_run_us(300000);
+    h_send("\t  disarm                                        \t ");
+    h_run_us(300000);
+    TEST_ASSERT_TRUE(h_state() == ST_DISARMING || h_state() == ST_DISARMED);
+    TEST_ASSERT_TRUE(h_run_until_state(ST_DISARMED, 2000000));
+    h_run_us(200000);
+    TEST_ASSERT_EQUAL_UINT32(2, count_responses(from));
+}
+
+static void test_writer_only_host_is_disarmed_by_the_host_timeout(void)
+{
+    /* A host that only writes fills the RX ring; a DISARM behind 1 KB of
+     * unparsed input is not seen, but unread input is not host activity, so
+     * the host timeout still disarms. */
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("CFG host_timeout_s=5"));
+    arm();
+    size_t from = h_lines();
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("SRC V=2"));
+    TEST_ASSERT_TRUE(h_wait_line("EVT SRC_DONE", from, 2000000));
+    psim_set_tx_space_limit(0);
+    for (int k = 0; k < 1500; k++) {
+        psim_host_give_rx((const uint8_t *)"DIAG?\n", 6);
+    }
+    psim_host_give_rx((const uint8_t *)"DISARM\n", 7);
+    TEST_ASSERT_TRUE(h_run_until_state(ST_DISARMED, 8000000));
+    TEST_ASSERT_EQUAL_STRING("host_timeout", disarm_reason_name(inst_disarm_reason()));
+    TEST_ASSERT_TRUE(fabs(h_vsweep()) < 0.01);
+    psim_set_tx_space_limit(PSIM_TX_NO_LIMIT);
+}
+
 static void test_session_loss_during_deferred_job_frees_the_slot(void)
 {
     /* SELFTEST runs for a while; the host disconnects mid-way */
@@ -866,5 +996,10 @@ int main(void)
     RUN_TEST(test_disarm_acts_while_commands_are_held);
     RUN_TEST(test_swp_abort_acts_while_commands_are_held);
     RUN_TEST(test_disarm_during_deferred_measurement);
+    RUN_TEST(test_early_abort_never_leaves_a_later_sweep_running);
+    RUN_TEST(test_early_disarm_still_acts_after_a_held_arm);
+    RUN_TEST(test_abort_and_disarm_in_one_packet);
+    RUN_TEST(test_padded_disarm_acts_early);
+    RUN_TEST(test_writer_only_host_is_disarmed_by_the_host_timeout);
     return UNITY_END();
 }

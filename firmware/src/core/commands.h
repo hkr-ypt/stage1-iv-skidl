@@ -30,8 +30,11 @@ void commands_service(uint64_t now_us);
  * still executed and answered later, in order. */
 typedef enum { URGENT_NONE = 0, URGENT_DISARM, URGENT_ABORT, URGENT_COUNT } urgent_t;
 urgent_t commands_urgent_kind(const char *line, size_t len);
-/* Acts on one such line now. True if it did, for SWP.ABORT only when a sweep
- * was aborted: that line is then answered OK without executing it again. */
+/* Acts on one such line now; true if it disarmed / aborted a sweep. */
 bool     commands_urgent_act(urgent_t k);
+/* For a line acted on early, reached in order: true if it needs no execution
+ * (a SWP.ABORT with no sweep running any more: answered OK). A sweep that a
+ * held SWP.RUN started meanwhile is aborted by executing the line. */
+bool     commands_urgent_settled(urgent_t k);
 
 #endif /* COMMANDS_H */
