@@ -865,11 +865,6 @@ static void test_early_abort_never_leaves_a_later_sweep_running(void)
     }
 }
 
-static bool arming_or_armed(void)
-{
-    return h_state() == ST_ARMING || h_state() == ST_ARMED;
-}
-
 static void test_early_disarm_still_acts_after_a_held_arm(void)
 {
     /* the DISARM arrives while DISARMED (nothing to do yet) behind a held ARM;
@@ -882,14 +877,16 @@ static void test_early_disarm_still_acts_after_a_held_arm(void)
         h_send("DIAG?");
     }
     h_send("DISARM");
-    /* the held ARM runs once MEAS? is done; the DISARM then acts at once,
-     * already during ARMING */
-    TEST_ASSERT_TRUE(h_run_until(arming_or_armed, 10000000));
-    TEST_ASSERT_TRUE(h_run_until_state(ST_DISARMED, 3000000));
-    TEST_ASSERT_FALSE(h_gate());
+    /* the held ARM runs once MEAS? is done; the waiting DISARM undoes it in
+     * the same pass, so the gate never turns on */
+    uint32_t gate_on = psim_board()->gate_on_events;
+    h_run_us(10000000);
+    TEST_ASSERT_EQUAL(ST_DISARMED, h_state());
+    TEST_ASSERT_EQUAL_UINT32(gate_on, psim_board()->gate_on_events);
     psim_set_tx_space_limit(PSIM_TX_NO_LIMIT);
     h_run_us(2000000);
     TEST_ASSERT_EQUAL_UINT32(9, count_responses(from));
+    TEST_ASSERT_EQUAL(ST_DISARMED, h_state());
 }
 
 static void test_abort_and_disarm_in_one_packet(void)
@@ -948,6 +945,34 @@ static void test_writer_only_host_is_disarmed_by_the_host_timeout(void)
     psim_set_tx_space_limit(PSIM_TX_NO_LIMIT);
 }
 
+static void test_waiting_disarm_undoes_an_arm_ahead_of_it_in_a_backlog(void)
+{
+    /* ARM, 300 other lines, DISARM in one packet behind a held TX side: when
+     * the backlog then drains unheld, the ARM ahead of the waiting DISARM is
+     * undone at once, not after the 300 lines */
+    size_t from = h_lines();
+    psim_set_tx_space_limit(0);
+    hold_tx_with_diag();
+    static char pkt[4 + 300 * 2 + 8];
+    size_t n = 0;
+    memcpy(pkt + n, "ARM\n", 4);
+    n += 4;
+    for (int k = 0; k < 300; k++) {
+        memcpy(pkt + n, "X\n", 2);
+        n += 2;
+    }
+    memcpy(pkt + n, "DISARM\n", 7);
+    n += 7;
+    psim_host_give_rx((const uint8_t *)pkt, n);
+    h_run_us(100000);
+    uint32_t gate_on = psim_board()->gate_on_events;
+    psim_set_tx_space_limit(PSIM_TX_NO_LIMIT);
+    h_run_us(3000000);
+    TEST_ASSERT_EQUAL_UINT32(gate_on, psim_board()->gate_on_events);
+    TEST_ASSERT_EQUAL(ST_DISARMED, h_state());
+    TEST_ASSERT_EQUAL_UINT32(6 + 1 + 300 + 1, count_responses(from));
+}
+
 static void test_session_loss_during_deferred_job_frees_the_slot(void)
 {
     /* SELFTEST runs for a while; the host disconnects mid-way */
@@ -1001,5 +1026,6 @@ int main(void)
     RUN_TEST(test_abort_and_disarm_in_one_packet);
     RUN_TEST(test_padded_disarm_acts_early);
     RUN_TEST(test_writer_only_host_is_disarmed_by_the_host_timeout);
+    RUN_TEST(test_waiting_disarm_undoes_an_arm_ahead_of_it_in_a_backlog);
     return UNITY_END();
 }

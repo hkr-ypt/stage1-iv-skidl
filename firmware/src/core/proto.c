@@ -680,8 +680,9 @@ static void urg_scan(const uint8_t *b, size_t n)
     }
 }
 
-/* While commands cannot be parsed, act on the waiting DISARM / SWP.ABORT
- * lines now (their responses keep their place in the order). */
+/* Acts on the DISARM / SWP.ABORT lines waiting in the RX ring (every pass:
+ * before parsing when it is held back, after the command otherwise); their
+ * responses keep their place in the order. */
 static void urgent_service(void)
 {
     /* the abort first, so that "SWP.ABORT, DISARM" in one packet answers both
@@ -690,8 +691,8 @@ static void urgent_service(void)
         && commands_urgent_act(URGENT_ABORT)) {
         s_p.urg_acted[URGENT_ABORT]++;
     }
-    /* every pass while a DISARM waits (a held ARM ahead of it may arm the
-     * output later); it acts only when there is something to disarm */
+    /* every pass while a DISARM waits (an ARM ahead of it may arm the output
+     * later); it acts only when there is something to disarm */
     if (s_p.urg_pending[URGENT_DISARM] > 0u) {
         (void)commands_urgent_act(URGENT_DISARM);
     }
@@ -900,6 +901,10 @@ void proto_service(uint64_t now_us)
                 break;   /* at most one command per pass */
             }
         }
+        /* after the command (so a DISARM reached in order is executed, not
+         * pre-empted): undo at once an ARM / SWP.RUN that ran ahead of a
+         * DISARM / SWP.ABORT still waiting in a backlog */
+        urgent_service();
     }
     send_evt_lost();
     stream_records();
