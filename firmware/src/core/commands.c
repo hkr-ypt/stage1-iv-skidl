@@ -1245,7 +1245,7 @@ static err_t h_hb_hold(ctx_t *c)
 static err_t h_dac_raw(ctx_t *c)
 {
     if (c->cl->npos == 1 && c->cl->nkv == 0 && tok_eq(c->cl->pos[0], "OFF")) {
-        engine_zero_output_now();   /* dac_update(): B back to 0xFFFF, scrub resumes */
+        engine_zero_output_now("aborted");   /* dac_update(): B back to 0xFFFF, scrub resumes */
         return E_OK;
     }
     static const char *const keys[] = { "CONFIRM" };

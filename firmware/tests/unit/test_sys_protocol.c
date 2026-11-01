@@ -630,6 +630,99 @@ static void test_integer_keys_accept_the_number_grammar(void)
     TEST_ASSERT_EQUAL(0, strncmp(h_cmd("CFG n_avg=2.5e0"), "ERR ARG", 7));
 }
 
+static size_t count_responses(size_t from)
+{
+    size_t n = 0;
+    for (size_t i = from; i < h_lines(); i++) {
+        if (starts(h_line(i), "OK") || starts(h_line(i), "ERR")) {
+            n++;
+        }
+    }
+    return n;
+}
+
+static void test_stalled_host_state_events_never_lost(void)
+{
+    /* The host stops reading behind a sweep's records but keeps sending
+     * DISARM/ARM. The ordered queue must hold back the commands instead of
+     * dropping their STATE events: the last STATE the host reads is the state
+     * the instrument is in. */
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("CFG settle_us=100"));
+    TEST_ASSERT_EQUAL(0, strncmp(h_cmd("SWP.WP 0 3 STEP=0.1"), "OK SWP", 6));
+    arm();
+    size_t from = h_lines();
+    psim_set_tx_space_limit(0);
+    h_send("SWP.RUN");
+    TEST_ASSERT_TRUE(h_run_until_state(ST_SWEEPING, 1000000));
+    TEST_ASSERT_TRUE(h_run_until_state(ST_ARMED, 5000000));
+    for (int k = 0; k < 10; k++) {
+        h_send("DISARM");
+        h_run_us(400000);
+        h_send("ARM");
+        h_run_us(400000);
+    }
+    psim_set_tx_space_limit(PSIM_TX_NO_LIMIT);
+    h_run_us(10000000);
+    proto_stats_t ps;
+    proto_get_stats(&ps);
+    TEST_ASSERT_EQUAL_UINT32(0, ps.evt_lost);
+    TEST_ASSERT_EQUAL_UINT32(21, count_responses(from));
+    size_t last = SIZE_MAX;
+    for (size_t i = from; i < h_lines(); i++) {
+        if (starts(h_line(i), "EVT STATE ")) {
+            last = i;
+        }
+    }
+    TEST_ASSERT_NOT_EQUAL(SIZE_MAX, last);
+    const char *want = h_state() == ST_ARMED ? "EVT STATE ARMED" : "EVT STATE DISARMED";
+    TEST_ASSERT_TRUE_MESSAGE(starts(h_line(last), want), h_line(last));
+}
+
+static void test_stalled_host_back_to_back_sweeps_keep_their_events(void)
+{
+    /* SWP.RUN after SWP.RUN while the host is not reading: every sweep that
+     * ran arrives as SWEEP_BEGIN, all of its records, SWEEP_END */
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("CFG settle_us=100"));
+    TEST_ASSERT_EQUAL(0, strncmp(h_cmd("SWP.WP 0 0.1 STEP=0.01"), "OK SWP kind=wp points=11", 24));
+    arm();
+    size_t from = h_lines();
+    psim_set_tx_space_limit(0);
+    for (int k = 0; k < 6; k++) {
+        h_send("SWP.RUN");
+        h_run_us(600000);
+    }
+    psim_set_tx_space_limit(PSIM_TX_NO_LIMIT);
+    h_run_us(10000000);
+    proto_stats_t ps;
+    proto_get_stats(&ps);
+    TEST_ASSERT_EQUAL_UINT32(0, ps.evt_lost);
+    TEST_ASSERT_EQUAL_UINT32(6, count_responses(from));
+    unsigned ran = 0;
+    for (size_t i = from; i < h_lines(); i++) {
+        if (!starts(h_line(i), "OK id=")) {
+            continue;
+        }
+        unsigned id = (unsigned)atoi(h_line(i) + 6);
+        char b[48], e[48], pt[16];
+        snprintf(b, sizeof b, "EVT SWEEP_BEGIN id=%u ", id);
+        snprintf(e, sizeof e, "EVT SWEEP_END id=%u ", id);
+        snprintf(pt, sizeof pt, "PT %u,", id);
+        size_t ib = h_find(b, from), ie = h_find(e, from);
+        TEST_ASSERT_NOT_EQUAL_MESSAGE(SIZE_MAX, ib, b);
+        TEST_ASSERT_NOT_EQUAL_MESSAGE(SIZE_MAX, ie, e);
+        size_t n = 0;
+        for (size_t j = from; j < h_lines(); j++) {
+            if (starts(h_line(j), pt)) {
+                TEST_ASSERT_TRUE_MESSAGE(j > ib && j < ie, "a record outside its sweep");
+                n++;
+            }
+        }
+        TEST_ASSERT_EQUAL_UINT32(11, n);
+        ran++;
+    }
+    TEST_ASSERT_TRUE(ran >= 2u);
+}
+
 static void test_session_loss_during_deferred_job_frees_the_slot(void)
 {
     /* SELFTEST runs for a while; the host disconnects mid-way */
@@ -673,5 +766,7 @@ int main(void)
     RUN_TEST(test_events_never_overtake_earlier_records);
     RUN_TEST(test_duplicate_keys_differing_in_case_rejected);
     RUN_TEST(test_integer_keys_accept_the_number_grammar);
+    RUN_TEST(test_stalled_host_state_events_never_lost);
+    RUN_TEST(test_stalled_host_back_to_back_sweeps_keep_their_events);
     return UNITY_END();
 }

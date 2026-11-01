@@ -119,4 +119,4 @@ by `-Og` and the IWDG debug freeze. See [`build.md`](build.md).
 | Flash sector 0 | vector table + reset code (676 B) |
 | Flash sectors 1–2 | calibration records A/B (nothing linked) |
 | Flash sector 3+ | code + constants, ≈ 70 KB of 464 KB |
-| SRAM | thread stack 8 KB at the bottom (32 B MPU no-access guard: overflow → MemManage; canary above it), `.data`/`.bss` ≈ 15 KB, `.noinit` ≈ 60 KB (result ring 44 KB, sweep list 16 KB, crash record), fault stack 0.5 KB, handler stack 1 KB: ≈ 86 KB of 128 KB (budget 90 KB, checked in CI) |
+| SRAM | thread stack 8 KB at the bottom (128 B MPU no-access guard: overflow → MemManage; canary above it), `.data`/`.bss` ≈ 15 KB, `.noinit` ≈ 60 KB (result ring 44 KB, sweep list 16 KB, crash record), fault stack 0.5 KB, handler stack 1 KB: ≈ 86 KB of 128 KB (budget 90 KB, checked in CI) |

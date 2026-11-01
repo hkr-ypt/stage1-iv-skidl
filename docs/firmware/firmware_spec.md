@@ -1104,9 +1104,10 @@ A future DUT-voltage servo changes that (§13).
   - debug builds set `DBG_IWDG_STOP`, never `DBG_TIM2_STOP`.
 - **Fault handlers.** HardFault, MemManage, BusFault, UsageFault and NMI
   (including **CSS**) share one naked entry. It runs on MSP's reserved
-  region, so a thread-stack overflow still reaches it. The lowest 32 B of the
-  thread stack are an MPU no-access region, so an overflow raises MemManage
-  at once; the canary is the word above it. In order:
+  region, so a thread-stack overflow still reaches it. The lowest 128 B of
+  the thread stack are an MPU no-access region (larger than the 104 B
+  exception frame with FP context), so an overflow raises MemManage at once;
+  the canary is the word above it. In order:
   1. PC5 low;
   2. `dac_zero_safe()` (§7.4), frame-aligned with SPI-reset and bit-bang
      fallbacks;
@@ -1648,11 +1649,15 @@ here. Each item says what the code does and why; the code and
     `CAL?` output round-trips exactly.
 11. *Output ordering.* Events a command causes are held and sent after its
     `OK`. `SWEEP_BEGIN`, `SWEEP_END` and `STATE` events each carry their own
-    watermark: each waits until every `PT` record pushed before it has been
-    sent, and records pushed after it wait for it, so a stalled host still
-    reads every sweep between its `SWEEP_BEGIN` and `SWEEP_END`. A command is
-    parsed only while the TX ring has room for its response and events (spec
-    §7.1 did not define the priorities).
+    watermark in a 2 KB ordered queue: each waits until every `PT` record
+    pushed before it has been sent, and records pushed after it wait for it.
+    A command is parsed only while the TX ring has room for its response and
+    events and the ordered queue has room for everything the command can lead
+    to (`PROTO_AFTER_RESERVE`); otherwise it waits in the RX ring. So a
+    stalled host still reads every sweep between its `SWEEP_BEGIN` and
+    `SWEEP_END` and loses no event its own commands cause (spec §7.1 did not
+    define the priorities). `EVT FAULT` and `EVT WARN` are not ordered: they
+    go out at once.
 12. *Ramps* step on a 1 ms **grid** (`next += 1 ms`, resynchronised when more
     than a period late) so that the 10 V/s disarm ramp finishes ±10 V in
     1.0 s, inside the 1.1 s deadline whatever the pass jitter. An individual
@@ -1685,16 +1690,22 @@ here. Each item says what the code does and why; the code and
     (bring-up) overflows the thread stack into the MPU guard (item 21).
 19. *Compliance during a ramp.* A trip during the disarm ramp loads the zero
     code, which completes the disarm (it is not left to `DISARM_TIMEOUT`); a
-    trip during an `SRC` ramp ends it with `SRC_DONE status=compliance`.
-    `SWP.RUN` is refused (`ERR BUSY`) while an `SRC` ramp runs, so that no
-    `SRC_DONE` is ever lost. With the output already at 0 V, the first trip
-    is reported (`WARN COMPLIANCE`) and later ones are not, until the output
-    is driven again.
-20. *A fault during a sweep* goes from `SWEEPING` straight to `FAULT`:
-    `SWEEP_END status=fault`, `EVT FAULT`, `EVT STATE FAULT`, with no
-    intermediate `STATE ARMED`.
-21. *Stack guard.* The lowest 32 B of the thread stack are an MPU no-access
-    region (region 0, `PRIVDEFENA`), so an overflow raises MemManage at once;
+    trip during an `SRC` ramp ends it with `SRC_DONE status=compliance`
+    (bring-up `DAC.RAW OFF`: `status=aborted`). `SWP.RUN` is refused
+    (`ERR BUSY`) while an `SRC` ramp runs, instead of silently replacing it.
+    So `SRC_DONE` comes when a ramp reaches its target or is cut short at 0 V;
+    a new `SRC` replaces the target (one `SRC_DONE`, for the last one), and
+    `DISARM`, a fault or a session loss end a ramp with `EVT STATE` instead.
+    With the output already at 0 V, the first trip is reported
+    (`WARN COMPLIANCE`) and later ones are not, until the output is driven
+    again.
+20. *A fault during a sweep* goes from `SWEEPING` straight to `FAULT`, with
+    no intermediate `STATE ARMED`. `EVT FAULT` is sent at once, so it can
+    precede the sweep's last records when the host is behind;
+    `SWEEP_END status=fault` and `EVT STATE FAULT` follow those records.
+21. *Stack guard.* The lowest 128 B of the thread stack are an MPU no-access
+    region (region 0, `PRIVDEFENA`; larger than the 104 B exception frame with
+    FP context), so an overflow raises MemManage at once;
     the canary is the word above it, and the fault handler does not read a
     stacked frame that lies in the guard.
 22. *ADC read window* is checked again when the read ends (§7.4); an

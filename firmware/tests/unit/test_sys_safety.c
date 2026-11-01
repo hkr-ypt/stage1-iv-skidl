@@ -431,6 +431,23 @@ static void test_bringup_stack_overflow_crash(void)
 #endif
 }
 
+static void test_bringup_dac_raw_off_during_src_ramp(void)
+{
+#if FW_BRINGUP
+    /* DAC.RAW OFF zeroes the output at once: an SRC ramp cut short ends with
+     * status=aborted, not with a compliance report */
+    arm();
+    size_t from = h_lines();
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("SRC V=5"));
+    h_run_us(100000);
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("DAC.RAW OFF"));
+    TEST_ASSERT_TRUE(h_wait_line("EVT SRC_DONE", from, 100000));
+    TEST_ASSERT_NOT_NULL(strstr(h_line(h_find("EVT SRC_DONE", from)), "status=aborted"));
+    TEST_ASSERT_EQUAL(SIZE_MAX, h_find("EVT WARN COMPLIANCE", from));
+    TEST_ASSERT_EQUAL_HEX16(engine_zero_code(), h_dac_a());
+#endif
+}
+
 static void test_disarmed_hang_resets_by_watchdog(void)
 {
     port_crash_test(2);             /* hang with interrupts off */
@@ -653,6 +670,7 @@ int main(void)
     RUN_TEST(test_slow_pass_latches_loop_overrun);
     RUN_TEST(test_hang_fires_deadman_and_never_rearms);
     RUN_TEST(test_bringup_stack_overflow_crash);
+    RUN_TEST(test_bringup_dac_raw_off_during_src_ramp);
     RUN_TEST(test_disarmed_hang_resets_by_watchdog);
     RUN_TEST(test_iwdg_kicked_in_fault);
     RUN_TEST(test_dac_spi_failure_faults_and_zeroes);

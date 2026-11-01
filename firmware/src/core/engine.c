@@ -367,7 +367,7 @@ static void ramp_start(ramp_kind_t kind, int32_t to_uv, uint32_t rate_uv_s, int3
     }
 }
 
-/* status: "reached", or "compliance" when a trip ended the ramp at 0 V */
+/* status: "reached"; "compliance" or "aborted" when the ramp was ended at 0 V */
 static void emit_src_done(const char *status)
 {
     char buf[64];
@@ -453,18 +453,18 @@ bool engine_arm_prepare(void)
     return out_load(0, V_LIMIT_MAX_UV, false);
 }
 
-void engine_zero_output_now(void)
+void engine_zero_output_now(const char *why)
 {
     ramp_kind_t was = s_out.ramp;
     s_out.ramp = RAMP_NONE;
     if (!out_load(0, V_LIMIT_MAX_UV, true)) {
-        return;   /* out_load latched F_DAC_SPI */
+        return;   /* out_load latched a fault */
     }
     /* a ramp cut short still ends with its event */
     if (was == RAMP_DISARM) {
         s_out.disarm_done = true;   /* the zero code is loaded: the disarm is complete */
     } else if (was == RAMP_SRC) {
-        emit_src_done("compliance");
+        emit_src_done(why);
     }
 }
 
@@ -530,7 +530,7 @@ static void compliance_trip(int64_t i_pa)
     }
     bool was_zero = (s_out.ramp == RAMP_NONE && s_out.code == engine_zero_code());
     uint32_t epoch = s_epoch;
-    engine_zero_output_now();
+    engine_zero_output_now("compliance");
     if (epoch != s_epoch) {
         return;
     }

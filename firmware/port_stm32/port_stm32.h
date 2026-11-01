@@ -104,10 +104,12 @@ extern const uint8_t __cal_flash_start[]; /* 0x08004000, sectors 1 and 2    */
 extern const uint8_t __cal_sector_bytes[];/* absolute symbol: 16 KiB        */
 
 #define STM32_STACK_CANARY  0x5AFEC0DEu
-/* The lowest 32 B of the thread stack are an MPU no-access region (system.c),
- * so an overflow faults (MemManage) before it leaves SRAM; the canary is the
- * first word above it. */
-#define STM32_MPU_GUARD_BYTES 32u
+/* The lowest 128 B of the thread stack are an MPU no-access region
+ * (system.c), so an overflow faults (MemManage) before it leaves SRAM; the
+ * canary is the first word above it. 128 B covers the largest exception
+ * frame (104 B with the FP context: thread code uses the FPU, so FPCA is set):
+ * any frame stacked from a PSP at or below the canary starts in the guard. */
+#define STM32_MPU_GUARD_BYTES 128u
 #define STM32_CANARY_WORD     (STM32_MPU_GUARD_BYTES / 4u)
 
 /* ---- exception and interrupt handlers (startup.c vector table) ------------------ */

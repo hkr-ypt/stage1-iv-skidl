@@ -80,8 +80,14 @@ bool         tok_eq(tok_t t, const char *s);
 
 /* ---- service -------------------------------------------------------------- */
 #define PROTO_HOLD_MAX     1024u   /* events held during one command          */
-#define PROTO_AFTER_MAX    1536u   /* events waiting for pending PT records   */
-#define PROTO_AFTER_EVENTS 16u     /* ... at most this many                    */
+#define PROTO_AFTER_MAX    2048u   /* events waiting for pending PT records   */
+/* A command is parsed only while the ordered queue has room for everything it
+ * can lead to: SWEEP_BEGIN (<= PROTO_RESP_MAX), SWEEP_END (160), four STATE
+ * events (96 each: sweeping, then disarming/disarmed or fault) and their
+ * entry headers. So a host that stops reading holds back its own commands
+ * instead of losing their events. */
+#define PROTO_AFTER_HDR      6u
+#define PROTO_AFTER_RESERVE  (PROTO_RESP_MAX + 160u + 4u * 96u + 6u * PROTO_AFTER_HDR)
 #define PROTO_PT_LINE_MAX  200u
 #define PROTO_EVT_RESERVE  256u
 

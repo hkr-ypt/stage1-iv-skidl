@@ -59,8 +59,11 @@ The user-visible ones:
   index and current are in `SWEEP_END`.
 * ADC errors latch a fault in every state, `DISARMED` included.
 * `CAL.SAVE` is a deferred command (it waits for an idle ADC).
-* `SRC_DONE` carries `status=reached|compliance`; `SWP.RUN` answers
+* `SRC_DONE` carries `status=reached|compliance|aborted`; `SWP.RUN` answers
   `ERR BUSY` while an `SRC` ramp runs.
+* A host that stops reading behind unread records also stops getting its
+  commands parsed once the ordered-event queue is about a third full: they
+  wait in the receive buffer rather than lose their events.
 * The session zero is marked stale at the start of every new host session.
 
 ## 4. Residual risks (unchanged from spec §3.3)

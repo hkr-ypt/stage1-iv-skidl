@@ -33,6 +33,9 @@
 #if (PROTO_TX_RING < PT_MIN_FREE + PROTO_PT_LINE_MAX)
 #error "PROTO_TX_RING too small for the output priorities"
 #endif
+#if (PROTO_AFTER_MAX < PROTO_AFTER_RESERVE + 2u * (PROTO_AFTER_HDR + 160u))
+#error "PROTO_AFTER_MAX too small for its command reserve"
+#endif
 
 /* ---- line builder ------------------------------------------------------------ */
 
@@ -307,15 +310,12 @@ static struct {
     bool          in_cmd;
     char          hold[PROTO_HOLD_MAX];
     size_t        hold_len;
-    /* events ordered after the records pushed before them: text in after[],
-     * one entry per event with its own watermark, released in FIFO order */
+    /* events ordered after the records pushed before them, released in FIFO
+     * order; each entry is a header (uint16 len, uint32 until: its own
+     * watermark, results_next_seq() when it was queued) and the line */
     char          after[PROTO_AFTER_MAX];
     size_t        after_len;
-    struct {
-        uint16_t  len;
-        uint32_t  until;           /* results_next_seq() when it was queued */
-    }             after_ev[PROTO_AFTER_EVENTS];
-    uint8_t       after_n;
+    uint16_t      after_n;
     /* a finished deferred response waiting for TX space */
     char          resp[PROTO_RESP_MAX];
     size_t        resp_len;
@@ -429,6 +429,12 @@ static bool records_pending_before(uint32_t until)
     return results_peek_unsent(&r) && r.seq < until;
 }
 
+static void after_hdr(size_t off, uint16_t *len, uint32_t *until)
+{
+    memcpy(len, s_p.after + off, sizeof *len);
+    memcpy(until, s_p.after + off + sizeof *len, sizeof *until);
+}
+
 void proto_event_ordered(const lb_t *b)
 {
     if (!s_p.session) {
@@ -439,11 +445,12 @@ void proto_event_ordered(const lb_t *b)
         proto_event(b->buf, b->len);
         return;
     }
-    if (s_p.after_n < PROTO_AFTER_EVENTS && s_p.after_len + b->len <= sizeof s_p.after) {
-        memcpy(s_p.after + s_p.after_len, b->buf, b->len);
-        s_p.after_len += b->len;
-        s_p.after_ev[s_p.after_n].len = (uint16_t)b->len;
-        s_p.after_ev[s_p.after_n].until = until;
+    if (s_p.after_len + PROTO_AFTER_HDR + b->len <= sizeof s_p.after) {
+        uint16_t len = (uint16_t)b->len;
+        memcpy(s_p.after + s_p.after_len, &len, sizeof len);
+        memcpy(s_p.after + s_p.after_len + sizeof len, &until, sizeof until);
+        memcpy(s_p.after + s_p.after_len + PROTO_AFTER_HDR, b->buf, b->len);
+        s_p.after_len += PROTO_AFTER_HDR + b->len;
         s_p.after_n++;
     } else {
         event_lost();
@@ -455,12 +462,16 @@ void proto_event_ordered(const lb_t *b)
 static void flush_after(void)
 {
     size_t off = 0;
-    uint8_t k = 0;
-    while (k < s_p.after_n && !records_pending_before(s_p.after_ev[k].until)) {
-        if (!tx_line(s_p.after + off, s_p.after_ev[k].len)) {
+    uint16_t k = 0;
+    while (k < s_p.after_n) {
+        uint16_t len;
+        uint32_t until;
+        after_hdr(off, &len, &until);
+        if (records_pending_before(until)
+            || !tx_line(s_p.after + off + PROTO_AFTER_HDR, len)) {
             break;   /* keep it and the rest for the next pass (order matters) */
         }
-        off += s_p.after_ev[k].len;
+        off += PROTO_AFTER_HDR + len;
         k++;
     }
     if (k == 0) {
@@ -468,14 +479,19 @@ static void flush_after(void)
     }
     memmove(s_p.after, s_p.after + off, s_p.after_len - off);
     s_p.after_len -= off;
-    memmove(&s_p.after_ev[0], &s_p.after_ev[k], (size_t)(s_p.after_n - k) * sizeof s_p.after_ev[0]);
-    s_p.after_n = (uint8_t)(s_p.after_n - k);
+    s_p.after_n = (uint16_t)(s_p.after_n - k);
 }
 
 /* true while a queued ordered event must go out before record `seq` */
 static bool event_due_before(uint32_t seq)
 {
-    return s_p.after_n > 0 && seq >= s_p.after_ev[0].until;
+    if (s_p.after_n == 0) {
+        return false;
+    }
+    uint16_t len;
+    uint32_t until;
+    after_hdr(0, &len, &until);
+    return seq >= until;
 }
 
 static void flush_hold(void)
@@ -770,7 +786,8 @@ void proto_service(uint64_t now_us)
     read_port(now_us);
     if (commands_deferred_pending() || s_p.resp_pending) {
         complete_deferred();
-    } else if (ring_free(&s_tx) >= CMD_MIN_FREE) {
+    } else if (ring_free(&s_tx) >= CMD_MIN_FREE
+               && sizeof s_p.after - s_p.after_len >= PROTO_AFTER_RESERVE) {
         while (next_line()) {
             bool blank = (s_p.line_len == 0 && !s_p.line_long && !s_p.line_bad);
             process_line();

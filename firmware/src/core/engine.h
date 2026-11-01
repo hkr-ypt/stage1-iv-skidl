@@ -67,8 +67,10 @@ bool     engine_disarm_done(void);
 /* FAULT entry (after dac_zero_safe): forget the output, abort the sweep with
  * status=fault, fail a running job. No DAC access. */
 void     engine_fault_entry(fault_t f);
-/* Compliance with on_compliance=stop: immediate zero code, no ramp. */
-void     engine_zero_output_now(void);
+/* Immediate zero code, no ramp (compliance with on_compliance=stop, DAC.RAW
+ * OFF). A disarm ramp cut short is complete; an SRC ramp cut short ends with
+ * SRC_DONE status=<why> ("compliance", "aborted"). */
+void     engine_zero_output_now(const char *why);
 
 /* ---- ADC, monitor and front-end check ----------------------------------------- */
 typedef struct {

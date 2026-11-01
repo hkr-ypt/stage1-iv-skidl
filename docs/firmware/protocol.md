@@ -64,10 +64,12 @@ command, field or error code is a protocol change and increments
   it, even while the host is not reading: a host may stop reading a sweep at
   `SWEEP_END`.
 - **Flow control.** The device never stops measuring for the host. It parses
-  a command only when its transmit buffer has room for the response, so a
-  host that does not read will not get answers either; records are kept in
-  a 1024-record ring (§6) and events beyond the buffer are dropped and
-  counted (§7).
+  a command only when its transmit buffer has room for the response and the
+  events the command can lead to (including the `SWEEP_BEGIN`, `SWEEP_END`
+  and `STATE` events waiting behind unread records), so a host that does not
+  read will not get answers either; further commands wait in the receive
+  buffer. Records are kept in a 1024-record ring (§6); events beyond the
+  buffers are dropped and counted (§7).
 
 ## 3. Tokens and numbers
 
@@ -137,7 +139,7 @@ also pulses NRST), or `none`. `crash=` names: `hardfault`, `memmanage`,
 |---|---|---|
 | `ARM` | DISARMED | Checks the preconditions (session, POST passed, ADC idle-able, a gate-open front-end check within 1 s, BOR level 3, valid configuration). `OK`, then `EVT STATE ARMING`, then `EVT STATE ARMED` 100 ms after the first heartbeat edge. Errors: `ERR STATE`, `ERR FAULT`, `ERR PRECOND <name>` |
 | `DISARM` | ARMING, ARMED, SWEEPING; DISARMED, DISARMING (no-op) | `OK`; aborts any sweep (`status=aborted`), ramps to 0 V at ≥ 10 V/s, zero pair, heartbeat off, `EVT STATE DISARMING reason=command` ... `EVT STATE DISARMED reason=command` (100 ms after the last edge) |
-| `SRC V=<volts>` | ARMED | Ramps the output to the level at `ramp_rate`; `OK`, then `EVT SRC_DONE v_v=<V> status=reached` when reached. A compliance trip during the ramp zeroes the output and ends it with `EVT SRC_DONE v_v=0.000000 status=compliance` (and `EVT WARN COMPLIANCE`). `ERR RANGE` beyond `v_limit` or the DAC range. A new `SRC` replaces the target of a ramp in progress |
+| `SRC V=<volts>` | ARMED | Ramps the output to the level at `ramp_rate`; `OK`, then `EVT SRC_DONE v_v=<V> status=reached` when reached. A compliance trip during the ramp zeroes the output and ends it with `EVT SRC_DONE v_v=0.000000 status=compliance` (and `EVT WARN COMPLIANCE`); bring-up `DAC.RAW OFF` ends it with `status=aborted`. `DISARM` or a fault ends a ramp with `EVT STATE` instead. `ERR RANGE` beyond `v_limit` or the DAC range. A new `SRC` replaces the target of a ramp in progress |
 | `FAULT.CLR` | FAULT (`ERR STATE` otherwise) | Clears the latched fault if its cause is gone and `T_DISARM` (100 ms) has elapsed since the last edge: `OK`, then `EVT STATE DISARMED`. Otherwise `ERR PRECOND <reason>`: `wait` (T_DISARM), `adc` (ADC not re-initialised and self-tested yet; the check is started, retry), `dac` (SPI1 still failing), `invariant`, `stack` and `clock` (these two need `RESET`) |
 | `RESET` | DISARMED, FAULT | `OK`, then a software reset 50–200 ms later (after the `OK` has left); the session ends |
 
@@ -280,13 +282,17 @@ PT <sweep_id>,<seq>,<idx>,<seg>,<t_set_us>,<t_i_us>,<t_v_us>,<dac_code>,<v_set_V
 | `EVT STATE <S> [fault=<F>] [reason=<R>]` | every state change |
 | `EVT FAULT <F> detail=<word>` | a fault is latched; `detail` names the check (`hb_gap`, `dac_spi`, `dac_scrub`, `adc_timeout`, `adc_readback`, `adc_stuck`, `adc_spi`, `stale`, `clip_i`, `clip_v`, `b_shadow`, `tim2_frozen`, `hb_state`, `hb_thread`, `canary`, `deadline`, `compliance`, `hse`, `post_init`, `post_negref`, `post_zero`, `post_adc`, `post_timeout`, `setpoint`) |
 | `EVT WARN <W> ...` | `KELVIN idx=<i>` (3 consecutive points, once per sweep), `NO_OUTPUT idx=<i>`, `LATE idx=<i>` (first in a sweep), `COMPLIANCE i_a=<A>` (output zeroed outside a sweep; with the output already at 0 V only the first trip, until the output is driven again), `HOST_TIMEOUT`, `SESSION_LOST` (dropped: no session), `AFE` (front-end check failed), `EVT_LOST n=<k>` |
-| `EVT SRC_DONE v_v=<V> status=<reached\|compliance>` | an `SRC` ramp ended: at its target, or at 0 V after a compliance trip |
+| `EVT SRC_DONE v_v=<V> status=<reached\|compliance\|aborted>` | an `SRC` ramp ended: at its target, or at 0 V after a compliance trip (`aborted`: bring-up `DAC.RAW OFF`) |
 | `EVT SWEEP_BEGIN id=<n> kind=<wp\|list> points=<N> t0_us=<µs> adc_rate=... n_avg=... settle_us=... first_settle_us=... ramp_rate=... v_limit=... i_compliance=... on_compliance=... end=... cal_source=... cal_seq=... g_dac_uv=... c_dac=... g_v_uv=... g_i_na=... r_s=... r_top=... i_plateau=... zero=<valid\|none\|stale> o_v=... o_i=... zero_sps=... zero_age_s=...` | sweep start |
 | `EVT SWEEP_END id=<n> status=<complete\|aborted\|compliance\|overflow\|session_lost\|host_timeout\|fault> points=<n> [fault=<F>] [trip_idx=<i> trip_i_a=<A>]` | sweep end, after every record of the sweep |
 
-Events are never allowed to block measurement: if the transmit buffer is
-full an event is dropped and counted; `EVT WARN EVT_LOST n=<k>` reports the
-loss once space is available. Measurement records are never dropped: if the
+Events are never allowed to block measurement: if the transmit buffer (or,
+for `SWEEP_BEGIN`/`SWEEP_END`/`STATE` waiting behind records, the ordered
+queue) is full, an event is dropped and counted; `EVT WARN EVT_LOST n=<k>`
+reports the loss once space is available. Because commands wait while the
+ordered queue lacks room for their events, a stalled host loses none of the
+events its own commands cause. `EVT FAULT` and `EVT WARN` are sent at once
+and can precede records measured before them. Measurement records are never dropped: if the
 host falls 1024 records behind, the sweep ends with `status=overflow`.
 
 ## 8. Example session

@@ -11,7 +11,7 @@
  *
  * SRAM 128 KiB at 0x20000000 (RM0383 §2.3), from the bottom up:
  *   .thread_stack  8 KiB  PSP of thread mode. At the BOTTOM so an overflow
- *                         runs into its lowest 32 B, an MPU no-access region
+ *                         runs into its lowest 128 B, an MPU no-access region
  *                         (stm32_core_init: MemManage), instead of into data.
  *                         The word above the guard is the canary
  *                         (port_stack_ok()).
@@ -174,7 +174,7 @@ SECTIONS
 ASSERT(__vectors_start == 0x08000000, "vector table must be at 0x08000000")
 ASSERT(ADDR(.text) >= 0x0800C000, "code must start in flash sector 3")
 ASSERT(__thread_stack_bottom == 0x20000000, "thread stack must sit at the bottom of SRAM")
-ASSERT((__thread_stack_bottom & 31) == 0, "the MPU guard region needs 32-byte alignment")
+ASSERT((__thread_stack_bottom & 127) == 0, "the MPU guard region needs 128-byte alignment")
 ASSERT(__noinit_end__ <= __fault_stack_bottom, "SRAM overflow: .data+.bss+.noinit reach the fault/handler stacks")
 ASSERT(SIZEOF(.data) + SIZEOF(.rodata) + SIZEOF(.text) <= LENGTH(FLASH), "flash overflow")
 ASSERT(!DEFINED(_sbrk) && !DEFINED(_malloc_r), "heap use is forbidden (_sbrk/_malloc_r linked)")

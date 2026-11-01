@@ -230,7 +230,7 @@ void stm32_core_init(void)
     NVIC_SetPriority(BusFault_IRQn, PRIO_FAULTS);
     NVIC_SetPriority(UsageFault_IRQn, PRIO_FAULTS);
 
-    /* MPU guard (PM0214 §4.5): region 0 = the lowest 32 B of the thread stack,
+    /* MPU guard (PM0214 §4.5): region 0 = the lowest 128 B of the thread stack,
      * no access, execute never. A thread-stack overflow (a push, or exception
      * stacking: MSTKERR) raises MemManage there instead of a bus error below
      * SRAM. PRIVDEFENA keeps the default map everywhere else; HFNMIENA = 0
