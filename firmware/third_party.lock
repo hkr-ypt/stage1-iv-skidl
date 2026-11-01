@@ -1,0 +1,7 @@
+# Pinned third-party sources for the Stage 1 I-V firmware.
+# Fetched by firmware/tools/fetch_deps.sh into firmware/third_party/ (gitignored).
+# Format: name  url  commit  tag  [sparse-path]
+tinyusb          https://github.com/hathach/tinyusb                  dae3f9a366bfcddbf9dcf1b48d7500286a849539  0.21.0
+cmsis_device_f4  https://github.com/STMicroelectronics/cmsis-device-f4  3b64b7b0b546cefe84f13c65508126eea58b97d8  v2.6.9
+cmsis_core       https://github.com/ARM-software/CMSIS_5              2b7495b8535bdcb306dac29b9ded4cfb679d7e5c  5.9.0   CMSIS/Core/Include
+unity            https://github.com/ThrowTheSwitch/Unity              cbcd08fa7de711053a3deec6339ee89cad5d2697  v2.6.1

@@ -1,0 +1,172 @@
+name: firmware
+
+# Firmware, simulator and host software (docs/firmware/verification.md).
+# Runs next to build.yml (the hardware checks, which also run the repository
+# path guard). Nothing here uses an absolute path; third-party sources are
+# fetched by commit hash (firmware/third_party.lock), never vendored.
+#
+# A check that cannot run FAILS here; it is never reported as passing:
+#   * the simulator suite runs with STAGE1IV_REQUIRE_SIM=1 and
+#     STAGE1IV_NO_SKIP=1 (a skipped pytest is a failure);
+#   * ctest fails on any test that does not run;
+#   * each tool the jobs need is installed explicitly and its absence fails.
+
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "firmware/**"
+      - "host/**"
+      - "docs/firmware/**"
+      - "blocks/**"
+      - "tools/check_no_abs_paths.py"
+      - ".github/workflows/firmware.yml"
+  pull_request:
+    paths:
+      - "firmware/**"
+      - "host/**"
+      - "docs/firmware/**"
+      - "blocks/**"
+      - "tools/check_no_abs_paths.py"
+      - ".github/workflows/firmware.yml"
+  workflow_dispatch:
+
+jobs:
+  host:
+    name: unit + system tests, simulator, host library (${{ matrix.variant }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [host, host-bringup]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends cmake ninja-build gcc
+          python -m pip install --upgrade pip
+          pip install "pyserial==3.5" "pytest>=7"
+          cmake --version
+      - name: Fetch pinned third-party sources (verified by commit hash)
+        run: firmware/tools/fetch_deps.sh
+      - name: Configure and build (ASan + UBSan)
+        working-directory: firmware
+        run: |
+          cmake --preset ${{ matrix.variant }}
+          cmake --build --preset ${{ matrix.variant }}
+      - name: Unit and system tests (ctest)
+        working-directory: firmware
+        run: ctest --preset ${{ matrix.variant }} --output-on-failure --no-tests=error
+      - name: Host library unit tests + end-to-end against the simulator
+        working-directory: host
+        env:
+          STAGE1IV_SIM: ${{ github.workspace }}/firmware/build/${{ matrix.variant }}/stage1_iv_sim
+          STAGE1IV_REQUIRE_SIM: "1"
+          STAGE1IV_NO_SKIP: "1"
+        run: python -m pytest -q -rA -p no:cacheprovider tests
+
+  coverage:
+    name: unit-test coverage (report only)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends cmake ninja-build gcc gcovr
+      - run: firmware/tools/fetch_deps.sh
+      - name: Build and test with gcov
+        working-directory: firmware
+        run: |
+          cmake --preset coverage
+          cmake --build --preset coverage
+          ctest --preset coverage --output-on-failure --no-tests=error
+          gcovr -r . --filter src/ --txt build/coverage/coverage.txt --print-summary build/coverage
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: firmware/build/coverage/coverage.txt
+
+  target:
+    name: STM32F411 images (release, debug, bringup) + link checks
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install the GNU Arm toolchain
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends cmake ninja-build \
+            gcc-arm-none-eabi libnewlib-arm-none-eabi binutils-arm-none-eabi
+          arm-none-eabi-gcc --version
+      - run: firmware/tools/fetch_deps.sh
+      - name: Build the three variants (-Werror)
+        working-directory: firmware
+        run: |
+          for p in fw-release fw-debug fw-bringup; do
+            cmake --preset "$p"
+            cmake --build --preset "$p"
+          done
+      - name: Link checks (no heap, no float printf, bring-up symbols, single writers, memory map, RAM budget)
+        working-directory: firmware
+        run: python3 tools/check_image.py build/fw-release build/fw-debug build/fw-bringup
+      - name: Reproducible (a second build in another directory is byte-identical)
+        working-directory: firmware
+        run: |
+          cmake -S . -B build/repro -G Ninja -DCMAKE_TOOLCHAIN_FILE=cmake/arm-none-eabi.cmake \
+                -DFW_BUILD_VARIANT=release -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/repro
+          cmp build/fw-release/stage1_iv_fw-release.bin build/repro/stage1_iv_fw-release.bin
+          cmp build/fw-release/stage1_iv_fw-release.hex build/repro/stage1_iv_fw-release.hex
+          sha256sum build/fw-*/stage1_iv_fw-*.bin
+      - name: A registered-PID build refuses the development PID
+        working-directory: firmware
+        run: |
+          if cmake -S . -B build/pidcheck -DCMAKE_TOOLCHAIN_FILE=cmake/arm-none-eabi.cmake \
+                   -DFW_USB_PID_REGISTERED=ON > /dev/null 2>&1; then
+            echo "FW_USB_PID_REGISTERED=ON with PID 0x0001 must not configure"; exit 1
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: firmware-images
+          path: |
+            firmware/build/fw-*/stage1_iv_fw-*.elf
+            firmware/build/fw-*/stage1_iv_fw-*.hex
+            firmware/build/fw-*/stage1_iv_fw-*.bin
+            firmware/build/fw-*/stage1_iv_fw-*.map
+
+  static:
+    name: static checks (cppcheck, nominal constants, path guard)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends cppcheck
+          pip install "pytest>=7"
+          cppcheck --version
+      - run: firmware/tools/fetch_deps.sh
+      - name: cppcheck (portable code, simulator, target port; both variants)
+        working-directory: firmware
+        run: |
+          COMMON="--enable=warning,performance,portability --std=c11 --error-exitcode=1 --inline-suppr --quiet
+                  -DFW_USB_PID=0x0001 -DFW_USB_PID_REGISTERED=0
+                  -Isrc -Isrc/port -Isrc/core -Isrc/drivers -Isrc/app -Isim"
+          for v in RELEASE BRINGUP; do
+            cppcheck $COMMON -DFW_VARIANT_$v=1 src sim
+          done
+          cppcheck $COMMON -DFW_VARIANT_RELEASE=1 -DSTM32F411xE -Iport_stm32 \
+                   --suppress=missingIncludeSystem port_stm32
+      - name: Nominal constants match the SKiDL blocks
+        run: |
+          python3 firmware/tools/check_nominal.py --verbose
+          python3 -m pytest -q -p no:cacheprovider firmware/tools/tests
+      - name: Path guard (no absolute paths)
+        run: python3 tools/check_no_abs_paths.py

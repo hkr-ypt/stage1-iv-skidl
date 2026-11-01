@@ -1,10 +1,14 @@
 # Firmware handoff — what the hardware requires of the firmware
 
-No firmware exists yet, and this document is not firmware. It lists the
-behaviour the **hardware** depends on, so that whoever writes the firmware
-inherits the requirements, not just the pinout. Nothing here is hardware
-protection. Where the hardware *does* protect, this document says so and
-what limits that protection has.
+This document lists the behaviour the **hardware** depends on, so that the
+firmware inherits the requirements, not just the pinout. Nothing here is
+hardware protection. Where the hardware *does* protect, this document says
+so and what limits that protection has.
+
+The firmware that implements these requirements is in `firmware/`
+(specification `docs/firmware/firmware_spec.md`, implementation notes
+`docs/firmware/architecture.md`). Where the firmware is stricter than a
+requirement below, the note **[firmware]** says how.
 
 Sources: the SKiDL blocks (`blocks/*.py`), the data sheets cited inline, and
 the hardware-audit corrections (`docs/audit_corrections.md`).
@@ -19,7 +23,7 @@ not running normally:
 | Condition | What the hardware does | Time to zero |
 |---|---|---|
 | Power-up | DAC8552 powers up at zero scale on both channels, and the midpoint now comes from channel B, so V_SWEEP = 8.03·(0 − 0/2) = 0 | immediate (POR) |
-| MCU reset, debugger halt, crash, PC5 stuck high or low, MCU unpowered | No heartbeat → DAC_ARM decays → U11 opens → DAC VREF pin pulled to 0 V by R35 → both DAC outputs 0 V whatever codes they hold → V_SWEEP ≈ 0 | ≤ ~52 ms (calculated) |
+| MCU reset, debugger halt, crash, PC5 stuck high or low, MCU unpowered | No heartbeat → DAC_ARM decays → U11 opens → DAC VREF pin pulled to 0 V by R35 → both DAC outputs 0 V whatever codes they hold → V_SWEEP ≈ 0 | PC5 low or floating: 52–54 ms nominal, ≤ 63 ms worst case; PC5 left high: 64–66 ms nominal, ≤ 77 ms worst case (simulated, `firmware_spec.md` §4.4). Bring-up limits: ≤ 70 ms / ≤ 85 ms |
 
 The residual at "zero" is offsets only: DAC zero-code error and U3/U5 offsets
 times the level-shift gain, estimated ≤ ~0.1–0.15 V (not a guaranteed value;
@@ -34,24 +38,31 @@ To **arm** the output the firmware must:
    codes only while disarmed, so they must be rewritten before arming.
 2. **Then start the heartbeat on PC5** (§2).
 3. Treat the output as live about **10 ms** after the heartbeat starts. The
-   hardware needs several edges to arm (calculated: ≥ 5 at 1 kHz). Do not
-   rely on being armed until about 100 ms (margin).
+   hardware needs several edges to arm (simulated: 2.1 ms nominal, 4.0 ms
+   worst case at 2 kHz). Do not rely on being armed until about 100 ms
+   (margin). **[firmware]** `ARMED` is reported 100 ms after the first edge;
+   the zero pair is written at every boot before any edge, and the firmware
+   never re-arms after a reset.
 
 To **disarm**, stop toggling PC5 and leave it static (low preferred). The
-output reaches zero within the ~52 ms decay. For an immediate zero, also
+output reaches zero within the decay above. For an immediate zero, also
 write channel A = channel B/2 (A = `0x8000` with B = `0xFFFF`).
+**[firmware]** An orderly disarm ramps to 0 V at ≥ 10 V/s, writes the zero
+code and only then stops PC5 (left low); every fault path, the fault
+handlers and a 2 ms dead-man timer write the zero pair immediately.
 
 ## 2. The heartbeat (PC5)
 
 | Requirement | Value | Why |
 |---|---|---|
 | Waveform | square wave, ~50 % duty | the pump transfers charge on rising edges (R36/C47/D6/C48/R37) |
-| Frequency | **≥ 1 kHz** (toggle at least every 0.5 ms); 1–5 kHz recommended | DAC_ARM ≈ 2.4 V nominal and ≥ 1.9 V worst case at 1 kHz against U11's guaranteed V_IH of 1.49 V. At 500 Hz the worst-case margin falls to ~0.1 V (simulated) |
+| Frequency | **≥ 1 kHz** (toggle at least every 0.5 ms); 1–5 kHz recommended | DAC_ARM 2.62 V nominal / 2.03 V worst case at 1 kHz against U11's guaranteed V_IH of 1.49 V; 2.70 / 2.15 V at 2 kHz; 2.42 / 1.76 V at 500 Hz (simulated, `firmware_spec.md` §4.4). **[firmware]** 2 kHz on a fixed 250 µs grid; any edge spacing > 1.0 ms is a fault |
 | Source | **software only.** Toggle from the main control loop after its health checks, never from a timer ISR, timer output compare/PWM, DMA or MCO | PC5 has no timer output function on the STM32F411 (DS10314: only EVENTOUT/ADC), so a peripheral cannot keep it toggling after the CPU stops. That protection is lost if a healthy ISR keeps toggling while the main loop is hung |
 | Debugging | any halt over ~50 ms disarms the output | intended: a halted controller must not hold a voltage on the DUT |
 
-The disarm time (~52 ms) and arm margins are **calculated** from a transient
-simulation of the pump. Bring-up measures them (`docs/bringup_checklist.md`).
+The disarm times and arm margins are **calculated** from a transient
+simulation of the pump. Bring-up measures them (`docs/bringup_checklist.md`
+§6, with the 70 ms / 85 ms limits).
 
 ## 3. DAC8552 (U4) — sweep range is a firmware contract on its positive side
 
@@ -68,7 +79,9 @@ V_SWEEP = (R4/R3)·(V_A − V_B/2) = 8.0321·(V_A − V_B/2), with V_A, V_B in 0
   is guaranteed to measure. **Firmware must clamp commands to ±10.0 V and
   must never write B < `0xFFFF` while armed.**
 * **Write B once per boot; trim the zero with A.** Changing B moves the
-  midpoint and the zero together.
+  midpoint and the zero together. **[firmware]** B = `0xFFFF` is rewritten
+  with every update (the pair below) and by a 100 ms scrub, so a corrupted
+  frame cannot persist; no production code path can produce another B.
 * **Simultaneous load** (SLAS430A, Table 1 and "Example 1"; control byte DB23…DB16 =
   `0 0 LDB LDA X BufSel PD1 PD0`):
   1. `0x00` + data → write buffer A, load nothing;
@@ -76,7 +89,8 @@ V_SWEEP = (R4/R3)·(V_A − V_B/2) = 8.0321·(V_A − V_B/2), with V_A, V_B in 0
 
   Use this for the boot write (A and B change together, no intermediate code
   pair). Single-channel updates of A during a sweep can use `0x10` (write
-  buffer A, load DAC A).
+  buffer A, load DAC A). **[firmware]** Every update uses the pair; `0x10` is
+  never used.
 * SPI1: SYNC (CS_DAC, PA4) idles high and is pulled up by R34 (100 k to +5VA)
   while the MCU's pins float. Logic levels: the DAC runs at 5 V, V_INH = 2.4 V,
   so 3.3 V drive is valid.
@@ -124,10 +138,13 @@ V_SWEEP = (R4/R3)·(V_A − V_B/2) = 8.0321·(V_A − V_B/2), with V_A, V_B in 0
   as "output disconnected / analog supply missing", not as an open DUT, and
   do not adapt any calibration to it. An open DUT reads the same way, so the
   distinction needs a known load at start-up (or the operator's word).
-* **Current-limit plateau** (~49 mA nominal, set by R7, not characterised by TI
-  at this setting) is normal operation, not a fault. Firmware may detect it
-  (I flat while V_SWEEP keeps moving) and must not report the plateau region as
-  DUT behaviour.
+* **Current-limit plateau** (~49 mA nominal, set by R7; a design value, not
+  characterised by TI at this setting and not yet measured) is normal
+  operation, not a fault. Firmware may detect it (I flat while V_SWEEP keeps
+  moving) and must not report the plateau region as DUT behaviour.
+  **[firmware]** Records on the plateau carry the `CLIM` flag; the threshold
+  comes from the `i_plateau` calibration coefficient, nominal 49 mA until the
+  bring-up measurement replaces it.
 
 ## 6. USB
 
@@ -137,7 +154,9 @@ V_SWEEP = (R4/R3)·(V_A − V_B/2) = 8.0321·(V_A − V_B/2), with V_A, V_B in 0
   sensing** (STM32F411 OTG_FS GCCFG: VBUS sensing off) and must never select
   PA9's OTG_FS_VBUS alternate function. It must detect cable attach and detach
   from PA0 itself and drive the soft connect (device disconnect bit)
-  accordingly.
+  accordingly. **[firmware]** PA0 is measured by ADC1 (attach > 3.8 V VBUS for
+  20 ms, detach < 3.0 V); losing VBUS, enumeration or DTR, or 30 s without a
+  byte from the host, disarms the output (`docs/firmware/protocol.md` §1).
 * The board is powered from the bench supply at J1, never from VBUS.
 
 ## 7. Other pins

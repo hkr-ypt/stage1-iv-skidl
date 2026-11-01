@@ -19,3 +19,8 @@ kicad_paths.local.json
 build/
 # KiCad writes per-user view state next to a project it opens.
 stage1_iv.kicad_prl
+
+# Firmware: third-party sources fetched by firmware/tools/fetch_deps.sh, build trees
+firmware/third_party/
+.pytest_cache/
+*.egg-info/

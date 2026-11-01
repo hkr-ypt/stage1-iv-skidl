@@ -1,0 +1,62 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": { "major": 3, "minor": 25, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "host",
+      "displayName": "Host: unit tests + simulator (release variant, ASan/UBSan)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/host",
+      "cacheVariables": { "FW_BUILD_VARIANT": "release", "FW_SANITIZE": "ON", "CMAKE_BUILD_TYPE": "Debug" }
+    },
+    {
+      "name": "host-bringup",
+      "displayName": "Host: unit tests + simulator (bringup variant, ASan/UBSan)",
+      "inherits": "host",
+      "binaryDir": "${sourceDir}/build/host-bringup",
+      "cacheVariables": { "FW_BUILD_VARIANT": "bringup" }
+    },
+    {
+      "name": "coverage",
+      "displayName": "Host: unit tests with gcov coverage (no sanitizers)",
+      "inherits": "host",
+      "binaryDir": "${sourceDir}/build/coverage",
+      "cacheVariables": { "FW_SANITIZE": "OFF", "FW_COVERAGE": "ON" }
+    },
+    {
+      "name": "fw-release",
+      "displayName": "STM32F411 firmware, release (production) variant",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/fw-release",
+      "toolchainFile": "${sourceDir}/cmake/arm-none-eabi.cmake",
+      "cacheVariables": { "FW_BUILD_VARIANT": "release", "CMAKE_BUILD_TYPE": "Release" }
+    },
+    {
+      "name": "fw-debug",
+      "displayName": "STM32F411 firmware, debug variant",
+      "inherits": "fw-release",
+      "binaryDir": "${sourceDir}/build/fw-debug",
+      "cacheVariables": { "FW_BUILD_VARIANT": "debug", "CMAKE_BUILD_TYPE": "Debug" }
+    },
+    {
+      "name": "fw-bringup",
+      "displayName": "STM32F411 firmware, BRING-UP ONLY variant (unsafe test commands)",
+      "inherits": "fw-release",
+      "binaryDir": "${sourceDir}/build/fw-bringup",
+      "cacheVariables": { "FW_BUILD_VARIANT": "bringup" }
+    }
+  ],
+  "buildPresets": [
+    { "name": "host", "configurePreset": "host" },
+    { "name": "host-bringup", "configurePreset": "host-bringup" },
+    { "name": "coverage", "configurePreset": "coverage" },
+    { "name": "fw-release", "configurePreset": "fw-release" },
+    { "name": "fw-debug", "configurePreset": "fw-debug" },
+    { "name": "fw-bringup", "configurePreset": "fw-bringup" }
+  ],
+  "testPresets": [
+    { "name": "host", "configurePreset": "host", "output": { "outputOnFailure": true } },
+    { "name": "host-bringup", "configurePreset": "host-bringup", "output": { "outputOnFailure": true } },
+    { "name": "coverage", "configurePreset": "coverage", "output": { "outputOnFailure": true } }
+  ]
+}
