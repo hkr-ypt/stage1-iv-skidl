@@ -2,8 +2,79 @@
 output_buffer.py — SHEET 4: Power Buffer (Voltage Source Output Stage)
 =====================================================================
 
-OPA548 power buffer with native current limit (R7 sets I_LIMIT ~= 49 mA,
-spec §C.4) and an in-the-loop output isolation resistor R9 (spec §C.6).
+OPA547 power buffer with native current limit (R7 sets the plateau, ~49 mA
+in this board's conditions, spec §C.4) and an in-the-loop output isolation
+resistor R9 (spec §C.6).
+
+WHY U5 IS AN OPA547T, NOT AN OPA548T (final audit)
+--------------------------------------------------
+The OPA547, OPA548 and OPA549 are one family: same pinout, same 7-lead
+stagger-formed TO-220 (TI package KVT), same current-limit scheme
+(I_LIM = K * 4.75 V / (R_int + R_CL)), different output-current class:
+
+    part     limit range   K      R_int    limit tolerance (TI, 25 C)
+    OPA547   0..750 mA     5000   31.6 k   +/-10 mA typ, +/-30 mA max at 375 mA
+    OPA548   0..5 A        15000  13.75 k  +/-100 mA typ, +/-250 mA max at 2.5 A
+
+The errors of this limit circuit are currents, not percentages. TI's OPA549
+data sheet says of it that "offset in the current limit circuitry may
+introduce approximately +/-0.25 A variation at low current limit values" and
+sends lower-current applications to the smaller parts, and the typical
+curves of both smaller parts show the same thing: the change of the limit
+with supply voltage and with temperature is the same number of mA at every
+setting plotted. This design needs a ~49 mA plateau. On an OPA548 that is
+1 % of the range (R7 was 1.43 M, I_SET = 3.3 uA of 330 uA), well inside the
++/-100 mA typical tolerance, with a +0.8 mA/K drift and, at the lowest
+setting TI plots, 80 mA less limit at +/-15 V than at +/-30 V: the real
+limit could sit anywhere from zero (U5 unable to drive the DUT at all, in
+one polarity or both) to far above the passive 91 mA bound (no plateau;
+F1/F2 running near their hold current). TI's own OPA548 macromodel does not
+limit at all below ~87 mA with that resistor.
+
+THE SETTING: R7 = 348 k
+-----------------------
+The OPA547 equation holds at VS = +/-30 V and a 25 C case. This board runs
+U5 from +/-15 V, self-heated. From SBOS056F's typical curves (Current Limit
+vs Supply Voltage / vs Temperature, each read at 250, 375 and 500 mA):
+
+    +/-30 V -> +/-15 V:   +ILIM -12 mA,  -ILIM -4 mA
+    case temperature:     -0.19 mA/K  (-9 mA from 25 C to 70 C)
+    unit to unit:         +/-10 mA typical, +/-30 mA maximum
+
+    I_LIM(equation) = 5000 * 4.75 V / (31.6 k + 348 k) = 62.6 mA
+
+    expected plateau, +/-15 V       sourcing     sinking
+      case 25 C (cold, pulsed)       50.6 mA      58.5 mA
+      case 45 C (idle, warm)         46.8 mA      54.7 mA
+      case 70 C (held in limit)      42.0 mA      50.0 mA
+    all errors against it (85 C case, -30 mA unit):  9 mA
+    all errors with it (25 C case, +30 mA unit):    89 mA
+
+So the plateau is centred on the intended 49 mA where the board actually
+operates, it is above zero for every unit (the hard requirement: a limit at
+zero is an instrument with no output), and it stays below the passive
+bound (91 mA) and inside the measurable range (+/-97.8 mA).
+validation/measurement_range.py recomputes this on every build and fails if
+the low end is not above zero. 453 k, the value the bare equation gives for
+49 mA, fails it: its low end is -4 mA. The plateau is not a precision
+quantity on any of these parts; bring-up measures it in both polarities
+and firmware uses the measured value. To move one unit's plateau, change
+R7: about 6 k per mA (larger R7 = less current). TI's OPA547 macromodel
+gives +74 / -67 mA with 348 k at +/-15 V (+75 / -73 mA at +/-30 V: it
+carries a +10..12 mA offset of its own, which is within the typical
+tolerance, and has no temperature dependence); the data sheet's measured
+typical curves are taken as the better guide, and the design holds for
+either.
+
+Nothing else changes with the part: output swing (V+) - 1.8 V / (V-) + 1.2 V
+at 0.1 A (guaranteed, SBOS056F) against the 10.95 V this stage needs; input
+range (V+) - 3 V; 1 MHz GBW; unity-gain stable; E/S and thermal shutdown as
+before; tab on V-. Offset (5 mV max) and quiescent current (15 mA max) are
+lower than the OPA548's (10 mV, 20 mA). Its 0.5 A continuous rating is far
+above the 143 mA fault envelope that R30 sets (Sheet 8). The schematic symbol
+and the nets keep their OPA548 names (the pinout is identical and
+tools/author_project_symbols.py cross-checks it against BOTH data sheets);
+the fitted part is the value and MPN of U5.
 
 Feedback (VO_SENSE) is tapped on the FAR side of R9 so the amplifier regulates
 the voltage delivered past the isolation resistor. R9's drop is NOT corrected
@@ -11,25 +82,29 @@ downstream — which is exactly why the independent Kelvin sense (Sheet 6) exist
 
 E/S is tied permanently enabled through R8 to +15VA (MCU-driven shutdown is a
 deferred extension point, spec §C.6). E/S is NOT a safe-state mechanism: a
-disabled OPA548 output still leaks a few mA (SBOS070D Fig. 16, typical), which
-into an open or high-impedance DUT is not "off". The safe state is the DAC
-reference gate on Sheet 3.
+disabled output still leaks (SBOS056F "Output leakage current", typical),
+which into an open or high-impedance DUT is not "off". The safe state is the
+DAC reference gate on Sheet 3. The pin may be taken to V+ (absolute maximum
+"Input shutdown voltage: V+").
 
 R9 (10 ohm, in the loop): 1206, +/-1 %, >= 0.25 W. Its worst steady
-dissipation is ~0.16 W, with U5's output driven into a rail and the
-current set only by R9 + F1 + R30 + R10 (docs/physical_design.md, R30 fault
-envelope); 0.25 W at 70 C covers that with 1.5x margin.
+dissipation is 0.21 W, with U5's output driven into a rail, FORCE+ shorted to
+AGND and every series part at its minimum (validation/measurement_range.py
+recomputes it on every build against the 0.25 W rating).
 
 SNUBBER (audit V1) — R38 + C49, FITTED ONLY IF NEEDED
 ----------------------------------------------------
-SBOS070D §9.1 recommends an output R-C snubber when the OPA548 is driven into
-current limit, with 10 ohm + 0.01 uF to ground as the example (Fig. 38). This
-design sits in current limit by intent (49 mA), at a setting TI does not
-characterise, driving whatever capacitance the DUT cable brings. The footprints
-are on the board, from U5 OUT (VO_RAW) to AGND, and the parts are DNP: the
-bring-up checklist looks for oscillation at the current-limit plateau with a
-capacitive load, and fits them if it is seen. A pad pair is cheap; adding a
-snubber to a board without one is not.
+TI recommends an output R-C snubber when these amplifiers are driven into
+current limit: 3 ohm + 0.01 uF for the OPA547 (SBOS056F Fig. 11), 3..10 ohm
++ 0.01..0.1 uF for the OPA548 (SBOS070D §9.1, Fig. 38). This design sits in
+current limit by intent, but U5 never sees the DUT cable directly:
+F1 + R30 (>= 103 ohm) isolate it, so its load is resistive, and TI's OPA547
+macromodel stays quiet on the plateau with 100 pF..1 uF at the jacks (final
+audit). The footprints are on the board, from U5 OUT (VO_RAW) to AGND, and
+the parts are DNP: the bring-up checklist looks for oscillation at the
+current-limit plateau with a capacitive load, and fits them if it is seen
+(start from TI's 3 ohm + 0.01 uF). A pad pair is cheap; adding a snubber to a
+board without one is not.
 
 C15/C16 sit on the +/-15 V rails and are rated 50 V X7R (audit: >= 25 V).
 """
@@ -39,8 +114,10 @@ from skidl import Net
 
 
 def create_output_buffer_block(n):
-    U5 = OPA548()(ref="U5", tag="U5", value="OPA548T")
-    R7 = R()(ref="R7", tag="R7", value="1.43M",
+    U5 = OPA548()(ref="U5", tag="U5", value="OPA547T")
+    # R_CL for the OPA547 (header): 62.6 mA by the data-sheet equation, which
+    # is ~47 mA sourcing / ~55 mA sinking at +/-15 V with U5 warm.
+    R7 = R()(ref="R7", tag="R7", value="348k 1%",
              footprint="Resistor_SMD:R_1206_3216Metric")
     R8 = R()(ref="R8", tag="R8", value="10k")
     C14 = C()(ref="C14", tag="C14", value="0.01uF",

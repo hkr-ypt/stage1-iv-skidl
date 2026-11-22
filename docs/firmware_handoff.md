@@ -75,7 +75,7 @@ V_SWEEP = (R4/R3)·(V_A − V_B/2) = 8.0321·(V_A − V_B/2), with V_A, V_B in 0
   the ceiling rises (B = 0, A = full scale commands +20.1 V). The real ceiling
   is U3B's swing, guaranteed at least +13.8 V and at most the +15 V rail
   (OPA2277, SBOS079C). That is above U5's specified input range
-  ((V+) − 3 V = +12 V, SBOS070D), and above the ±11.8 V the voltage channel
+  ((V+) − 3 V = +12 V, SBOS056F), and above the ±11.8 V the voltage channel
   is guaranteed to measure. **Firmware must clamp commands to ±10.0 V and
   must never write B < `0xFFFF` while armed.**
 * **Write B once per boot; trim the zero with A.** Changing B moves the
@@ -131,17 +131,24 @@ V_SWEEP = (R4/R3)·(V_A − V_B/2) = 8.0321·(V_A − V_B/2), with V_A, V_B in 0
   as an open or swapped sense lead.
 * **Output disconnected (U12 open).** U12 disconnects FORCE+ whenever a
   ±15 V rail is missing or low (guaranteed open with either rail absent,
-  guaranteed closed at ≥ ±14.45 V; `final_corrections.md` §2.5). The MCU
-  has no signal for it and cannot command it. Firmware sees it as: I ≈ 0
+  guaranteed closed at the nominal ±15 V rails, from ±14.25 V at 25 °C and
+  ±14.7 V at 50 °C; `final_corrections.md` §2.5, `final_audit.md` §3.2).
+  The MCU has no signal for it and cannot command it. Firmware sees it as: I ≈ 0
   however V_SWEEP is set, with the Kelvin voltage near 0 V (or wherever the
   DUT's own charge leaves it) instead of following the command. Report that
   as "output disconnected / analog supply missing", not as an open DUT, and
   do not adapt any calibration to it. An open DUT reads the same way, so the
   distinction needs a known load at start-up (or the operator's word).
-* **Current-limit plateau** (~49 mA nominal, set by R7; a design value, not
-  characterised by TI at this setting and not yet measured) is normal
-  operation, not a fault. Firmware may detect it (I flat while V_SWEEP keeps
-  moving) and must not report the plateau region as DUT behaviour.
+* **Current-limit plateau** (centred on ~49 mA by R7 = 348 kΩ on the
+  OPA547T now fitted as U5; a design centre, not yet measured) is normal
+  operation, not a fault. Hardware facts firmware should expect
+  (`final_audit.md` §3.1): the two polarities differ (the sinking limit is
+  typically about 8 mA higher than the sourcing one); the plateau falls by
+  about 0.2 mA per kelvin as U5 warms, so it sags by several mA during a
+  long hold on the plateau; a board is in family anywhere from 30 to 75 mA,
+  and the data-sheet extremes are 9 and 89 mA. Firmware may detect it (I
+  flat while V_SWEEP keeps moving) and must not report the plateau region
+  as DUT behaviour.
   **[firmware]** Records on the plateau carry the `CLIM` flag; the threshold
   comes from the `i_plateau` calibration coefficient, nominal 49 mA until the
   bring-up measurement replaces it.

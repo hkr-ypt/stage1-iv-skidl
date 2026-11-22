@@ -284,6 +284,24 @@
           "7": "E/S"
         }
       },
+      "fitted_part_verified_against": {
+        "fitted_part": "OPA547T",
+        "source_document": "Texas Instruments OPA547 data sheet",
+        "document_number": "SBOS056F",
+        "revision": "F \u2014 JANUARY 2002, revised JULY 2005",
+        "table": "PIN CONFIGURATIONS drawing, page 2 (each package's lead labels read left to right as leads 1..7)",
+        "excerpt_file": "libraries/provenance/opa547_sbos056f_pin_configurations.txt",
+        "excerpt_sha256": "63066ec4a838917fd60b00710bcf7c58703e55e4933a041c2b7da101b20d1200",
+        "pins": {
+          "1": "VIN+",
+          "2": "VIN-",
+          "3": "ILIM",
+          "4": "V-",
+          "5": "V+",
+          "6": "VO",
+          "7": "E/S"
+        }
+      },
       "pins": [
         {
           "number": "1",

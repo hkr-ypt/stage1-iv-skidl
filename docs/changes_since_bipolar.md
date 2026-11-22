@@ -1,5 +1,11 @@
 # Changes since the bipolar design (`bfbb140`)
 
+> **Later changes.** This list is kept as written. Do not order parts from
+> it: the final design audit ([`final_audit.md`](final_audit.md)) changed U5
+> to an **OPA547T**, R7 to **348 kΩ**, D7 to **BZT52B24** (±2 %), C26/C27 to
+> **18 pF** and R30's order code to **PR02000201000FA100**. The current
+> parts list is [`component_manifest.md`](../component_manifest.md).
+
 Every change made to the design after commit `bfbb140` (the merge of the
 bipolar routed board, PR #12), in one place. It covers two rounds:
 

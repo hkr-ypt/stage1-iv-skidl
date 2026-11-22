@@ -4,10 +4,12 @@ This is the procedure for the first assembled boards after the final hardware
 audit corrections (`docs/audit_corrections.md`) and the remaining hardware
 corrections (`docs/final_corrections.md`). Some of the corrections rest on
 calculation, data-sheet limits or simulation, never on a measurement: the
-reference-gate charge pump, the F1 thermal placement, the OPA548 behaviour at
-its uncharacterised current-limit setting, the U12 switching thresholds and
-the R10 thermal EMF. This checklist is where they get measured. Record every measured value. A **STOP** step means stop: do not go
-on to the next section until it is understood.
+reference-gate charge pump, the F1 thermal placement, the U5 current-limit
+plateau, the U12 switching thresholds and the R10 thermal EMF. This checklist
+is where they get measured. The final design audit (`docs/final_audit.md`)
+then changed four fitted parts or values (U5, R7, D7, C26/C27) and one order
+code (R30); they are marked below. Record every measured value. A **STOP**
+step means stop: do not go on to the next section until it is understood.
 
 The firmware requirements referred to here are in
 [`firmware_handoff.md`](firmware_handoff.md). Test firmware is needed from
@@ -34,9 +36,12 @@ decay.
 - [ ] **Fit / DNP.** Leave **R14, R38 and C49 unfitted** (DNP; the board and
   schematic carry the DNP attribute and the BOM excludes them). Everything
   else in `component_manifest.md` with Fit = `fit` is fitted.
-- [ ] **R30, Vishay PR02 2 W (PR02000201000FB100).** Axial, 12.7 mm pitch,
-  1.2 mm holes. Form the leads so the **body sits about 3 mm above the board**
-  (a lead kink or a spacer). In the worst rail fault it dissipates up to
+- [ ] **R30, Vishay PR02 2 W (PR02000201000FA100: copper 0.78 mm leads,
+  axial, taped).** It must be the **copper-lead** PR02: the FeCu-lead version
+  is a 1.3 W part. (The order code used before ended in …FB100, which is not
+  a valid PR02 number.) Axial, 12.7 mm pitch, 1.2 mm holes; the body is up to
+  10.0 mm long, so the bends start close to the end caps. Form the leads so
+  the **body sits about 3 mm above the board** (a lead kink or a spacer). In the worst rail fault it dissipates up to
   1.96 W (98 % of rating, `final_corrections.md` §2.7). F1 is now 14 mm
   away, body to body.
 - [ ] **R10, Vishay Dale RS02B10R00BE12 (10.00 Ω 0.1 % 3 W wirewound).**
@@ -48,10 +53,15 @@ decay.
 - [ ] **U12, Toshiba TLP176AM(TPL,E** (SOIC-4 photorelay). Pin 1 (LED anode)
   to the dot on the fab outline. Pins 1 (anode) and 3 (cathode) are the LED,
   4 and 6 the output; the package has no pins 2 and 5.
-- [ ] **U5, OPA548T (TO-220-7, staggered).** The footprint is KiCad's
-  staggered TO-220-7 with 1.2 mm drills. Check that the purchased part's lead
-  form matches the stagger before soldering: the pin functions are verified
-  against SBOS070D, but the stagger comes from the package drawing.
+- [ ] **U5, OPA547T (TI package KVT: TO-220-7, stagger-formed leads).** The
+  board and BOM say OPA547T; the schematic symbol and the silkscreen
+  reference are unchanged from the OPA548T it replaces (same pinout and
+  package). **Do not fit an OPA548T**: R7 is sized for the OPA547. Not the
+  OPA547T-1 (straight leads) nor the OPA547F (DDPAK). The footprint is
+  KiCad's staggered TO-220-7 with 1.2 mm drills; the pin functions are
+  verified against SBOS056F and SBOS070D and the hole pattern against TI's
+  KVT solder footprint. Check the purchased part's lead form against the
+  stagger before soldering.
 - [ ] **U5 tab is at V− (−15 V).** It must not touch any enclosure, bracket or
   grounded metal. If a heatsink is fitted, use an insulating pad and a
   shoulder washer, and check with an ohmmeter that the heatsink is open to the
@@ -62,8 +72,9 @@ decay.
   its anode, on pad 2, is on +3V3D now. D5 is bidirectional. New parts:
   - **D8 (MBR0540, top):** cathode on +15VA, anode on AGND;
   - **D9 (MBR0540, bottom side):** cathode on AGND, anode on −15VA;
-  - **D7 (BZT52C24, bottom side):** cathode on SSR_LED_K (U12 pin 3), anode
-    on −15VA;
+  - **D7 (BZT52B24, the ±2 % grade, e.g. Vishay BZT52B24-E3-08; bottom
+    side):** cathode on SSR_LED_K (U12 pin 3), anode on −15VA. A ±5 % or
+    ±6 % BZT52C24 is **not** a substitute (`final_audit.md` §3.2);
   - **U12:** pin 1 as above.
   A reversed D8 or D9 is a short across its rail at first power (§2 catches
   it).
@@ -73,7 +84,7 @@ decay.
   impedance, so flux residue shows up directly as error or drift:
   - U7 inputs and the Kelvin attenuator R12/R13/R32/R33 (≈ 8 kΩ Thevenin);
   - the U6 and U7 RG pins, including the **empty R14 pads**;
-  - the OPA548 ILIM node (R7 = 1.43 MΩ, C14);
+  - the U5 ILIM node (R7 = 348 kΩ, C14);
   - DAC_VREF (R35 = 1 MΩ) and DAC_ARM (R37 = 100 kΩ, C48). Leakage here
     shifts the arm and disarm thresholds;
   - VREF_2V5 and the U3 summing nodes.
@@ -115,10 +126,12 @@ FORCE+/FORCE− with the Kelvin leads on its terminals.
 
 - [ ] Supply currents at power-up, recorded per rail. **STOP** on any rail at
   its limit. Both ±15 V currents include the U12 LED string (next item).
-- [ ] **U12 LED string.** Voltage across R39 (620 Ω): expect ≈ 4.8 V
-  (≈ 7.7 mA, typical values at ±15 V); the data-sheet bounds give 3.0 mA at
-  ±14.45 V and 11.6 mA at ±15.5 V. Below 1.9 V (3 mA) U12 is not guaranteed
-  on: **STOP**.
+- [ ] **U12 LED string.** Voltage across R39 (620 Ω): expect ≈ 4.7 V at the
+  instant of power-up, settling within seconds to ≈ 3.5 V (≈ 5.6 mA,
+  typical values at ±15 V) as D7 warms itself by about 60 K. The data-sheet
+  bounds at ±15.0 V are ≥ 2.9 V (4.7 mA) at 25 °C and ≥ 2.5 V (4.0 mA) at
+  50 °C, and ≤ 5.3 V (8.5 mA) at ±15.5 V. Below 1.9 V (3 mA) U12 is not
+  guaranteed on: **STOP**.
 - [ ] **U12 closed:** J4 (FORCE+) follows R30 pad 2. With 1 kΩ load and the
   output at 0 V this is a small-signal check; at 10 mA (§7) the drop across
   U12 (R30 pad 2 to J4) is ≤ 20 mV (RON ≤ 2 Ω).
@@ -142,8 +155,9 @@ FORCE+/FORCE− with the Kelvin leads on its terminals.
 
 ## 5. Partial-supply states and sequencing (U12, D8/D9)
 
-`final_corrections.md` §2.5 gives what is guaranteed (U12 open with either
-rail absent; closed at ≥ ±14.45 V) and what is only expected (closing near
+`final_corrections.md` §2.5 and `final_audit.md` §3.2 give what is
+guaranteed (U12 open with either rail absent; closed at the nominal ±15 V
+rails, from ±14.25 V at 25 °C) and what is only expected (closing near
 26 V total). This section measures it. MCU in reset, 1 kΩ load across the
 jacks with the Kelvin leads on it.
 
@@ -158,7 +172,7 @@ jacks with the Kelvin leads on it.
 - [ ] **U12 thresholds.** Ramp ±15 V together slowly (tracking supply, or both
   current-limited supplies turned up together) and record the total
   rail-to-rail voltage at which J4 starts to follow R30 pad 2, and on the way
-  down where it stops. Expected ≈ 26 V; it must lie between 16 V and 28.9 V.
+  down where it stops. Expected ≈ 26 V; it must lie between 16 V and 28.5 V.
 - [ ] **Transients.** Scope TP1, TP2 and FORCE+ while switching the supplies
   in different orders: all together; ±15 V first, then +5 V; +5 V first,
   then ±15 V; one ±15 V rail at a time; and the reverse orders at power-down,
@@ -240,25 +254,42 @@ again afterwards.
   channels track, with signed readings and no step at 0 V.
 - [ ] **Current-limit plateau.** Short FORCE+ to FORCE− (Kelvin leads on the
   short) and command +10 V (`SRC V=10`, `MEAS? N=16`). Record the plateau
-  current, and repeat at −10 V. The ≈ 49 mA figure is a **nominal design
-  value** from R7 (49.4 mA typical); TI does not characterise ILIM at this
-  setting, so it is not a specification. The measured value, smaller
+  current, and repeat at −10 V. The ≈ 49 mA figure is a **design centre**,
+  not a specification. With R7 = 348 kΩ the OPA547 data sheet's typical
+  curves give about **+51 mA / −59 mA cold, falling to about +42 mA /
+  −50 mA** as U5 warms on the plateau (the sinking limit is the larger),
+  ±10 mA typical between units; a board is in family anywhere from 30 to
+  75 mA, and the data-sheet extremes are 9 and 89 mA. Record the cold and
+  the settled value in both polarities. A plateau does not move when the
+  command goes from 8 V to 10 V; a current that follows the command (about
+  83 mA at 10 V into the short) is the series resistors, not the limit.
+  **STOP** if either polarity gives no output, or no plateau below 80 mA
+  (check that U5 is an OPA547T and R7 is 348 kΩ). The measured value, smaller
   polarity, becomes the calibration coefficient (`CAL.SET i_plateau=<A>`,
-  `CAL.SAVE`), which the firmware's `CLIM` classification uses.
+  `CAL.SAVE`), which the firmware's `CLIM` classification uses. To move a
+  unit's plateau, change R7: larger R7 gives less current, about 6 kΩ per
+  mA (for example 412 kΩ for 9 mA less, 300 kΩ for 9 mA more).
 - [ ] **Thermal soak on the plateau.** Hold the short at +10 V for 30 min at
   room temperature. Measure R30's body, F1's and F2's bodies and U5's tab
   with a thermocouple or IR camera. **Neither F1 nor F2 may trip.** Record
-  their temperature rise. Bel's 0ZRM0010FF1E hold current is 100 mA at 23 °C
-  and 68 mA at 50 °C, against a 49 mA *typical* plateau. F1 is now at the
-  bottom edge, 14 mm from R30 and 23 mm from U5 (`final_corrections.md`
-  §2.1). If either PTC runs warmer than about 45 °C, or trips, or the plateau
-  is above ≈ 60 mA, swap in 0ZRM0017FF1E (170 mA hold, same footprint) and
-  report it.
+  their temperature rise. Bel's 0ZRM0010FF1E hold current is 100 mA at 23 °C,
+  80 mA at 40 °C and 68 mA at 50 °C, against a plateau of typically
+  42…59 mA. F1 is now at the bottom edge, 14 mm from R30 and 23 mm from U5
+  (`final_corrections.md` §2.1). If either PTC runs warmer than about 45 °C,
+  or trips, or the settled plateau is above ≈ 60 mA, first bring the plateau
+  down with R7 (previous item). The remaining contingency is 0ZRM0017FF1E
+  (170 mA hold, same footprint) **for F1 only**, reported when used: its
+  minimum resistance is 2.0 Ω, which takes R30 to 1.99 W of 2 W in the
+  FORCE+-to-AGND rail fault. **F2 stays 0ZRM0010FF1E**: with 2.0 Ω there, an
+  external 15.5 V on J7 would put 16.7 W into R10, above its 15 W
+  short-time rating (`final_corrections.md` §2.6).
 - [ ] **Snubber decision (audit V1).** On the plateau, drive the load through
   a 1 m DUT cable, and then with 10 nF and 100 nF across the jacks. Scope U5
   OUT (VO_RAW, R9's U5-side pad) for oscillation. If it oscillates, fit
-  **R38 = 10 Ω, C49 = 10 nF 50 V X7R** (SBOS070D §9.1) and repeat. Record the
-  decision on the board's traveller.
+  **R38 = 10 Ω, C49 = 10 nF 50 V X7R** and repeat; TI's own example for the
+  OPA547 is 3 Ω + 0.01 µF (SBOS056F Fig. 11), so try 3.3 Ω if 10 Ω does not
+  cure it. Have both values in the kit. Record the decision on the board's
+  traveller.
 - [ ] **Rail-fault envelope (optional; costs a board).** The design bounds a
   DUT short at 128 mA and FORCE+ to AGND at 143 mA, with up to 1.96 W in R30
   (98 % of its 2 W rating) in the stacked worst case. Test it only if a board

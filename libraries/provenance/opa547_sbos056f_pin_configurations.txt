@@ -1,0 +1,50 @@
+SOURCE      : Texas Instruments, OPA547 High-Voltage, High-Current Operational
+              Amplifier, data sheet SBOS056F (January 2002, revised July
+              2005), 24 pages, "PIN CONFIGURATIONS", page 2.
+URL         : https://www.ti.com/lit/ds/symlink/opa547.pdf
+FILE SHA256 : 82b5d94d1c84d1f7ebafb3c3a1015151493735a50a01b487633cef0513e32ee8
+EXTRACT     : pdftotext -layout -f 2 -l 2 (poppler 24.02), the lines of the
+              "PIN CONFIGURATIONS" drawing copied verbatim below. This data
+              sheet has no pin table: the drawing numbers the leads
+              "1 2 3 4 5 6 7" left to right and labels each lead with a
+              leader line, the labels staggered over two text rows so that
+              they fit. The leader lines are graphics and do not survive
+              text extraction; the labels' left-to-right positions do.
+USE         : U5 is fitted with an OPA547T in the symbol and footprint that
+              were authored for the OPA548T. tools/author_project_symbols.py
+              reads each package's labels below in left-to-right order as
+              leads 1..7 and requires every lead to carry the same function
+              as the same-numbered pin of the OPA548 "Pin Functions" table
+              (opa548_sbos070d_pin_functions.txt), which the symbol is
+              already checked against. A disagreement stops the build.
+              Figure 1 of the same data sheet prints the same lead numbers
+              on the amplifier symbol (V+ 5, V- 4, inputs 1 and 2, output 6,
+              ILIM 3, E/S 7); that figure is not parsed.
+---------------- BEGIN VERBATIM EXCERPT ----------------
+PIN CONFIGURATIONS
+     Top Front View
+
+
+
+
+             7-Lead                                                              7-Lead                                                                          7-Lead
+         Stagger-Formed                                                     Straight-Formed                                                                   DDPAK (FA)
+            TO-220 (T)                                                        TO-220 (T-1)                                                                   Surface-Mount
+
+
+
+
+                                   1 2 3 4 5 6 7                                                     1 2 3 4 5 6 7                      1 2 3 4 5 6 7
+
+
+
+
+                                                                                                                                         VIN+ ILIM V+ E/S
+                                                                                                                                            VIN– V– VO
+
+                                   VIN+ ILIM V+ E/S                                                      VIN+ ILIM V+ E/S
+                                      VIN– V– VO                                                            VIN– V– VO
+
+
+                                                                            NOTE: Tabs are electrically connected to the V– supply.
+---------------- END VERBATIM EXCERPT ----------------

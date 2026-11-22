@@ -62,8 +62,9 @@ synthesized generic rectangle:
   literal `STD`; since every part now carries `RESOLVED` or
   `VERIFY-DATASHEET`, the flag is drawn **visible on every symbol**, stating on
   the sheet itself where that part's pin numbers came from. No part is
-  flagged `VERIFY-DATASHEET` any more: U5/OPA548T, the last one, is now
-  cross-checked against TI SBOS070D (`RESOLVED`). If a future part needs the
+  flagged `VERIFY-DATASHEET` any more: U5 (OPA548T symbol, OPA547T fitted),
+  the last one, is cross-checked against TI SBOS070D and SBOS056F
+  (`RESOLVED`). If a future part needs the
   flag, it will show on the sheet the same way.
 - **DNP parts** (R14, R38, C49) are emitted with `(in_bom no)` and
   `(dnp yes)`, so KiCad greys them out and leaves them out of BOM exports.

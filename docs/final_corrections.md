@@ -1,5 +1,14 @@
 # Final remaining hardware corrections — implementation record
 
+> **Later changes.** This record is kept as written. The final design audit
+> ([`final_audit.md`](final_audit.md)) changed four facts stated below:
+> U5 is an **OPA547T** with R7 = 348 kΩ (§2.7: on an OPA548 the 49 mA
+> setting is not merely uncharacterised, it can come out at zero); D7 is the
+> ±2 % **BZT52B24** and U12 is guaranteed closed from ±14.25 V at 25 °C, not
+> ±14.45 V (§2.5: the earlier figure left out the zener's self-heating);
+> R30's order code is **PR02000201000FA100**; and C26/C27 are 18 pF. The
+> passive fault envelope of §2.7 and everything in §2.1–§2.4 and §2.6 stand.
+
 This records the last round of hardware corrections after
 [`audit_corrections.md`](audit_corrections.md): what was changed, the
 analysis behind each change, how it was validated, and what is still open.

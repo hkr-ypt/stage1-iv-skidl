@@ -364,7 +364,7 @@
       (property "Value" "D_Zener" (at -3.81 -3.81 0) (effects (font (size 1.27 1.27)) (justify left)))
       (property "Footprint" "" (at 0 0 0) (effects (font (size 1.27 1.27)) hide))
       (property "Datasheet" "" (at 0 0 0) (effects (font (size 1.27 1.27)) hide))
-      (property "ki_description" "Zener diode (cathode = pin K)" (at 0 0 0) (effects (font (size 1.27 1.27)) hide))
+      (property "ki_description" "Zener diode, 24 V +/-2 % (cathode = pin K)" (at 0 0 0) (effects (font (size 1.27 1.27)) hide))
       (symbol "D_Zener_0_1"
         (rectangle (start -3.81 2.54) (end 3.81 -2.54) (stroke (width 0.254) (type default)) (fill (type background)))
       )
@@ -536,7 +536,7 @@
       (property "Value" "OPA548T" (at -7.62 -7.62 0) (effects (font (size 1.27 1.27)) (justify left)))
       (property "Footprint" "" (at 0 0 0) (effects (font (size 1.27 1.27)) hide))
       (property "Datasheet" "" (at 0 0 0) (effects (font (size 1.27 1.27)) hide))
-      (property "ki_description" "High-current power op-amp with current limit" (at 0 0 0) (effects (font (size 1.27 1.27)) hide))
+      (property "ki_description" "Power op-amp with adjustable current limit (OPA547T fitted)" (at 0 0 0) (effects (font (size 1.27 1.27)) hide))
       (symbol "OPA548T_0_1"
         (rectangle (start -7.62 6.35) (end 7.62 -6.35) (stroke (width 0.254) (type default)) (fill (type background)))
       )

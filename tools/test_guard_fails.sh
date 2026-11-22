@@ -431,6 +431,21 @@ assert old in s
 p.write_text(s.replace(old, "MountingHole_3.2mm_M3_Isolated\" F 110 60 0)"))
 '
 
+# --- the final hardware audit (docs/final_audit.md) -----------------------------
+
+# 34. U5 back to an OPA548T programmed for 49 mA: 1 % of that part's range and
+#     inside its +/-250 mA current-limit tolerance, so the real limit can be
+#     zero, i.e. an output stage that cannot drive the DUT at all
+expect_fail range "U5 current limit set inside the amplifier limit tolerance" '
+import pathlib
+p = pathlib.Path("blocks/output_buffer.py"); s = p.read_text()
+for old, new in (("value=\"OPA547T\"", "value=\"OPA548T\""),
+                 ("value=\"348k 1%\"", "value=\"1.43M\"")):
+    assert old in s
+    s = s.replace(old, new)
+p.write_text(s)
+'
+
 echo "----------------------------------------------------------------------"
 if [ "$FAILURES" -eq 0 ]; then
     echo "ALL INJECTED FAULTS CAUGHT — the guard works."

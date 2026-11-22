@@ -415,10 +415,14 @@ def D_TVS():
 
 
 def D_Zener():
-    # BZT52C24 (Diodes Inc. DS18004): 22.8..25.6 V at 5 mA, IR <= 0.1 uA at
-    # VR = 16.8 V, 370 mW at TA = 25 C, SOD-123. Device:D_Zener pin 1 = K.
+    # BZT52B24, the +/-2 % grade (Vishay doc. 86342, BZT52B24-E3-08):
+    # 23.52..24.48 V at 5 mA (pulse), ZZ <= 70 ohm, +8..+10 e-4/K, IR <=
+    # 0.1 uA at VR = 18 V, 300 mW on FR-4 (RthJA 420 K/W), SOD-123.
+    # Device:D_Zener pin 1 = K. It was the +/-6 % BZT52C24; see
+    # blocks/protection.py for why the grade matters in the U12 LED string.
     return _part("Device:D_Zener", "D", "Diode_SMD:D_SOD-123",
-                 "BZT52C24", "RESOLVED", "Zener diode (cathode = pin K)")
+                 "BZT52B24-E3-08", "RESOLVED",
+                 "Zener diode, 24 V +/-2 % (cathode = pin K)")
 
 
 def D_Schottky():
@@ -589,14 +593,21 @@ def TMUX1101():
 # =====================================================================
 
 def OPA548():
-    # No OPA548 symbol exists in the official KiCad libraries, so this is the
-    # project-local symbol in libraries/stage1_iv.kicad_sym. Its pin numbers
-    # are read from a published third-party KiCad library
-    # (libraries/provenance/opa548t_akl_symbol.txt) and are now CHECKED against
-    # the manufacturer's own pin table, TI SBOS070D "Pin Functions"
-    # (libraries/provenance/opa548_sbos070d_pin_functions.txt):
-    # tools/author_project_symbols.py refuses to build if the two disagree on
-    # any pin. Hence RESOLVED.
+    # The OPA547/OPA548 power op-amp position, U5. The FITTED part is the
+    # OPA547T (blocks/output_buffer.py says why); the symbol is the family
+    # symbol, which keeps its OPA548T name: both parts have the same seven
+    # pins in the same 7-lead stagger-formed TO-220 (TI package KVT).
+    #
+    # No OPA547/OPA548 symbol exists in the official KiCad libraries, so this
+    # is the project-local symbol in libraries/stage1_iv.kicad_sym. Its pin
+    # numbers are read from a published third-party KiCad library
+    # (libraries/provenance/opa548t_akl_symbol.txt) and are CHECKED against
+    # the manufacturer's own pin data for BOTH parts: TI SBOS070D "Pin
+    # Functions" (libraries/provenance/opa548_sbos070d_pin_functions.txt) and
+    # TI SBOS056F "Pin Configurations"
+    # (libraries/provenance/opa547_sbos056f_pin_configurations.txt).
+    # tools/author_project_symbols.py refuses to build if any of the three
+    # disagree on any pin. Hence RESOLVED.
     #
     # Footprint: the upstream TO-220-7 footprint with its holes opened from
     # 1.1 to 1.2 mm (tools/vendor_footprints.py, PROJECT_FOOTPRINTS). At the
@@ -605,8 +616,8 @@ def OPA548():
     return _part("stage1_iv:OPA548T", "U",
                  "stage1_iv:TO-220-7_P2.54x3.7mm"
                  "_StaggerOdd_Lead3.8mm_Vertical_Drill1.2mm",
-                 "OPA548T", "RESOLVED",
-                 "High-current power op-amp with current limit",
+                 "OPA547T", "RESOLVED",
+                 "Power op-amp with adjustable current limit (OPA547T fitted)",
                  aliases={"+IN": 1, "-IN": 2, "ILIM": 3, "OUT": 6},
                  keywords="power opamp current limit")
 

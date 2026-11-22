@@ -38,8 +38,8 @@ Total components: **141** — 132 on the board (129 fitted, 3 DNP footprints) an
 | C23 | 100nF 50V X7R | generic | Device:C | Capacitor_SMD:C_0603_1608Metric | 6 Voltage Sense | fit | OK — pin numbers read from Device.kicad_sym:1761 |
 | C24 | 1nF | generic | Device:C | Capacitor_SMD:C_0603_1608Metric | 7 ADC | fit | OK — pin numbers read from Device.kicad_sym:1761 |
 | C25 | 1nF | generic | Device:C | Capacitor_SMD:C_0603_1608Metric | 7 ADC | fit | OK — pin numbers read from Device.kicad_sym:1761 |
-| C26 | 22pF | generic | Device:C | Capacitor_SMD:C_0603_1608Metric | 7 ADC | fit | OK — pin numbers read from Device.kicad_sym:1761 |
-| C27 | 22pF | generic | Device:C | Capacitor_SMD:C_0603_1608Metric | 7 ADC | fit | OK — pin numbers read from Device.kicad_sym:1761 |
+| C26 | 18pF | generic | Device:C | Capacitor_SMD:C_0603_1608Metric | 7 ADC | fit | OK — pin numbers read from Device.kicad_sym:1761 |
+| C27 | 18pF | generic | Device:C | Capacitor_SMD:C_0603_1608Metric | 7 ADC | fit | OK — pin numbers read from Device.kicad_sym:1761 |
 | C28 | 100nF | generic | Device:C | Capacitor_SMD:C_0603_1608Metric | 7 ADC | fit | OK — pin numbers read from Device.kicad_sym:1761 |
 | C29 | 10uF/16V | generic | Device:C_Polarized | Capacitor_Tantalum_SMD:CP_EIA-3528-21_Kemet-B | 7 ADC | fit | OK — pin numbers read from Device.kicad_sym:5140 |
 | C30 | 100nF | generic | Device:C | Capacitor_SMD:C_0603_1608Metric | 7 ADC | fit | OK — pin numbers read from Device.kicad_sym:1761 |
@@ -68,7 +68,7 @@ Total components: **141** — 132 on the board (129 fitted, 3 DNP footprints) an
 | D4 | 1N4148W | 1N4148W | Device:D | Diode_SMD:D_SOD-123 | 6 Voltage Sense | fit | OK — pin numbers read from Device.kicad_sym:11674 |
 | D5 | SMBJ15CA | SMBJ15CA | Device:D_TVS | Diode_SMD:D_SMB | 8 Protection/DUT | fit | OK — pin numbers read from Device.kicad_sym:35674 |
 | D6 | BAT54S | BAT54S | Diode:BAT54S | Package_TO_SOT_SMD:SOT-23 | 2 MCU | fit | OK — pin numbers read from Diode.kicad_sym:5067 |
-| D7 | BZT52C24 | BZT52C24 | Device:D_Zener | Diode_SMD:D_SOD-123 | 8 Protection/DUT | fit | OK — pin numbers read from Device.kicad_sym:38003 |
+| D7 | BZT52B24 | BZT52B24-E3-08 | Device:D_Zener | Diode_SMD:D_SOD-123 | 8 Protection/DUT | fit | OK — pin numbers read from Device.kicad_sym:38003 |
 | D8 | MBR0540 | MBR0540 | Device:D_Schottky | Diode_SMD:D_SOD-123 | 1 Power | fit | OK — pin numbers read from Device.kicad_sym:25682 |
 | D9 | MBR0540 | MBR0540 | Device:D_Schottky | Diode_SMD:D_SOD-123 | 1 Power | fit | OK — pin numbers read from Device.kicad_sym:25682 |
 | FB1 | BLM21PG221SN1D | BLM21PG221SN1D | Device:FerriteBead | Inductor_SMD:L_0805_2012Metric | 1 Power | fit | OK — pin numbers read from Device.kicad_sym:42596 |
@@ -89,7 +89,7 @@ Total components: **141** — 132 on the board (129 fitted, 3 DNP footprints) an
 | R4 | 20.0k 0.1% | generic | Device:R | Resistor_SMD:R_0603_1608Metric | 3 DAC/Sweep | fit | OK — pin numbers read from Device.kicad_sym:104590 |
 | R5 | 2.49k 0.1% | generic | Device:R | Resistor_SMD:R_0603_1608Metric | 3 DAC/Sweep | fit | OK — pin numbers read from Device.kicad_sym:104590 |
 | R6 | 20.0k 0.1% | generic | Device:R | Resistor_SMD:R_0603_1608Metric | 3 DAC/Sweep | fit | OK — pin numbers read from Device.kicad_sym:104590 |
-| R7 | 1.43M | generic | Device:R | Resistor_SMD:R_1206_3216Metric | 4 Power Buffer | fit | OK — pin numbers read from Device.kicad_sym:104590 |
+| R7 | 348k 1% | generic | Device:R | Resistor_SMD:R_1206_3216Metric | 4 Power Buffer | fit | OK — pin numbers read from Device.kicad_sym:104590 |
 | R8 | 10k | generic | Device:R | Resistor_SMD:R_0603_1608Metric | 4 Power Buffer | fit | OK — pin numbers read from Device.kicad_sym:104590 |
 | R9 | 10R 1% 0.25W | generic | Device:R | Resistor_SMD:R_1206_3216Metric | 4 Power Buffer | fit | OK — pin numbers read from Device.kicad_sym:104590 |
 | R10 | 10.0R 0.1% 3W | RS02B10R00BE12 | Device:R | Resistor_THT:R_Axial_DIN0614_L14.3mm_D5.7mm_P20.32mm_Horizontal | 5 Current Sense | fit | OK — pin numbers read from Device.kicad_sym:104590 |
@@ -112,7 +112,7 @@ Total components: **141** — 132 on the board (129 fitted, 3 DNP footprints) an
 | R27 | 22R | generic | Device:R | Resistor_SMD:R_0603_1608Metric | 2 MCU | fit | OK — pin numbers read from Device.kicad_sym:104590 |
 | R28 | 100k | generic | Device:R | Resistor_SMD:R_0603_1608Metric | 2 MCU | fit | OK — pin numbers read from Device.kicad_sym:104590 |
 | R29 | 100k | generic | Device:R | Resistor_SMD:R_0603_1608Metric | 2 MCU | fit | OK — pin numbers read from Device.kicad_sym:104590 |
-| R30 | 100R 1% 2W | PR02000201000FB100 | Device:R | Resistor_THT:R_Axial_DIN0411_L9.9mm_D3.6mm_P12.70mm_Horizontal | 8 Protection/DUT | fit | OK — pin numbers read from Device.kicad_sym:104590 |
+| R30 | 100R 1% 2W | PR02000201000FA100 | Device:R | Resistor_THT:R_Axial_DIN0411_L9.9mm_D3.6mm_P12.70mm_Horizontal | 8 Protection/DUT | fit | OK — pin numbers read from Device.kicad_sym:104590 |
 | R31 | 0R | generic | Device:R | Resistor_SMD:R_0805_2012Metric | 1 Power | fit | OK — pin numbers read from Device.kicad_sym:104590 |
 | R32 | 10.0k 0.1% | generic | Device:R | Resistor_SMD:R_0603_1608Metric | 6 Voltage Sense | fit | OK — pin numbers read from Device.kicad_sym:104590 |
 | R33 | 10.0k 0.1% | generic | Device:R | Resistor_SMD:R_0603_1608Metric | 6 Voltage Sense | fit | OK — pin numbers read from Device.kicad_sym:104590 |
@@ -135,7 +135,7 @@ Total components: **141** — 132 on the board (129 fitted, 3 DNP footprints) an
 | U2 | REF5025AIDGKT | REF5025AIDGKT | Reference_Voltage:REF5025ADGK | Package_SO:VSSOP-8_3x3mm_P0.65mm | 1 Power | fit | OK — pin numbers read from Reference_Voltage.kicad_sym:29304 |
 | U3 | OPA2277UA | OPA2277UA | Amplifier_Operational:OPA2277 | Package_SO:SOIC-8_3.9x4.9mm_P1.27mm | 3 DAC/Sweep | fit | OK — pin numbers read from Amplifier_Operational.kicad_sym:47360 |
 | U4 | DAC8552IDGKR | DAC8552IDGKR | Analog_DAC:DAC8552 | Package_SO:VSSOP-8_3x3mm_P0.65mm | 3 DAC/Sweep | fit | OK — pin numbers read from Analog_DAC.kicad_sym:22608 |
-| U5 | OPA548T | OPA548T | stage1_iv:OPA548T | stage1_iv:TO-220-7_P2.54x3.7mm_StaggerOdd_Lead3.8mm_Vertical_Drill1.2mm | 4 Power Buffer | fit | OK — pin numbers read from opa548t_akl_symbol.txt:1 |
+| U5 | OPA547T | OPA547T | stage1_iv:OPA548T | stage1_iv:TO-220-7_P2.54x3.7mm_StaggerOdd_Lead3.8mm_Vertical_Drill1.2mm | 4 Power Buffer | fit | OK — pin numbers read from opa548t_akl_symbol.txt:1 |
 | U6 | INA128P | INA128P | Amplifier_Instrumentation:INA128 | Package_DIP:DIP-8_W7.62mm | 5 Current Sense | fit | OK — pin numbers read from Amplifier_Instrumentation.kicad_sym:2285 |
 | U7 | INA128P | INA128P | Amplifier_Instrumentation:INA128 | Package_DIP:DIP-8_W7.62mm | 6 Voltage Sense | fit | OK — pin numbers read from Amplifier_Instrumentation.kicad_sym:2285 |
 | U8 | ADS1256IDBR | ADS1256IDBR | stage1_iv:ADS1256 | Package_SO:SSOP-28_5.3x10.2mm_P0.65mm | 7 ADC | fit | OK — pin numbers read from ads1256_sbas288k_terminal_functions.txt:1 |

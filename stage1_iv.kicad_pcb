@@ -17624,7 +17624,7 @@
 			)
 			(uuid "3c93e944-3fc1-5d79-9421-edc5255b2792")
 		)
-		(property "Value" "OPA548T"
+		(property "Value" "OPA547T"
 			(at 3.81 2.15 0)
 			(layer "F.Fab")
 			(uuid "7afb66ad-e8d6-5a31-b510-96385035a58c")
@@ -17648,7 +17648,7 @@
 				)
 			)
 		)
-		(property "Description" "High-current power op-amp with current limit"
+		(property "Description" "Power op-amp with adjustable current limit (OPA547T fitted)"
 			(at 0 0 0)
 			(unlocked yes)
 			(layer "F.Fab")
@@ -17673,7 +17673,7 @@
 				)
 			)
 		)
-		(property "MPN" "OPA548T"
+		(property "MPN" "OPA547T"
 			(at 0 0 0)
 			(layer "F.Fab")
 			(hide yes)
@@ -18156,7 +18156,7 @@
 				)
 			)
 		)
-		(property "Value" "1.43M"
+		(property "Value" "348k 1%"
 			(at 0 1.83 0)
 			(layer "F.Fab")
 			(effects
@@ -26230,7 +26230,7 @@
 				)
 			)
 		)
-		(property "Value" "22pF"
+		(property "Value" "18pF"
 			(at 0 1.43 0)
 			(layer "F.Fab")
 			(effects
@@ -26417,7 +26417,7 @@
 				)
 			)
 		)
-		(property "Value" "22pF"
+		(property "Value" "18pF"
 			(at 0 1.43 0)
 			(layer "F.Fab")
 			(effects
@@ -29548,7 +29548,7 @@
 				)
 			)
 		)
-		(property "MPN" "PR02000201000FB100"
+		(property "MPN" "PR02000201000FA100"
 			(at 0 0 90)
 			(layer "F.Fab")
 			(hide yes)
@@ -30938,7 +30938,7 @@
 			)
 			(uuid "1e1c1b26-97c0-5c98-a7f0-ac853b7b1203")
 		)
-		(property "Value" "BZT52C24"
+		(property "Value" "BZT52B24"
 			(at 0 -2.1 0)
 			(layer "B.Fab")
 			(uuid "b844788d-fc5a-5f13-9846-be1d38aaa69a")
@@ -30964,7 +30964,7 @@
 				(justify mirror)
 			)
 		)
-		(property "Description" "Zener diode (cathode = pin K)"
+		(property "Description" "Zener diode, 24 V +/-2 % (cathode = pin K)"
 			(at 0 0 0)
 			(unlocked yes)
 			(layer "B.Fab")
@@ -30991,7 +30991,7 @@
 				(justify mirror)
 			)
 		)
-		(property "MPN" "BZT52C24"
+		(property "MPN" "BZT52B24-E3-08"
 			(at 0 0 0)
 			(layer "B.Fab")
 			(hide yes)

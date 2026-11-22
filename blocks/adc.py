@@ -48,8 +48,11 @@ def create_adc_block(n):
     U8 = ADS1256()(ref="U8", tag="U8", value="ADS1256IDBR")
     Y1 = Crystal()(ref="Y1", tag="Y1", value="7.6800MHz",
                    footprint="Crystal:Crystal_SMD_HC49-SD")
-    C26 = C()(ref="C26", tag="C26", value="22pF")
-    C27 = C()(ref="C27", tag="C27", value="22pF")
+    # Crystal load capacitors. SBAS288K Figure 22: "C1, C2: 5pF to 20pF";
+    # TI's own ADS1255 circuit (Figure 25) uses 18 pF with a 7.68 MHz
+    # crystal. They were 22 pF, outside that range (final audit).
+    C26 = C()(ref="C26", tag="C26", value="18pF")
+    C27 = C()(ref="C27", tag="C27", value="18pF")
     C28 = C()(ref="C28", tag="C28", value="100nF")
     C29 = C_POL("Capacitor_Tantalum_SMD:CP_EIA-3528-21_Kemet-B")(
         ref="C29", tag="C29", value="10uF/16V")
