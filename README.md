@@ -398,7 +398,7 @@ so the build **aborts** on any failure. Five hard checks:
 
 Current result: 141 parts (9 virtual PWR_FLAGs), 406 pads, **359 netted, 47
 declared no-connect, 0 unaccounted**. `tools/test_guard_fails.sh` reintroduces real defects one
-at a time (40 cases, among them the five structural ones above and, since the
+at a time (43 cases, among them the five structural ones above and, since the
 audit corrections, the midpoint back on VREF_2V5, the DAC reference wired
 around U11, a DC path onto DAC_ARM and R30 back to 1/4 W) and confirms every
 one is caught. `python3 validation/assertions.py` runs the connectivity
@@ -440,7 +440,7 @@ its PGA = 2 full scale. It also bounds the FORCE-path fault (U5 driven into a
 short, 143 mA with FORCE+ on AGND) and an external source on J7 (F2 + R10:
 1.19 A), and checks R9, R30 and R10 against their ratings. Current result:
 worst-case headroom 334 mV (V) and 115 mV (I); fault dissipation R30 1.96 W
-of 2 W, R9 0.21 W of 0.25 W, R10 0.16 W of 3 W and 14.3 W of its 15 W
+of 2 W, R9 0.21 W of 0.5 W, R10 0.16 W of 3 W and 14.3 W of its 15 W
 short-time rating ([`docs/final_corrections.md`](docs/final_corrections.md)
 §2.7).
 
@@ -519,11 +519,13 @@ Four rules follow from the hardware as it is:
   connect the jacks to the ±15 V rails.
 - **Switching off:** `DISARM` first; switch ±15 V off first, or all three
   rails together.
-- **An inductive DUT** (a coil, a relay, a motor, a transformer winding):
-  do not take it into current limit until the bring-up test of the fast
-  exit from the negative limit has passed on the board
-  (`docs/bringup_checklist.md` §7). In TI's model that exit can leave U5
-  oscillating with current still in the DUT.
+- **An inductive DUT** (a coil, a relay, a motor, a transformer winding:
+  about 0.2 mH or more): do not take it into current limit until the
+  bring-up test of the fast exit from the negative limit has passed on
+  the board (`docs/bringup_checklist.md` §7). In TI's model that exit,
+  which the safe state, the firmware's default current cut-off and large
+  sweep steps all make, can leave U5 oscillating with current still in
+  the DUT. Diodes with ordinary test leads are not affected.
 - **Nothing capacitive directly on VO_RAW or TP2** (a coaxial cable, a ×1
   probe): use a ×10 probe.
 

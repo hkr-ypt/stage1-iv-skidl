@@ -160,20 +160,26 @@ V_SWEEP = (R4/R3)·(V_A − V_B/2) = 8.0321·(V_A − V_B/2), with V_A, V_B in 0
   facts; no firmware was changed). `i_compliance` defaults to 50 mA, which
   `firmware_spec.md` calls "effectively off, under the hardware plateau".
   With the plateau expected at 40…65 mA, and the sinking one typically
-  above 50 mA, that default acts *before* U5 limits on many units: the
+  above 50 mA, that default acts *before* U5 limits on most units, and
+  typically in the sinking polarity: the
   output is zeroed instead of sitting on the plateau. Where the hardware
   plateau is meant to act, set `i_compliance` to its 100 mA maximum (the
   bring-up checklist does this before its plateau tests).
 * **An inductive DUT in negative current limit** (final audit, model
   evidence, `final_audit.md` §3.7). In TI's OPA547 model, when the command
-  falls at once out of the negative limit with 0.3…10 mH in the DUT, U5 is
-  left oscillating with about 60 mA still in the DUT although the command
-  is 0 V. The cut-off above, the fault paths, the dead-man and the
-  hardware reference gate all make that edge; the firmware's ramps
+  falls at once out of the negative limit with about 0.2…30 mH in the
+  DUT, U5 is left oscillating with tens of mA still in the DUT (about
+  60 mA at a 0 V command). The cut-off above (its default reaction, `on_compliance=stop`, writes
+  the zero code at once), the fault paths, the dead-man and the hardware
+  reference gate all make that edge, and so does a sweep point
+  that steps several volts out of the negative limit (sweep points are
+  written to the DAC as steps; in the model −10 V to −6 V or beyond
+  latches, −7 V does not). `SRC` and the sweep's pre-ramp and end ramp
   (≤ 10 V/s) do not. Until bring-up has tested it on the board, an
   inductive DUT is not to be taken into current limit. The state is left
-  by commanding the limit again and ramping out, or by switching ±15 V
-  off; a reading of current at a 0 V command is its signature.
+  for certain by switching ±15 V off, and in the model by commanding the
+  limit again and ramping out (a small command of either sign does not
+  end it); a reading of current at a 0 V command is its signature.
 
 ## 6. USB
 

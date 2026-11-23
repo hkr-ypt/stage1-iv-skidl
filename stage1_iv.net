@@ -2,7 +2,7 @@
   (version "D")
   (design
     (source "main.py")
-    (date "11/23/2026 03:28 PM")
+    (date "11/23/2026 11:05 PM")
     (tool "SKiDL (2.2.3)")
     (sheet
       (number 1)
@@ -561,7 +561,7 @@
         (field
           (name "SKiDL Tag") "C14")
         (field
-          (name "SKiDL Line") "blocks/output_buffer.py:200"))
+          (name "SKiDL Line") "blocks/output_buffer.py:206"))
       (libsource
         (lib "NO_LIB")
         (part "C"))
@@ -595,7 +595,7 @@
         (field
           (name "SKiDL Tag") "C15")
         (field
-          (name "SKiDL Line") "blocks/output_buffer.py:202"))
+          (name "SKiDL Line") "blocks/output_buffer.py:208"))
       (libsource
         (lib "NO_LIB")
         (part "C"))
@@ -629,7 +629,7 @@
         (field
           (name "SKiDL Tag") "C16")
         (field
-          (name "SKiDL Line") "blocks/output_buffer.py:204"))
+          (name "SKiDL Line") "blocks/output_buffer.py:210"))
       (libsource
         (lib "NO_LIB")
         (part "C"))
@@ -663,7 +663,7 @@
         (field
           (name "SKiDL Tag") "C17")
         (field
-          (name "SKiDL Line") "blocks/output_buffer.py:206"))
+          (name "SKiDL Line") "blocks/output_buffer.py:212"))
       (libsource
         (lib "NO_LIB")
         (part "C_Polarized"))
@@ -697,7 +697,7 @@
         (field
           (name "SKiDL Tag") "C18")
         (field
-          (name "SKiDL Line") "blocks/output_buffer.py:208"))
+          (name "SKiDL Line") "blocks/output_buffer.py:214"))
       (libsource
         (lib "NO_LIB")
         (part "C_Polarized"))
@@ -731,7 +731,7 @@
         (field
           (name "SKiDL Tag") "C19")
         (field
-          (name "SKiDL Line") "blocks/output_buffer.py:225"))
+          (name "SKiDL Line") "blocks/output_buffer.py:231"))
       (libsource
         (lib "NO_LIB")
         (part "C"))
@@ -1762,7 +1762,7 @@
       (tstamps "49e1076a-f8bb-5f05-bd16-5665e5660893"))
     (comp
       (ref "C47")
-      (value "100nF 10% X7R")
+      (value "100nF 16V X7R 10%")
       (description "Unpolarized capacitor")
       (footprint "Capacitor_SMD:C_0603_1608Metric")
       (fields
@@ -1853,7 +1853,7 @@
         (field
           (name "SKiDL Tag") "C49")
         (field
-          (name "SKiDL Line") "blocks/output_buffer.py:230"))
+          (name "SKiDL Line") "blocks/output_buffer.py:236"))
       (libsource
         (lib "NO_LIB")
         (part "C"))
@@ -2193,7 +2193,7 @@
         (field
           (name "SKiDL Tag") "D5")
         (field
-          (name "SKiDL Line") "blocks/protection.py:174"))
+          (name "SKiDL Line") "blocks/protection.py:175"))
       (libsource
         (lib "NO_LIB")
         (part "D_TVS"))
@@ -2261,7 +2261,7 @@
         (field
           (name "SKiDL Tag") "D7")
         (field
-          (name "SKiDL Line") "blocks/protection.py:183"))
+          (name "SKiDL Line") "blocks/protection.py:184"))
       (libsource
         (lib "NO_LIB")
         (part "D_Zener"))
@@ -2363,7 +2363,7 @@
         (field
           (name "SKiDL Tag") "F1")
         (field
-          (name "SKiDL Line") "blocks/protection.py:155"))
+          (name "SKiDL Line") "blocks/protection.py:156"))
       (libsource
         (lib "NO_LIB")
         (part "Polyfuse"))
@@ -2397,7 +2397,7 @@
         (field
           (name "SKiDL Tag") "F2")
         (field
-          (name "SKiDL Line") "blocks/protection.py:177"))
+          (name "SKiDL Line") "blocks/protection.py:178"))
       (libsource
         (lib "NO_LIB")
         (part "Polyfuse"))
@@ -2601,7 +2601,7 @@
         (field
           (name "SKiDL Tag") "J4")
         (field
-          (name "SKiDL Line") "blocks/protection.py:186"))
+          (name "SKiDL Line") "blocks/protection.py:187"))
       (libsource
         (lib "NO_LIB")
         (part "Conn_01x01"))
@@ -2635,7 +2635,7 @@
         (field
           (name "SKiDL Tag") "J5")
         (field
-          (name "SKiDL Line") "blocks/protection.py:187"))
+          (name "SKiDL Line") "blocks/protection.py:188"))
       (libsource
         (lib "NO_LIB")
         (part "Conn_01x01"))
@@ -2669,7 +2669,7 @@
         (field
           (name "SKiDL Tag") "J6")
         (field
-          (name "SKiDL Line") "blocks/protection.py:188"))
+          (name "SKiDL Line") "blocks/protection.py:189"))
       (libsource
         (lib "NO_LIB")
         (part "Conn_01x01"))
@@ -2703,7 +2703,7 @@
         (field
           (name "SKiDL Tag") "J7")
         (field
-          (name "SKiDL Line") "blocks/protection.py:189"))
+          (name "SKiDL Line") "blocks/protection.py:190"))
       (libsource
         (lib "NO_LIB")
         (part "Conn_01x01"))
@@ -3555,7 +3555,7 @@
         (field
           (name "SKiDL Tag") "R30")
         (field
-          (name "SKiDL Line") "blocks/protection.py:169"))
+          (name "SKiDL Line") "blocks/protection.py:170"))
       (libsource
         (lib "NO_LIB")
         (part "R"))
@@ -3827,7 +3827,7 @@
         (field
           (name "SKiDL Tag") "R38")
         (field
-          (name "SKiDL Line") "blocks/output_buffer.py:228"))
+          (name "SKiDL Line") "blocks/output_buffer.py:234"))
       (libsource
         (lib "NO_LIB")
         (part "R"))
@@ -3861,7 +3861,7 @@
         (field
           (name "SKiDL Tag") "R39")
         (field
-          (name "SKiDL Line") "blocks/protection.py:181"))
+          (name "SKiDL Line") "blocks/protection.py:182"))
       (libsource
         (lib "NO_LIB")
         (part "R"))
@@ -3997,7 +3997,7 @@
         (field
           (name "SKiDL Tag") "R7")
         (field
-          (name "SKiDL Line") "blocks/output_buffer.py:197"))
+          (name "SKiDL Line") "blocks/output_buffer.py:203"))
       (libsource
         (lib "NO_LIB")
         (part "R"))
@@ -4031,7 +4031,7 @@
         (field
           (name "SKiDL Tag") "R8")
         (field
-          (name "SKiDL Line") "blocks/output_buffer.py:199"))
+          (name "SKiDL Line") "blocks/output_buffer.py:205"))
       (libsource
         (lib "NO_LIB")
         (part "R"))
@@ -4042,7 +4042,7 @@
       (tstamps "d4602b99-fd19-5b52-9a62-e3fbb9d2ed0c"))
     (comp
       (ref "R9")
-      (value "10R 1% 0.25W")
+      (value "10R 1% 0.5W")
       (description "Resistor")
       (footprint "Resistor_SMD:R_1206_3216Metric")
       (fields
@@ -4065,7 +4065,7 @@
         (field
           (name "SKiDL Tag") "R9")
         (field
-          (name "SKiDL Line") "blocks/output_buffer.py:223"))
+          (name "SKiDL Line") "blocks/output_buffer.py:229"))
       (libsource
         (lib "NO_LIB")
         (part "R"))
@@ -4167,7 +4167,7 @@
         (field
           (name "SKiDL Tag") "TP2")
         (field
-          (name "SKiDL Line") "blocks/output_buffer.py:226"))
+          (name "SKiDL Line") "blocks/output_buffer.py:232"))
       (libsource
         (lib "NO_LIB")
         (part "TestPoint"))
@@ -4507,7 +4507,7 @@
         (field
           (name "SKiDL Tag") "U12")
         (field
-          (name "SKiDL Line") "blocks/protection.py:180"))
+          (name "SKiDL Line") "blocks/protection.py:181"))
       (libsource
         (lib "NO_LIB")
         (part "TLP176AM"))
@@ -4643,7 +4643,7 @@
         (field
           (name "SKiDL Tag") "U5")
         (field
-          (name "SKiDL Line") "blocks/output_buffer.py:194"))
+          (name "SKiDL Line") "blocks/output_buffer.py:200"))
       (libsource
         (lib "NO_LIB")
         (part "OPA548T"))

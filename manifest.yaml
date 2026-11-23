@@ -301,7 +301,7 @@ added_beyond_source_bom:
       while DAC_ARM is high; otherwise R35 pulls it to AGND and both DAC
       outputs are 0 V whatever codes the DAC holds.
   - ref: R36, C47, D6, C48, R37
-    value: 1k, 100nF 10% X7R, BAT54S, 470nF 16V X7R 10%, 100k
+    value: 1k, 100nF 16V X7R 10%, BAT54S, 470nF 16V X7R 10%, 100k
     reason: >
       Charge pump that turns a software-toggled heartbeat on PC5 into DAC_ARM.
       No DC path reaches DAC_ARM, so a reset, halt, crash or stuck pin disarms
@@ -507,7 +507,7 @@ validation:
       gain (+/-11.76 V, +/-97.3 mA from limits) vs +/-10.04 V and
       +/-91.3 mA reachable; worst-case headroom 334 mV (V), 115 mV (I).
       Fault: 128 mA (DUT short), 143 mA (FORCE+ to AGND); R30 1.96 W of
-      2 W, R9 0.21 W of 0.25 W, R10 0.16 W of 3 W.
+      2 W, R9 0.21 W of 0.5 W, R10 0.16 W of 3 W.
   footprint_check:
     module: validation/footprint_check.py
     checks: [KiCad_Lib resolves to library+symbol, footprint resolves to

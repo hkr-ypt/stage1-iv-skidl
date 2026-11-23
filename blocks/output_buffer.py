@@ -121,10 +121,14 @@ which into an open or high-impedance DUT is not "off". The safe state is the
 DAC reference gate on Sheet 3. The pin may be taken to V+ (absolute maximum
 "Input shutdown voltage: V+").
 
-R9 (10 ohm, in the loop): 1206, +/-1 %, >= 0.25 W. Its worst steady
-dissipation is 0.21 W, with U5's output driven into a rail, FORCE+ shorted to
-AGND and every series part at its minimum (validation/measurement_range.py
-recomputes it on every build against the 0.25 W rating).
+R9 (10 ohm, in the loop): 1206, +/-1 %, 0.5 W (a high-power thick-film
+1206; final audit: was 0.25 W). Its worst steady dissipation is 0.21 W, with
+U5's output driven into a rail, FORCE+ shorted to AGND and every series part
+at its minimum, a current between F1's hold and trip currents that F1 need
+not end; validation/measurement_range.py recomputes it on every build
+against the rating. A 0.25 W part is rated at 70 C and, derated in the usual
+way, allows about 0.21 W at 85 C: no margin 8.5 mm from a warm U5. Same
+pads.
 
 OUTPUT R-C NETWORK — R38 100 ohm + C49 10 nF, FITTED (final audit)
 ----------------------------------------------------------------
@@ -147,15 +151,17 @@ bring-up saw oscillation. Two things changed that:
     that hides it.
     WHAT THE NETWORK DOES NOT CURE IN THE MODEL: (1) a window about 20 mV
     wide at the positive knee where the output carries about 0.3 V p-p;
-    (2) a FAST fall of the command (0.4 V/us or more; U3 gives 0.8) out of
-    the NEGATIVE limit with a 0.3 .. 10 mH DUT, which leaves U5 oscillating
-    with about 60 mA still in the DUT although the command is at 0 V. Ramps
+    (2) a FAST fall of the command (above about 0.4 V/us; U3 gives 0.8) out
+    of the NEGATIVE limit with a 0.2 .. 30 mH DUT, which leaves U5
+    oscillating with tens of mA still in the DUT (about 60 mA at a 0 V
+    command). No output-network value cures it. Ramps
     do not do it; the immediate-zero paths (firmware cut-off and fault
-    handlers, the reference gate) do. Until bring-up shows the board does
+    handlers, the reference gate) do, and so does a sweep point that steps
+    several volts out of the limit (sweep points are DAC steps). Until bring-up shows the board does
     not do it, an inductive DUT is not to be taken into current limit. The
     remedy, if silicon needs it, takes no copper: 10 nF C0G on top of each
-    of R4 and R6 (Sheet 3), which slows every edge of V_SWEEP to
-    0.05 V/us (docs/final_audit.md §3.7).
+    of R4 and R6 (Sheet 3, 0603), which gives V_SWEEP a 200 us time constant
+    and slows a 10 V fall to 0.05 V/us (docs/final_audit.md §3.7).
   * The values on the pads were wrong for this amplifier. TI's 3 ohm +
     10 nF is shown on an inverting gain-of-4 stage. On a unity-gain OPA547 a
     10 nF capacitor behind 3 or 10 ohm is still a capacitive load at the
@@ -220,7 +226,7 @@ def create_output_buffer_block(n):
     # (T491B475K035AT, TAJB475K035RNJ); see docs/final_audit.md 3.8.
     for cap in (C17, C18):
         cap.fields["MPN"] = "TCJB106M035R0200E"
-    R9 = R()(ref="R9", tag="R9", value="10R 1% 0.25W",
+    R9 = R()(ref="R9", tag="R9", value="10R 1% 0.5W",
              footprint="Resistor_SMD:R_1206_3216Metric")
     C19 = C()(ref="C19", tag="C19", value="100pF")
     TP2 = TestPoint()(ref="TP2", tag="TP2", value="VO_SENSE")

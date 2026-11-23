@@ -25,8 +25,11 @@ costs it stability margin. (3) Touch AGND before handling the FORCE− lead.
 
 **Preparation.** Solder short wire stubs to TP1–TP8 (bottom side), to R38
 pad 1 (VO_RAW, top side) and to C48 pad 2 (DAC_ARM), so that probes and
-clips hold themselves. Fit a jumper from J2 pin 5 (NRST) to pin 3 (GND) to
-hold the MCU in reset for §3 and §5; SW1 cannot be held for minutes.
+clips hold themselves. To hold the MCU in reset for §3 and §5, put a clip
+lead across SW1's two terminals (NRST to GND); SW1 cannot be held for
+minutes. On J2 the same two nets are pins 5 and 3, but they are not
+adjacent and pin 4 between them is the 3.3 V rail: do not bridge them
+with a shunt.
 Insulate thermocouple tips: U5's tab is at −15 V. Easier probe points
 than IC pins: CS_DAC on R34 pad 2 (bottom), RESET_ADC on R20 pad 2 (top),
 DRDY on R19 pad 2, PC5 on R36.
@@ -65,7 +68,7 @@ decay.
   fundamental-mode, ESR ≤ 80 Ω; C0G for C19, C24–C27, C32, C33 and C49;
   ±10 % X7R for C47 and C48; ≤ 25 ppm/°C for the 0.1 % resistors; LED1 a
   yellow-green with V_F ≈ 2 V (an InGaN green stays dark on 3.3 V); R8 a
-  0.1 W 0603; R9 0.25 W at least, a 0.5 W 1206 recommended; crystals with
+  0.1 W 0603; R9 a 0.5 W 1206 (not a 0.25 W part); crystals with
   12…18 pF load capacitance; the unmarked ceramics X7R, 16 V or more
   (C42 25 V). Jacks with an M6
   thread, **chosen from a drawing** before the board is ordered: write
@@ -75,8 +78,11 @@ decay.
   pour starts 0.3 mm beyond it on both faces, under solder mask only. Any
   metal that bears on the board (nut, flange, washer, solder tag) must be
   **10 mm across or less**; under anything wider (an M6 washer is 12 mm)
-  fit an insulating washer of 12 mm or more on that face, and make the
-  electrical joint by soldering the stud or tag to the pad. §2 checks it.
+  fit an insulating washer of 12 mm or more on that face. The electrical
+  joint must then be made inside the 10 mm circle **before** the washer
+  goes on: the metal stud soldered into the plated hole, or a solder tag
+  or ring of 10 mm or less lying on the pad under the insulating washer.
+  Which, follows from the chosen jack's drawing. §2 checks it.
 - [ ] **Order of assembly.** Bottom-side SMD parts first: C19 and R8 lie
   between U5's two rows of leads and R9 and C16 under its body. Then the
   top side, then the through-hole parts; trim U5's leads with care.
@@ -187,8 +193,9 @@ decay.
 - [ ] AGND to DGND ≈ 0 Ω (R31; it is the only link).
 - [ ] **Dead-rail clamps (diode test).** Meter + on AGND, − on +15VA: a
   Schottky drop, 0.1–0.4 V (D8). Meter + on −15VA, − on AGND: the same (D9).
-  Reversed polarity reads open (capacitors charging). A short either way is a
-  reversed or damaged D8/D9: **STOP**.
+  Reversed polarity reads open, or 1…3 V through the unpowered ICs
+  (capacitors charging). A short either way is a reversed or damaged
+  D8/D9: **STOP**.
 - [ ] **FORCE+ is open with the board unpowered** (U12 off): J4 (FORCE+) to
   R30 pad 2 (FORCE_SW) > 10 MΩ.
 - [ ] VO_SENSE (TP2) to R30 pad 1 (F1_MID) = F1: 3.0–7.5 Ω. R30 pad 1 to
@@ -202,7 +209,7 @@ decay.
   **30…50 kΩ, creeping upward**; a meter range with 1 µA or less of test
   current reads 50.2 kΩ. A nut or washer that has cut through the mask
   onto the ground pour reads under 100 Ω. **STOP** only for J4 not open,
-  J5 or J6 under 1 kΩ, or J7 under 13 Ω.
+  J5 or J6 under 1 kΩ, or J7 under 12 Ω.
 - [ ] **Sense clamps D1–D4 (diode test, four readings).** Meter + on J5
   (SENSE+), − on +15VA: a diode drop (D1); reversed: open, or any reading
   above about 1 V. Meter + on −15VA, − on J5: a diode drop (D2). The same
@@ -211,7 +218,9 @@ decay.
   check after any occasion on which a source was connected to the jacks
   of an unpowered board.
 - [ ] **D7 (diode test).** Meter + on −15VA, − on SSR_LED_K (U12 pin 3, D7's
-  cathode pad): a diode drop. Reversed: open. A D7 fitted the wrong way
+  cathode pad): a diode drop. Reversed: open (use a meter whose diode test
+  stays under 5 V: this polarity reverse-biases U12's LED, which allows
+  6 V). A D7 fitted the wrong way
   round conducts as a plain diode: 45 mA through U12's LED and 1.3 W in
   R39 at first power, and U12 closed when a rail is missing. **STOP** if
   the two readings are the other way round.
@@ -229,7 +238,7 @@ decay.
 
 Use current-limited bench supplies: ±15 V at 50–100 mA, +5 V at 150 mA
 (the ±15 V limits are raised for §7). Bring them up together (§5 covers
-ordering). Hold the MCU in reset with SW1,
+ordering). Hold the MCU in reset (the clip across SW1, see Preparation),
 or leave it unprogrammed. **No DUT is connected.** Put a 1 kΩ resistor across
 FORCE+/FORCE− with the Kelvin leads on its terminals.
 
@@ -246,11 +255,13 @@ FORCE+/FORCE− with the Kelvin leads on its terminals.
   guaranteed on: **STOP**. **Above 7 V at any time: power off at once**;
   D7 is reversed or the wrong part. This reading is also the check on
   D7's self-heating; there is no separate temperature measurement of D7.
-- [ ] **R8.** Voltage across R8 (10 kΩ, U5's E/S pin to +15 V, bottom side
-  between U5's lead rows). TI characterises the pin at 60 µA only; record
-  what it is. Up to 10 V (10 mW) needs nothing. If R8 drops more than
-  about 20 V (40 mW in an 0603 beside a warm U5), fit 100 kΩ instead: the
-  pin only has to sit above (V−) + 2.4 V and may even be left open.
+- [ ] **R8.** Voltage across R8 (10 kΩ, U5's E/S pin to +15 V). R8 is on
+  the bottom between U5's lead rows; measure instead between **U5 pin 7
+  and pin 5** from the top (the same two nets), meter clipped on before
+  power. TI characterises the pin at 60 µA only; record what it is. Up to
+  10 V (10 mW) needs nothing. Above 10 V (up to 70…90 mW in an 0603
+  beside a warm U5), fit 100 kΩ instead: the pin only has to sit above
+  (V−) + 2.4 V and may even be left open.
 - [ ] **U12 closed:** J4 (FORCE+) follows R30 pad 2. With 1 kΩ load and the
   output at 0 V this is a small-signal check; at 10 mA (§7) the drop across
   U12 (R30 pad 2 to J4) is ≤ 20 mV (RON ≤ 2 Ω).
@@ -259,8 +270,14 @@ FORCE+/FORCE− with the Kelvin leads on its terminals.
   **30.000 kHz** within a few hundred ppm, present within tens of
   milliseconds of power-up, on several power cycles. (The clock itself is
   also on D0/CLKOUT, U8 pin 25, 7.68 MHz, until the firmware turns it off;
-  DRDY is the easier place to probe.) This is the check on the crystal
-  and on C26/C27 (now 18 pF). No DRDY: **STOP**.
+  DRDY is the easier place to probe.) With nobody reading the data, DRDY
+  is low with a 2 µs high pulse every 33.33 µs, not a square wave. This
+  is the check on the crystal and on C26/C27 (now 18 pF). If DRDY is
+  absent or at another rate, look for 7.68 MHz on U8 pin 25 first, and
+  repeat after a power cycle with U8 pin 20 (CS) held to +3V3D through
+  10 kΩ: the MCU's SPI pins float while it is in reset, and a floating CS
+  and SCLK can clock a stray command into the ADC. Still no DRDY:
+  **STOP**.
 - [ ] Rails: +15VA and −15VA at J1 = 15.0 V ±0.2 V; +5V_RAW 4.75…5.25 V;
   +5VA at U8 ≥ 4.75 V; +3V3D (3.3 V ± 2 %), VDDA, and
   **VREF_2V5 at TP8 = 2.500 V** (U2 is REF5025**AI**DGKT, the standard grade:
@@ -332,7 +349,12 @@ below is where that is measured.
 - [ ] **Transients.** Scope TP1, TP2 and FORCE+ while switching the supplies
   in different orders: all together; ±15 V first, then +5 V; +5 V first,
   then ±15 V; one ±15 V rail at a time; and the reverse orders at power-down,
-  with the sweep at 0 V and again at +5 V. Record the peak voltage and
+  with the sweep at 0 V and again at +5 V. (The 0 V part now. The +5 V
+  part after §6, with `ARM` and `SRC V=5` and the 1 kΩ load only; it
+  includes "+5 V first" at power-down while armed, the order the rule
+  above forbids in use, because that is the excursion to be measured. The
+  one-rail-at-a-time orders only if the R15/R17 readings above stayed
+  under 1.0 V, and for a few seconds.) Record the peak voltage and
   duration of any excursion on FORCE+. Anything above about 1 V into the load
   is a finding to report.
 
@@ -345,6 +367,19 @@ fixed 250 µs grid** and reports `ARMED` 100 ms after the first edge. The
 frequency, single-edge and B = 0 tests need the **bring-up image**
 (`stage1_iv_fw-bringup.elf`, `*IDN? build=bringup`); flash the release image
 again afterwards.
+
+**The firmware disarms by itself 30 s after the last byte it received
+while armed** (`host_timeout_s`, default 30). Every hold in this section
+and in §5, §7 and §8 would end that way if commands are typed into a
+terminal: the output ramps to 0 V, and a reading taken afterwards looks
+like a dead output. Either send the commands through the Python client
+(it sends `PING` every 5 s), or set **`CFG host_timeout_s=0`** for the
+bring-up session. `EVT WARN HOST_TIMEOUT` and `EVT STATE DISARMING
+reason=host_timeout` mean this, not a hardware fault. Before every reading
+on a held output confirm `STAT?` reports `state=ARMED`. **`CFG` settings
+are not stored**: they return to their defaults at every reset, re-flash
+or power cycle (`CFG?` shows them), so repeat `host_timeout_s` and, in §7
+and §8, `i_compliance` after each one.
 
 - [ ] **Arm** (`ARM`, release image, 2 kHz). DAC_ARM: simulated 2.70 V
   nominal, 2.15 V worst case; U11 needs 1.49 V. Record it.
@@ -416,7 +451,8 @@ again afterwards.
 
 - [ ] **Raise the ±15 V current limits first.** Set both to 250 mA (not
   above 0.5 A, the rating of D8/D9). On the plateau the +15 V or −15 V
-  supply delivers the plateau current (up to 89 mA) plus about 30 mA for
+  supply delivers the plateau current (up to 87 mA into a short) plus
+  about 30 mA for
   U5, the U12 LED string and the other amplifiers. At the 50–100 mA of §3
   the supply itself would limit, and its limit would be read as U5's.
   Throughout this section check on the supplies that neither rail is in
@@ -425,10 +461,13 @@ again afterwards.
   `CFG i_compliance=0.1`.** Its default is 50 mA, and the firmware writes
   the zero code the moment a reading exceeds it. The expected plateau is
   40…65 mA and the sinking one is typically above 50 mA, so with the
-  default every plateau test below ends in a zeroed output and an
+  default most plateau tests below (and typically every sinking one) end
+  in a zeroed output and an
   `EVT WARN COMPLIANCE`, which means the *firmware* stopped, not that U5
-  limited. 0.1 (100 mA) is the maximum. Restore the setting before §8's
-  diode sweep.
+  limited. 0.1 (100 mA) is the maximum. The setting is not stored: repeat
+  it after every reset, re-flash or power cycle in this section (lifting
+  R38, an R7 trim, `CRASH HARDFAULT`, SW1). §8 says step by step where it
+  is needed again.
 - [ ] **Sweep into 1 kΩ** from −10 V to +10 V and back: the Kelvin and current
   channels track, with signed readings and no step at 0 V.
 - [ ] **Sweep span.** Command the two ends and record what V_SWEEP (TP1)
@@ -445,15 +484,20 @@ again afterwards.
   function generator: 1 kHz square wave, 5 V peak to peak, generator
   ground on AGND. (The resistor must be at TP2, so that the generator's
   cable stays on the far side of it.) This pushes ±2.5 mA steps into U5's
-  feedback node. ×10 probe on TP2, AC-coupled, 20 mV/div, 1 µs/div,
-  triggered on the generator. Expected at each edge: a spike of the order
-  of 0.1 V lasting under a microsecond, then **at most one or two cycles
-  of ringing** near 0.5…1 MHz. Repeat at 0 V with the jacks open and with
+  feedback node. (5 V peak to peak as measured at the generator end of
+  the resistor: a generator set for a 50 Ω load delivers twice what it
+  displays into 1 kΩ, so set it to high-impedance load.) ×10 probe on
+  TP2, AC-coupled, 20 mV/div, 1 µs/div, triggered on the generator.
+  Expected at each edge (model fitted to TI's typical curve): a spike of
+  0.1…0.2 V lasting under a microsecond, one undershoot of some tens of
+  mV, **settled within about 2 µs**. Repeat at 0 V with the jacks open and with
   the jacks shorted, and at +5 V and −5 V (`SRC V=5`, `SRC V=-5`) with the
-  1 kΩ load (not shorted: that would be the plateau). Four or more cycles
-  means U5 has
-  lost phase margin: **STOP** and check that R38 is 100 Ω (not 10 Ω or
-  3 Ω) and that nothing capacitive is connected to VO_RAW or TP2. Only
+  1 kΩ load (not shorted: that would be the plateau). Ringing near
+  0.5 MHz that is still visible after 3 µs (three or more cycles) means
+  U5 has lost phase margin (in the same model 10 Ω in R38 gives about
+  three cycles, 3 Ω about five): **STOP** and check that R38 is 100 Ω
+  (not 10 Ω or 3 Ω) and that nothing capacitive is connected to VO_RAW or
+  TP2. Only
   then, to tell the network from the amplifier, lift one end of R38 and
   repeat, and report both results; refit R38 before any plateau test.
   Record the waveforms.
@@ -483,9 +527,10 @@ again afterwards.
   at the top of the spread: it is safe, R30 bounds it, but it has no
   plateau; correct it with R7.
   The measured value, smaller polarity, becomes the calibration coefficient
-  (`CAL.SET i_plateau=<A>`, `CAL.SAVE`), which the firmware's `CLIM`
+  (`DISARM`, then `CAL.SET i_plateau=<A>` and `CAL.SAVE TS=<unix seconds>`),
+  which the firmware's `CLIM`
   classification uses. To move a unit's plateau, change R7: larger R7 gives
-  less current, about 6 kΩ per mA near 348 kΩ (412 kΩ for 9 mA less, 300 kΩ
+  less current, about 6 kΩ per mA near 348 kΩ (412 kΩ for 9 mA less, 301 kΩ
   for 9 mA more; 332 kΩ is the first step if only the sourcing plateau is
   low). The build's limits on R7 (309…365 kΩ) are for an unmeasured unit;
   a measured unit may be trimmed outside them, noted on its traveller.
@@ -531,11 +576,14 @@ again afterwards.
   loads in turn, and for each one **check first that U5 is limiting** (TP2
   at least 1 V below the command), or the test proves nothing:
   1. the short at the jacks, then at the end of a 1 m DUT cable;
-  2. 47 Ω, alone, then with 10 nF and with 100 nF across it;
-  3. **inductors: 100 µH, 1 mH and 10 mH, each under about 20 Ω in total,
-     with no capacitor across the jacks.** (A relay coil only counts if
-     its resistance is under about 30 Ω; most are far above that and never
-     reach the limit.)
+  2. 22 Ω (0.5 W), or the largest resistor that still leaves TP2 1 V
+     below the command (47 Ω reaches the limit only on a unit whose
+     plateau is under about 52 mA); alone, then with 10 nF and with
+     100 nF across it;
+  3. **inductors: 100 µH, 1 mH and 10 mH, each under about 10 Ω in total,
+     with no capacitor across the jacks.** (With 20 Ω a 65 mA unit is
+     barely in limit. A relay coil only counts if its resistance is that
+     low; most are far above it and never reach the limit.)
 
   The inductive case is the one that matters: in TI's model the unfitted
   stage oscillates there, rail to rail in the negative polarity, and a
@@ -552,26 +600,33 @@ again afterwards.
   safe-state test for inductive DUTs).** In TI's model, with the network
   fitted, this is where the stage fails: after a *fast* fall of the
   command out of the negative limit (the zero code written at once, as
-  every fault path and the firmware's own current cut-off do) with 0.3 to
-  10 mH in the DUT, U5 keeps oscillating, 4 to 14 V peak to peak at 150 to
-  230 kHz, with about −60 mA still flowing in the DUT although the
-  command is 0 V. A ramp out (`SRC V=0`, `DISARM`, `SWP.ABORT`) does not
-  do it, nor does the positive polarity, nor a resistive load
-  (`final_audit.md` §3.7). Test it: 1 mH, then 10 mH, each of a few ohms,
-  at `SRC V=-10` with U5 limiting; scope on VO_RAW and TP3; then make the
+  every fault path, the reference gate and the firmware's own current
+  cut-off do, or a large sweep step) with about 0.2 to 30 mH in the DUT,
+  U5 keeps oscillating, 4 to 20 V peak to peak at 150 to 230 kHz, with
+  tens of mA still flowing in the DUT (about −60 mA at a 0 V command). A
+  ramp out (`SRC V=0`, `DISARM`, `SWP.ABORT`) does not do it, nor does the
+  positive polarity, nor a resistive load or a diode with its leads
+  (`final_audit.md` §3.7). Test it: about 0.3 mH, then 1 mH, then 10 mH,
+  each of a few ohms (under about 10 Ω), at `SRC V=-10` with U5 limiting; scope on VO_RAW and TP3; then make the
   firmware write the zero code at once. The simplest way is to set
   `CFG i_compliance` just under the measured plateau (e.g. 0.04), which
   makes the firmware's cut-off do it on the next reading; a `CRASH
   HARDFAULT` (bring-up image) does the same through the fault handler,
   and SW1 through the reference gate. **Pass:** VO_RAW and the current go
-  to zero and stay there. **If U5 is left oscillating:** `CFG i_compliance=0.1` again
+  to zero and stay there. **If U5 is left oscillating:** switch the ±15 V supplies off; that is the
+  quick and certain way out (R38 dissipates about 0.14 W while a 14 V
+  oscillation lasts). The other way, which ends it in the model, is to
+  re-enter the limit and ramp out: `CFG i_compliance=0.1` again
   (otherwise the cut-off answers the next command too), then `SRC V=-10`
-  and `SRC V=0` (re-entering the limit and ramping out ends it in the
-  model), or switch the ±15 V supplies off, which always ends it; record
-  it; and until it is resolved an inductive DUT must not be taken
-  into current limit at all. The remedy that needs no copper is to slow
-  V_SWEEP: a 10 nF C0G capacitor soldered on top of each of R4 and R6
-  (the sweep amplifier's 20 kΩ pair, same value on both), which gives
+  and `SRC V=0` (`SRC V=10` and back also works in the model; a small
+  command such as ±3 V does not end it); after `CRASH HARDFAULT` or SW1 the firmware has reset
+  and is DISARMED, so `ARM` comes first, and if it refuses, use the
+  supplies. Record it; and until it is resolved an inductive DUT must
+  not be taken into current limit at all. The remedy that needs no copper is to slow
+  V_SWEEP: a 10 nF C0G capacitor (0603; it sees about 2 V) soldered on
+  top of each of R4 and R6 (the sweep amplifier's 20 kΩ 0.1 % pair, same
+  value on both; keep the iron short, and re-measure the sweep span and
+  zero afterwards), which gives
   V_SWEEP a 200 µs time constant and holds a 10 V fall to 0.05 V/µs
   (`final_audit.md` §3.7). With them fitted, raise `CFG settle_us` to
   2000 or more, and repeat this test.
@@ -585,14 +640,19 @@ again afterwards.
   rated to 110 °C).
   Record whether and when F1 trips. F1 is **not** a guaranteed backstop at
   this current.
-- [ ] **FORCE− external source (optional; then recalibrate).** Board
-  **powered**, Kelvin leads **off** J7 (with SENSE− on J7 and the board
-  unpowered this would be the back-feed that rule 1 forbids). A 12 V
-  supply limited to 1.5 A, from J7 to AGND: F2 must trip within a few
+- [ ] **FORCE− external source (optional, once at most; then
+  recalibrate).** Board **powered**, firmware **DISARMED**, J4 open,
+  Kelvin leads **off** J7 (with SENSE− on J7 and the board unpowered this
+  would be the back-feed that rule 1 forbids). A 12 V supply limited to
+  1.5 A, **positive** on J7, negative on AGND: F2 must trip within a few
   seconds (Bel guarantees 10 s at 0.5 A; 12 V drives 0.7…0.9 A) and R10
-  survive. Remove the source if F2 has not tripped after 5 s. Recalibrate
-  the current channel afterwards (R10's short-time overload allows
-  ΔR ≤ 0.2 % + 0.05 Ω).
+  survive. Remove the source if F2 has not tripped after 5 s. Until F2
+  trips the shunt node is at 7…9 V, U6 saturates and drives ADC input
+  AIN0 beyond its rail through R15 at its own short-circuit current
+  (6…18 mA typical; the ADC allows 10 mA continuous and 100 mA
+  momentary), which is why the test is not to be repeated and why
+  positive is the polarity to use. Recalibrate the current channel
+  afterwards (R10's short-time overload allows ΔR ≤ 0.2 % + 0.05 Ω).
 
 ## 8. Measurement checks and calibration
 
@@ -602,8 +662,8 @@ Follow `firmware_handoff.md` §4–§5 and `docs/firmware/calibration.md`.
   SELFCAL done (logic analyser, `docs/firmware/bringup_firmware.md` §2).
 - [ ] Zero with the gate disarmed: jacks open (`ZERO`), then jacks shorted
   (`MEAS? N=64`). Record the offsets of both channels.
-- [ ] **Kelvin common-mode term.** (`CFG i_compliance=0.1` again for this
-  step.) Put **both** Kelvin leads on the low end of the short at the
+- [ ] **Kelvin common-mode term.** (`CFG i_compliance=0.1` for this step
+  and the next.) Put **both** Kelvin leads on the low end of the short at the
   jacks (the FORCE− side) and pass the largest current the unit gives in
   each polarity, i.e. its plateau, at `SRC V=10` and `SRC V=-10`. The
   voltage channel should read zero; what it reads, divided by I, is the
@@ -631,6 +691,12 @@ Follow `firmware_handoff.md` §4–§5 and `docs/firmware/calibration.md`.
   open DUT. With ±15 V off at `ARM`, the answer is `ERR PRECOND afe`.
 - [ ] Hysteresis sweep of a known diode, −V → +V → −V: signed and continuous,
   and the plateau region is flagged as current limit, not as DUT behaviour.
+  To see the plateau region the firmware's cut-off must be above the
+  plateau (`CFG i_compliance=0.1`) and the diode rated for the plateau
+  current (100 mA or more, e.g. a 1N400x); with the default 50 mA the
+  sweep ends with `status=compliance` on a unit whose sourcing plateau is
+  higher. Afterwards set `i_compliance` to what the instrument's use
+  calls for.
 
 ## 9. Records to keep
 
@@ -638,6 +704,7 @@ Rail voltages and currents, the R39 voltage (U12 LED current), VREF_2V5,
 the safe-state residual, the dead-rail voltages and load voltages of §5, the
 U12 close/open thresholds, DAC_ARM at 2 kHz, 1 kHz and 500 Hz, the arm time,
 every disarm time (with the PC5 level), the arming and disarming transients,
+the single-edge DAC_ARM peak, the jack mounting stack as built,
 the ADC clock frequency, the R15/R17 voltages in the single-rail states,
 the voltage across R8, the sweep span, the U5 stability waveforms, the
 plateau current and TP2 voltage at both polarities and at two commands,

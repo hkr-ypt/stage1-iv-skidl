@@ -61,7 +61,7 @@ Total components: **141** — 132 on the board (131 fitted, 1 DNP footprints) an
 | C44 | 100nF | generic | Device:C | Capacitor_SMD:C_0603_1608Metric | 7 ADC | fit | OK — pin numbers read from Device.kicad_sym:1761 |
 | C45 | 100nF | generic | Device:C | Capacitor_SMD:C_0603_1608Metric | 2 MCU | fit | OK — pin numbers read from Device.kicad_sym:1761 |
 | C46 | 100nF | generic | Device:C | Capacitor_SMD:C_0603_1608Metric | 3 DAC/Sweep | fit | OK — pin numbers read from Device.kicad_sym:1761 |
-| C47 | 100nF 10% X7R | generic | Device:C | Capacitor_SMD:C_0603_1608Metric | 2 MCU | fit | OK — pin numbers read from Device.kicad_sym:1761 |
+| C47 | 100nF 16V X7R 10% | generic | Device:C | Capacitor_SMD:C_0603_1608Metric | 2 MCU | fit | OK — pin numbers read from Device.kicad_sym:1761 |
 | C48 | 470nF 16V X7R 10% | generic | Device:C | Capacitor_SMD:C_0603_1608Metric | 2 MCU | fit | OK — pin numbers read from Device.kicad_sym:1761 |
 | C49 | 10nF 50V C0G 5% | generic | Device:C | Capacitor_SMD:C_0805_2012Metric | 4 Power Buffer | fit | OK — pin numbers read from Device.kicad_sym:1761 |
 | D1 | 1N4148W | 1N4148W | Device:D | Diode_SMD:D_SOD-123 | 6 Voltage Sense | fit | OK — pin numbers read from Device.kicad_sym:11674 |
@@ -93,7 +93,7 @@ Total components: **141** — 132 on the board (131 fitted, 1 DNP footprints) an
 | R6 | 20.0k 0.1% | generic | Device:R | Resistor_SMD:R_0603_1608Metric | 3 DAC/Sweep | fit | OK — pin numbers read from Device.kicad_sym:104590 |
 | R7 | 348k 1% | generic | Device:R | Resistor_SMD:R_1206_3216Metric | 4 Power Buffer | fit | OK — pin numbers read from Device.kicad_sym:104590 |
 | R8 | 10k | generic | Device:R | Resistor_SMD:R_0603_1608Metric | 4 Power Buffer | fit | OK — pin numbers read from Device.kicad_sym:104590 |
-| R9 | 10R 1% 0.25W | generic | Device:R | Resistor_SMD:R_1206_3216Metric | 4 Power Buffer | fit | OK — pin numbers read from Device.kicad_sym:104590 |
+| R9 | 10R 1% 0.5W | generic | Device:R | Resistor_SMD:R_1206_3216Metric | 4 Power Buffer | fit | OK — pin numbers read from Device.kicad_sym:104590 |
 | R10 | 10.0R 0.1% 3W | RS02B10R00BE12 | Device:R | Resistor_THT:R_Axial_DIN0614_L14.3mm_D5.7mm_P20.32mm_Horizontal | 5 Current Sense | fit | OK — pin numbers read from Device.kicad_sym:104590 |
 | R11 | 35.7k 0.1% | generic | Device:R | Resistor_SMD:R_0603_1608Metric | 5 Current Sense | fit | OK — pin numbers read from Device.kicad_sym:104590 |
 | R12 | 40.2k 0.1% | generic | Device:R | Resistor_SMD:R_0603_1608Metric | 6 Voltage Sense | fit | OK — pin numbers read from Device.kicad_sym:104590 |

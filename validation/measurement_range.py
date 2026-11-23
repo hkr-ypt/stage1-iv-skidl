@@ -53,7 +53,9 @@ circuit it recomputes
 
 and fails if any normal operating point, at worst-case tolerance, would put
 an ADC input outside its absolute window or the signal outside full scale,
-or if a FORCE-path resistor is under-rated for the fault envelope.
+if a FORCE-path resistor is under-rated for the fault envelope, or if any
+resistor the calculation reads is not fitted (R14, U7's gain resistor, is
+open by design and gives a gain of 1).
 
 The measurement check is for the NORMAL operating envelope: a passive DUT and
 the source inside its contracted span. External voltage on the jacks is the
@@ -233,15 +235,17 @@ def compute(circuit):
          ("R1", "R2", "R3", "R4", "R5", "R6", "R7", "R9", "R10", "R11",
           "R12", "R13", "R14", "R30", "R32", "R33")}
     problems = []
-    # An open RG (R11, R14) is a legitimate gain of 1, and an open R7 is
-    # judged below. Every other resistor read here must be fitted: the
-    # arithmetic that follows has no meaning without it.
+    # R14 (U7's RG) is DNP by design: an open RG is a gain of 1. An open R7
+    # is judged below. Every other resistor read here must be fitted,
+    # R11 (U6's RG, which sets the current channel's design gain of 2.4)
+    # included: the calculation that follows depends on each of them.
     unfitted = sorted(ref for ref, value in R.items()
-                      if value is None and ref not in ("R7", "R11", "R14"))
+                      if value is None and ref not in ("R7", "R14"))
     if unfitted:
         raise MeasurementRangeError(
-            f"{', '.join(unfitted)} not fitted (DNP): the source span, the "
-            f"fault envelope and both channels are computed from "
+            f"{', '.join(unfitted)} not fitted (DNP): this check's "
+            f"calculation of the source span, the fault envelope and the "
+            f"measurement channels depends on "
             f"{'it' if len(unfitted) == 1 else 'them'}")
 
     # ---- source ------------------------------------------------------------
@@ -483,6 +487,7 @@ def compute(circuit):
         "u5": u5_value, "ilim_doc": lim["doc"], "ilim_typ": ilim_typ,
         "ilim_max": ilim_max, "ilim_cold": ilim_cold, "ilim_hot": ilim_hot,
         "ilim_range": (ilim_lo, ilim_hi), "i_short": i_short,
+        "i_short_floor": i_short_floor,
         "i_max": i_max, "i_max_worst": i_max_worst,
         "k": k, "g_v": g_v, "g_i": g_i,
         "full_scale": full_scale, "pin_window": (pin_lo, pin_hi),
@@ -538,9 +543,11 @@ def run_measurement_range(circuit, verbose=True):
               f"holds with ILIM at any value)")
         print(f"      a shorted DUT at full sweep passes "
               f"{r['i_short'][0] * 1e3:.0f} .. {r['i_short'][1] * 1e3:.0f} "
-              f"mA through the series parts alone: a unit limiting above "
-              f"that shows no plateau into a short (reported; a failure "
-              f"only if a typical unit would)")
+              f"mA through the series parts alone ({r['i_short_floor'] * 1e3:.1f} "
+              f"mA with R30, R10 and the sweep at their limits as well): a "
+              f"unit limiting above that shows no plateau into a short "
+              f"(reported; a failure only if a typical unit would limit "
+              f"above {r['i_short_floor'] * 1e3:.1f} mA)")
         print(f"  external on J7 ..... {RAIL_MAX} V through F2 + R10: "
               f"{r['i_ext']:.2f} A (F2 Imax {PTC_I_MAX:g} A), R10 "
               f"{r['p_ext']:.1f} W until F2 trips (short-time rating "

@@ -404,7 +404,7 @@
   (symbol (lib_id "stage1_iv:R") (at 226.06 50.8 0) (unit 1) (in_bom yes) (on_board yes) (dnp no)
     (uuid 11a5a1fa-9a4f-55d8-9d75-68c074d4375e)
     (property "Reference" "R9" (at 222.25 45.72 0) (effects (font (size 1.27 1.27)) (justify left)))
-    (property "Value" "10R 1% 0.25W" (at 222.25 55.88 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "10R 1% 0.5W" (at 222.25 55.88 0) (effects (font (size 1.27 1.27)) (justify left)))
     (property "Pins_Verified" "RESOLVED" (at 222.25 58.42 0) (effects (font (size 1.27 1.27)) (justify left)))
     (property "Footprint" "Resistor_SMD:R_1206_3216Metric" (at 226.06 50.8 0) (effects (font (size 1.27 1.27)) hide))
     (property "Datasheet" "" (at 226.06 50.8 0) (effects (font (size 1.27 1.27)) hide))

@@ -473,7 +473,7 @@ both outputs are `VREF·code/65536`, and both channels share one VREF pin
 | 3 ILIM | OPA548_ILIM | R7 348 kΩ 1 % (1206) ‖ C14 10 nF to −15VA |
 | 4 V− | −15VA | C16 100 nF 50 V X7R + C18 10 µF/35 V polymer tantalum (TCJB106M035R0200E) to AGND |
 | 5 V+ | +15VA | C15 100 nF 50 V X7R + C17 10 µF/35 V polymer tantalum (TCJB106M035R0200E) to AGND |
-| 6 OUT | VO_RAW | R9 10 Ω 1 % 0.25 W (1206) to VO_SENSE, C19 100 pF across R9; R38 100 Ω + C49 10 nF to AGND (fitted) |
+| 6 OUT | VO_RAW | R9 10 Ω 1 % 0.5 W (1206) to VO_SENSE, C19 100 pF across R9; R38 100 Ω + C49 10 nF to AGND (fitted) |
 | 7 E/S | OPA548_ES | R8 10 kΩ to +15VA (always enabled) |
 
 - **The fitted part is an OPA547T (final audit).** The symbol
@@ -617,9 +617,10 @@ both outputs are `VREF·code/65536`, and both channels share one VREF pin
   polarity; with them the steady plateau is quiet in every case run,
   inductive, resistive and capacitive. What they do not cure in the model
   is a fast fall of the command out of the *negative* limit with an
-  inductive DUT (0.3…10 mH), which leaves U5 oscillating with current
-  still in the DUT; ramps do not do it, the immediate-zero paths of the
-  safe state do. Until bring-up has tested that exit, an inductive DUT is
+  inductive DUT (about 0.2…30 mH), which leaves U5 oscillating with current
+  still in the DUT; `SRC` and the sweep ramps do not do it, the
+  immediate-zero paths of the safe state do, and so does a sweep point
+  that steps several volts out of the limit (sweep points are DAC steps). Until bring-up has tested that exit, an inductive DUT is
   not to be taken into current limit; the remedy, if the board needs it,
   is 10 nF C0G on each of R4 and R6 and takes no copper
   (`docs/final_audit.md` §3.7). C49 is a C0G part: 5 nF is too little in
@@ -643,7 +644,7 @@ and closed at the nominal ±15 V rails: from ±14.3 V at 25 °C (data-sheet
 limits) and about ±14.75 V at 50 °C (expected), with D7 at its upper
 tolerance limit and at its own operating temperature. The bench supplies
 are to be set to ±15.0 V ±0.2 V at J1: at ±14.5 V closure holds only to
-about 38 °C (`docs/final_audit.md` §3.2; D7 was the looser BZT52C24, which
+about 38 °C (expected; `docs/final_audit.md` §3.2; D7 was the looser BZT52C24, which
 did not hold the relay closed at nominal rails once its self-heating is
 counted).
 `J7 FORCE− → F2 (PTC, 0ZRM0010FF1E) → ISENSE_HI` goes to the shunt on
@@ -687,7 +688,7 @@ R10 −0.1 %):
 ```
 DUT short:         I ≤ 15.5 V / 121.2 Ω = 128 mA
 FORCE+ to AGND:    I ≤ 15.5 V / 108.2 Ω = 143 mA    P(R30) ≤ 1.96 W of 2 W (98 %)
-                                                    P(R9) ≤ 0.21 W of 0.25 W, P(R10) ≤ 0.16 W of 3 W
+                                                    P(R9) ≤ 0.21 W of 0.5 W,  P(R10) ≤ 0.16 W of 3 W
 ```
 
 `validation/measurement_range.py` checks this envelope against the ratings on
@@ -1108,7 +1109,7 @@ Notes and review points:
 
 | Layer | Part | Intended role (repository) | Observations (analysis) |
 |---|---|---|---|
-| 1 | U5 ILIM (R7) | Normal current plateau (≈ 49 mA) | OPA547, SBOS056F: expected 40…65 mA with polarity and U5's temperature, ±10 mA typical and ±30 mA maximum between units, 8…89 mA with everything stacked (§5.3). A plateau, not a bound: nothing else relies on its value. U5 also has internal thermal shutdown |
+| 1 | U5 ILIM (R7) | Normal current plateau (≈ 49 mA) | OPA547, SBOS056F: expected 40…65 mA with polarity and U5's temperature, ±10 mA typical and ±30 mA maximum between units, 8…89 mA with the maximum unit tolerance stacked on the typical supply and temperature shifts (§5.3). A plateau, not a bound: nothing else relies on its value. U5 also has internal thermal shutdown |
 | 2 | F1 PTC 0ZRM0010FF1E | Series PTC. **Not a backstop** | Holds 100 mA and trips at 200 mA at 23 °C. The whole fault envelope (≤ 143 mA) lies between the two, where the data sheet promises neither. Hold current derates to 80 mA at 40 °C, 68 mA at 50 °C, 56 mA at 60 °C and 45 mA at 70 °C. So on the **normal** plateau it can trip above about 65 °C ambient at 49 mA, above about 57 °C at the typical upper end (59 mA) and above about 32 °C at the far upper end of the spread (89 mA). A trip there is benign and self-resetting: the current falls, and V and I are still measured. Contingency if bench tests show nuisance trips: 0ZRM0017FF1E (170 mA hold, same body and footprint), as a conditional swap only |
 | 3 | R30 100 Ω 1 % 2 W, Vishay PR02 | **The current bound**, passive | Bounds a DUT short to 128 mA and FORCE+ to AGND to 143 mA, carrying up to 1.96 W (98 % of rating) in that stacked worst case (§5.4) |
 | 3a | U12 TLP176AM photorelay | Disconnects FORCE+ unless both ±15 V rails are up | Guaranteed open with either rail absent, closed at the nominal ±15 V rails (from ±14.3 V at 25 °C, about ±14.75 V at 50 °C; rails to be set to ±15.0 V ±0.2 V); ≤ 2 Ω, 0.7 A when on (`docs/final_corrections.md` §2.5, `docs/final_audit.md` §3.2) |
@@ -1127,7 +1128,7 @@ Notes and review points:
 | Board unpowered, or one ±15 V rail absent, DUT connected | U12 is open, so U5 is disconnected from FORCE+. With a **passive** DUT nothing flows. D8/D9 only stop a dead rail being pulled to the wrong polarity: a DUT that **holds voltage** forward-biases D1–D4 from the SENSE jacks, charges the rail capacitors and feeds the analog section, limited only by F2 + R10 and by nothing if it shares ground with the board. Rule: power the board first, disconnect before power-off, DUT floating, never above ±15 V | Bring-up §5; `docs/final_audit.md` §6 |
 | +5 V collapsing before ±15 V while the output is armed | U12 interlocks only the ±15 V rails, and the gate stays armed for 17…79 ms after the MCU stops, while the DAC and the reference pass through their unspecified supply region: a positive excursion of a volt or two at the DUT for tens of milliseconds is plausible (bounded by 8 × the falling +5 V) | Rule: `DISARM` before switching off; switch ±15 V off first or all rails together. Measured at bring-up §5–§6 (`docs/final_audit.md` §6) |
 | Power-up / MCU reset / halt / crash | V_SWEEP ≈ 0 at power-up (midpoint from channel B). On reset, halt or crash the heartbeat stops and U11 removes the DAC reference within ≈ 50 ms (§5.2, §8.2) | Measured at bring-up (`docs/bringup_checklist.md`) |
-| **Inductive DUT (0.3…10 mH) held in negative current limit, and the command falls at once** (firmware cut-off or fault handler writes zero, heartbeat lost, reference gated) | In TI's model U5 is left oscillating (4…14 V p-p at 150…230 kHz at its output) with about 60 mA still in the DUT although the command is 0 V. A ramp out of the limit does not do it, nor does the positive polarity or a resistive or capacitive DUT. Model evidence, not measured; the stated DUTs are not inductive | Rule: no inductive DUT in current limit until `docs/bringup_checklist.md` §7 has tested this exit. Way out of the state: re-enter the limit and ramp out, or switch ±15 V off. Remedy without copper if the board does it: 10 nF C0G on each of R4 and R6 (`docs/final_audit.md` §3.7) |
+| **Inductive DUT (about 0.2…30 mH) held in negative current limit, and the command falls at once** (firmware cut-off or fault handler writes zero, heartbeat lost, reference gated, or a sweep step of about 2 V or more past the knee) | In TI's model U5 is left oscillating (4…20 V p-p at 150…230 kHz at its output) with tens of mA still in the DUT: about 60 mA at a 0 V command, about 35 mA of the wrong sign at +3 V. A ramp out of the limit does not do it, nor does the positive polarity, a resistive DUT or a diode with its test leads (independent review, about 230 runs). Model evidence, not measured; the stated DUTs are not inductive | Rule: no inductive DUT in current limit until `docs/bringup_checklist.md` §7 has tested this exit. Way out of the state: switch ±15 V off (certain), or re-enter the limit and ramp out (recovers it in the model). Remedy without copper if the board does it: 10 nF C0G on each of R4 and R6 (`docs/final_audit.md` §3.7) |
 | Firmware loads channel B below full scale while armed | The positive ceiling rises above +10.04 V, up to U3B's saturation (+13.8 V … +15 V) | Firmware contract, not hardware protection (`docs/firmware_handoff.md`) |
 
 ### 10.2 DNP and configuration options
@@ -1514,9 +1515,10 @@ a list of confirmed defects. Items are ordered roughly by consequence.
 - A software current cut-off set below the hardware plateau acts before U5
   limits. The plateau is expected at 40…65 mA and is different in the two
   polarities, so a 50 mA cut-off sits inside it (`docs/final_audit.md` §7).
-- Reactions that write zero at once are the edge that, in TI's model,
-  leaves U5 oscillating when an inductive DUT is in negative current limit
-  (§10.1). A ramp is safe there.
+- Reactions that write zero at once, and sweep points that step several
+  volts out of the limit, are the edge that, in TI's model, leaves U5
+  oscillating when an inductive DUT is in negative current limit (§10.1).
+  A ramp is safe there.
 - Calibrate offset and gain for both channels, including a zero point at the
   start of every session (INA128 offset referred to the DUT is up to 2.8 mV and
   26 µA before calibration). Iterate the set-point on the measured Kelvin
@@ -1617,7 +1619,7 @@ Taken from `stage1_iv.net` (ref.pin).
 | Rail fault current, DUT short (U5 driven into a rail) | 15.5 V / (9.9 + 3.0 + 95.3 + 0 + 3.0 + 9.99) Ω, all at their minima | 128 mA |
 | Rail fault current, FORCE+ to AGND | 15.5 V / (9.9 + 3.0 + 95.3 + 0) Ω | 143 mA |
 | R30 power, rail fault | max over R30's tolerance and heating of V²R/(R + R_rest)² | ≤ 1.96 W (2 W PR02) |
-| R9, R10 power, rail fault | as above | ≤ 0.21 W (0.25 W part) / ≤ 0.16 W (3 W part) |
+| R9, R10 power, rail fault | as above | ≤ 0.21 W (0.5 W part) / ≤ 0.16 W (3 W part) |
 | External 15.5 V on J7 | 15.5 V / (3.0 + 9.99) Ω until F2 trips | 1.19 A, R10 ≤ 14.3 W (15 W for 5 s) |
 | R9, R10 power at a 49 mA plateau | 0.049² × 10 | 24 mW each |
 | U5 output-stage power, shorted DUT | (15 − 0.049 × 121) × 0.049; at most V_S²/(4 R_path) = 15.5²/(4 × 121.2) for any limit (15.5²/(4 × 108.2) with FORCE+ shorted to AGND) | ≈ 0.44 W; ≤ 0.50 W (0.56 W) (+ 0.30 W typ / 0.47 W max quiescent) |

@@ -94,10 +94,11 @@ What each stage does, and what it does NOT do:
     D7 30 % worse). The 50 C row also leans on Toshiba's typical curve
     (+/-14.9 V at 30 % worse cooling). Neither allows for LED ageing. The
     earlier part did not keep the relay closed at the nominal rails once
-    warm; the +/-2 % part does, up to about 65 C ambient at +/-15.0 V, with
+    warm; the +/-2 % part does, up to about 65 C ambient at +/-15.0 V
+    (expected: typical curves), with
     the same nominal voltage, the same footprint and a better leakage test
     point. The margin is in the rails: at +/-14.5 V closure holds only to
-    about 38 C, so the bench supplies are to be SET to +/-15.0 V +/-0.2 V
+    about 38 C (expected), so the bench supplies are to be SET to +/-15.0 V +/-0.2 V
     at J1 (bring-up checklist). Lowering R39 instead would raise D7's
     dissipation, which is what limits this string. A BZT52B22 with R39 =
     910 ohm would hold 4.0 mA at +/-14.5 V and 50 C, but it halves the

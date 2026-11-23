@@ -512,6 +512,37 @@ assert old in s
 p.write_text(s.replace(old, "value=\"OPA547\""))
 '
 
+# 41. R7 given the value "DNP" (the other way a part is left unfitted): an
+#     open ILIM pin programs zero output current
+expect_fail range "R7 valued DNP" '
+import pathlib
+p = pathlib.Path("blocks/output_buffer.py"); s = p.read_text()
+old = "value=\"348k 1%\""
+assert old in s
+p.write_text(s.replace(old, "value=\"DNP\""))
+'
+
+# 42. R11 (U6 gain resistor) marked do-not-populate: an open RG would give
+#     the current channel a gain of 1 instead of 2.4; the check must stop,
+#     not compute with it or crash
+expect_fail range "R11 marked do-not-populate" '
+import pathlib
+p = pathlib.Path("blocks/current_sense.py"); s = p.read_text()
+old = "    R11 = R()(ref=\"R11\", tag=\"R11\", value=\"35.7k 0.1%\")\n"
+assert s.count(old) == 1
+p.write_text(s.replace(old, old + "    R11.dnp = True\n"))
+'
+
+# 43. R30 (the passive current bound) marked do-not-populate: the fault
+#     envelope cannot be computed without it
+expect_fail range "R30 marked do-not-populate" '
+import pathlib
+p = pathlib.Path("blocks/protection.py"); s = p.read_text()
+old = "                        \"R_Axial_DIN0411_L9.9mm_D3.6mm_P12.70mm_Horizontal\")\n"
+assert s.count(old) == 1
+p.write_text(s.replace(old, old + "    R30.dnp = True\n"))
+'
+
 echo "----------------------------------------------------------------------"
 if [ "$FAILURES" -eq 0 ]; then
     echo "ALL INJECTED FAULTS CAUGHT — the guard works."

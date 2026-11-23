@@ -82,7 +82,7 @@ def create_mcu_block(n):
     C42 = C()(ref="C42", tag="C42", value="100nF")
     # Safe-state heartbeat charge pump (see header) and the CS_DAC pull-up.
     R36 = R()(ref="R36", tag="R36", value="1k")
-    C47 = C()(ref="C47", tag="C47", value="100nF 10% X7R")
+    C47 = C()(ref="C47", tag="C47", value="100nF 16V X7R 10%")
     D6 = BAT54S()(ref="D6", tag="D6", value="BAT54S")
     C48 = C()(ref="C48", tag="C48", value="470nF 16V X7R 10%")
     R37 = R()(ref="R37", tag="R37", value="100k")
