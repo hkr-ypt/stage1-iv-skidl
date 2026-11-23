@@ -110,7 +110,7 @@ blocks:
     name: Power Buffer (Voltage Source Output Stage)
     file: blocks/output_buffer.py
     fn: create_output_buffer_block
-    key_parts: [U5 OPA547T (OPA548T symbol), R7 ILIM, R9 R_ISO, R38/C49 snubber (DNP)]
+    key_parts: [U5 OPA547T (OPA548T symbol), R7 ILIM, R9 R_ISO, R38/C49 output R-C network]
   - sheet: 5
     name: Current Sensing
     file: blocks/current_sense.py
@@ -312,11 +312,15 @@ added_beyond_source_bom:
       CS_DAC (/SYNC) pull-up to +5VA at the DAC: holds /SYNC high while PA4
       floats, so no frame can be clocked in during a reset (audit F2).
   - ref: R38, C49
-    value: 10R, 10nF 50V X7R (both DNP)
+    value: 100R, 10nF 50V X7R (both fitted)
     reason: >
-      U5 output snubber pads (TI: SBOS056F Fig. 11 for the OPA547, SBOS070D
-      section 9.1 for the OPA548; audit V1); fitted only if bring-up sees
-      oscillation on the current-limit plateau.
+      U5 output R-C network, VO_RAW to AGND (pads: audit V1). TI: an R-C
+      network may be required when the OPA547 is driven into current limit
+      (SBOS056F); this design is, by intent. Fitted by the final audit:
+      TI's OPA547 model oscillates on the plateau with an inductive DUT
+      without it. 100 ohm, not TI's 3 ohm (shown at gain -4) or the earlier
+      10 ohm: on this unity-gain follower a 10 nF capacitor behind a few
+      ohms costs phase margin (docs/final_audit.md 3.7).
   - ref: R32, R33
     value: 10.0k 0.1%
     reason: >
@@ -471,7 +475,7 @@ validation:
       - DAC reference gate U11 with a pull-down on the DAC side, SEL on DAC_ARM
       - DAC_ARM has no DC path from any rail or GPIO (AC-coupled heartbeat pump only)
       - CS_DAC (/SYNC) has a pull-up
-      - FORCE+ path = power amp (U5) -> R9 -> F1 -> R30 -> D5 -> J4
+      - FORCE+ path = power amp (U5) -> R9 -> F1 -> R30 -> U12 (photorelay) -> D5 -> J4
       - Kelvin sense independent from force path
       - ADC uses SPI2, DAC uses SPI1
       - SPI1 and SPI2 are physically separate buses
@@ -619,12 +623,14 @@ assumptions:
     10.04 V/(R30 + R10) = 91.3 mA for any passive DUT, because U5's current
     limit is a plateau with a wide tolerance, not a bound.
   - >
-    Current limit: U5 is an OPA547T and R7 = 348k, a plateau centred on
+    Current limit: U5 is an OPA547T and R7 = 348k, a plateau designed for
     49 mA at +/-15 V (62.6 mA by the SBOS056F equation at +/-30 V, 25 C;
-    typically 42..59 mA with polarity and temperature; 9..89 mA with every
-    data-sheet error stacked). validation/measurement_range.py fails the
-    build if it can reach zero. An OPA548 cannot be set this low (49 mA is
-    inside its limit tolerance): docs/final_audit.md. The passive bound is
+    expected 45..65 mA with polarity and temperature; 8..89 mA with every
+    error of the limit stacked). validation/measurement_range.py fails the
+    build if that stack falls under 5 mA or if a typical unit would show no
+    plateau. An OPA548 cannot be set this low (49 mA is inside its limit
+    tolerance). R38 100R + C49 10nF at U5's output are fitted for stability
+    on the plateau: docs/final_audit.md. The passive bound is
     R30 (128 mA DUT short, 143 mA FORCE+ to AGND, up to 1.96 W in a 2 W
     PR02); F1 is not a backstop at that current.
   - E/S MCU control of U5 deferred (needs level shifting) — tied enabled.

@@ -4,7 +4,10 @@
 > it: the final design audit ([`final_audit.md`](final_audit.md)) corrected
 > R30's order code to **PR02000201000FA100** (the …FB100 code below names no
 > real part) and changed U5 to an **OPA547T** with R7 = 348 kΩ, D7 to
-> **BZT52B24** and C26/C27 to 18 pF. The current parts list is
+> **BZT52B24** and C26/C27 to 18 pF. The output snubber of item V1 is now
+> **fitted, with R38 = 100 Ω** (not the 10 Ω below, which would have cost
+> the unity-gain stage its phase margin), and C17/C18 are a polymer
+> tantalum, **TCJB106M035R0200E**. The current parts list is
 > [`component_manifest.md`](../component_manifest.md).
 
 This records how the corrections from the final adversarial hardware audit

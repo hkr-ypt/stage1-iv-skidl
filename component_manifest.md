@@ -1,6 +1,6 @@
 # Component Manifest — Stage 1 I–V Characterization System
 
-Total components: **141** — 132 on the board (129 fitted, 3 DNP footprints) and 9 schematic-only PWR_FLAG symbols.
+Total components: **141** — 132 on the board (131 fitted, 1 DNP footprints) and 9 schematic-only PWR_FLAG symbols.
 
 | Ref | Value | MPN | KiCad Library | Footprint | Sheet | Fit | Status |
 |-----|-------|-----|---------------|-----------|-------|-----|--------|
@@ -29,8 +29,8 @@ Total components: **141** — 132 on the board (129 fitted, 3 DNP footprints) an
 | C14 | 0.01uF | generic | Device:C | Capacitor_SMD:C_0805_2012Metric | 4 Power Buffer | fit | OK — pin numbers read from Device.kicad_sym:1761 |
 | C15 | 100nF 50V X7R | generic | Device:C | Capacitor_SMD:C_0805_2012Metric | 4 Power Buffer | fit | OK — pin numbers read from Device.kicad_sym:1761 |
 | C16 | 100nF 50V X7R | generic | Device:C | Capacitor_SMD:C_0805_2012Metric | 4 Power Buffer | fit | OK — pin numbers read from Device.kicad_sym:1761 |
-| C17 | 10uF/35V | generic | Device:C_Polarized | Capacitor_Tantalum_SMD:CP_EIA-3528-21_Kemet-B | 4 Power Buffer | fit | OK — pin numbers read from Device.kicad_sym:5140 |
-| C18 | 10uF/35V | generic | Device:C_Polarized | Capacitor_Tantalum_SMD:CP_EIA-3528-21_Kemet-B | 4 Power Buffer | fit | OK — pin numbers read from Device.kicad_sym:5140 |
+| C17 | 10uF/35V | TCJB106M035R0200E | Device:C_Polarized | Capacitor_Tantalum_SMD:CP_EIA-3528-21_Kemet-B | 4 Power Buffer | fit | OK — pin numbers read from Device.kicad_sym:5140 |
+| C18 | 10uF/35V | TCJB106M035R0200E | Device:C_Polarized | Capacitor_Tantalum_SMD:CP_EIA-3528-21_Kemet-B | 4 Power Buffer | fit | OK — pin numbers read from Device.kicad_sym:5140 |
 | C19 | 100pF | generic | Device:C | Capacitor_SMD:C_0603_1608Metric | 4 Power Buffer | fit | OK — pin numbers read from Device.kicad_sym:1761 |
 | C20 | 100nF 50V X7R | generic | Device:C | Capacitor_SMD:C_0603_1608Metric | 5 Current Sense | fit | OK — pin numbers read from Device.kicad_sym:1761 |
 | C21 | 100nF 50V X7R | generic | Device:C | Capacitor_SMD:C_0603_1608Metric | 5 Current Sense | fit | OK — pin numbers read from Device.kicad_sym:1761 |
@@ -61,7 +61,7 @@ Total components: **141** — 132 on the board (129 fitted, 3 DNP footprints) an
 | C46 | 100nF | generic | Device:C | Capacitor_SMD:C_0603_1608Metric | 3 DAC/Sweep | fit | OK — pin numbers read from Device.kicad_sym:1761 |
 | C47 | 100nF | generic | Device:C | Capacitor_SMD:C_0603_1608Metric | 2 MCU | fit | OK — pin numbers read from Device.kicad_sym:1761 |
 | C48 | 470nF 16V X7R | generic | Device:C | Capacitor_SMD:C_0603_1608Metric | 2 MCU | fit | OK — pin numbers read from Device.kicad_sym:1761 |
-| C49 | 10nF 50V X7R | generic | Device:C | Capacitor_SMD:C_0805_2012Metric | 4 Power Buffer | DNP | OK — pin numbers read from Device.kicad_sym:1761 |
+| C49 | 10nF 50V X7R | generic | Device:C | Capacitor_SMD:C_0805_2012Metric | 4 Power Buffer | fit | OK — pin numbers read from Device.kicad_sym:1761 |
 | D1 | 1N4148W | 1N4148W | Device:D | Diode_SMD:D_SOD-123 | 6 Voltage Sense | fit | OK — pin numbers read from Device.kicad_sym:11674 |
 | D2 | 1N4148W | 1N4148W | Device:D | Diode_SMD:D_SOD-123 | 6 Voltage Sense | fit | OK — pin numbers read from Device.kicad_sym:11674 |
 | D3 | 1N4148W | 1N4148W | Device:D | Diode_SMD:D_SOD-123 | 6 Voltage Sense | fit | OK — pin numbers read from Device.kicad_sym:11674 |
@@ -120,7 +120,7 @@ Total components: **141** — 132 on the board (129 fitted, 3 DNP footprints) an
 | R35 | 1M | generic | Device:R | Resistor_SMD:R_0603_1608Metric | 3 DAC/Sweep | fit | OK — pin numbers read from Device.kicad_sym:104590 |
 | R36 | 1k | generic | Device:R | Resistor_SMD:R_0603_1608Metric | 2 MCU | fit | OK — pin numbers read from Device.kicad_sym:104590 |
 | R37 | 100k | generic | Device:R | Resistor_SMD:R_0603_1608Metric | 2 MCU | fit | OK — pin numbers read from Device.kicad_sym:104590 |
-| R38 | 10R | generic | Device:R | Resistor_SMD:R_0805_2012Metric | 4 Power Buffer | DNP | OK — pin numbers read from Device.kicad_sym:104590 |
+| R38 | 100R | generic | Device:R | Resistor_SMD:R_0805_2012Metric | 4 Power Buffer | fit | OK — pin numbers read from Device.kicad_sym:104590 |
 | R39 | 620R 1% 0.25W | generic | Device:R | Resistor_SMD:R_1206_3216Metric | 8 Protection/DUT | fit | OK — pin numbers read from Device.kicad_sym:104590 |
 | SW1 | RESET | generic | Switch:SW_Push | Button_Switch_THT:SW_PUSH_6mm | 2 MCU | fit | OK — pin numbers read from Switch.kicad_sym:11011 |
 | TP1 | V_SWEEP | n/a | Connector:TestPoint | TestPoint:TestPoint_Pad_D1.5mm | 3 DAC/Sweep | fit | OK — pin numbers read from Connector.kicad_sym:339728 |

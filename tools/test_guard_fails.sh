@@ -444,6 +444,41 @@ for old, new in (("value=\"OPA547T\"", "value=\"OPA548T\""),
     assert old in s
     s = s.replace(old, new)
 p.write_text(s)
+p = pathlib.Path("libraries/custom_symbols.py"); s = p.read_text()
+old = "\"OPA547T\", \"RESOLVED\""
+assert s.count(old) == 1
+p.write_text(s.replace(old, "\"OPA548T\", \"RESOLVED\""))
+'
+
+# 35. R7 = 412 k on the OPA547T: above zero by 0.1 mA with a nominal resistor
+#     and nominal rails, below zero with R7 at +1 % and the rails 0.5 V low.
+#     The stack must include both, and leave a floor
+expect_fail range "U5 current limit positive only at nominal R7 and rails" '
+import pathlib
+p = pathlib.Path("blocks/output_buffer.py"); s = p.read_text()
+old = "value=\"348k 1%\""
+assert old in s
+p.write_text(s.replace(old, "value=\"412k 1%\""))
+'
+
+# 36. R7 = 200 k: a 100 mA setting, above what R30 + R10 and the PTCs pass into
+#     a shorted DUT, so no unit would show a current-limit plateau at all
+expect_fail range "U5 current limit set above what the series path passes" '
+import pathlib
+p = pathlib.Path("blocks/output_buffer.py"); s = p.read_text()
+old = "value=\"348k 1%\""
+assert old in s
+p.write_text(s.replace(old, "value=\"200k 1%\""))
+'
+
+# 37. the order code of U5 left at OPA548T while its value says OPA547T: the
+#     limit would be checked for one amplifier and the other bought
+expect_fail range "U5 value and order code name different amplifiers" '
+import pathlib
+p = pathlib.Path("libraries/custom_symbols.py"); s = p.read_text()
+old = "\"OPA547T\", \"RESOLVED\""
+assert s.count(old) == 1
+p.write_text(s.replace(old, "\"OPA548T\", \"RESOLVED\""))
 '
 
 echo "----------------------------------------------------------------------"

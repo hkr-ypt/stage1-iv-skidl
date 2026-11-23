@@ -131,24 +131,28 @@ V_SWEEP = (R4/R3)·(V_A − V_B/2) = 8.0321·(V_A − V_B/2), with V_A, V_B in 0
   as an open or swapped sense lead.
 * **Output disconnected (U12 open).** U12 disconnects FORCE+ whenever a
   ±15 V rail is missing or low (guaranteed open with either rail absent,
-  guaranteed closed at the nominal ±15 V rails, from ±14.25 V at 25 °C and
-  ±14.7 V at 50 °C; `final_corrections.md` §2.5, `final_audit.md` §3.2).
+  closed at the nominal ±15 V rails, from ±14.3 V at 25 °C and about
+  ±14.75 V at 50 °C; `final_corrections.md` §2.5, `final_audit.md` §3.2).
   The MCU has no signal for it and cannot command it. Firmware sees it as: I ≈ 0
   however V_SWEEP is set, with the Kelvin voltage near 0 V (or wherever the
   DUT's own charge leaves it) instead of following the command. Report that
   as "output disconnected / analog supply missing", not as an open DUT, and
   do not adapt any calibration to it. An open DUT reads the same way, so the
   distinction needs a known load at start-up (or the operator's word).
-* **Current-limit plateau** (centred on ~49 mA by R7 = 348 kΩ on the
+* **Current-limit plateau** (designed for ~49 mA by R7 = 348 kΩ on the
   OPA547T now fitted as U5; a design centre, not yet measured) is normal
   operation, not a fault. Hardware facts firmware should expect
-  (`final_audit.md` §3.1): the two polarities differ (the sinking limit is
-  typically about 8 mA higher than the sourcing one); the plateau falls by
-  about 0.2 mA per kelvin as U5 warms, so it sags by several mA during a
-  long hold on the plateau; a board is in family anywhere from 30 to 75 mA,
-  and the data-sheet extremes are 9 and 89 mA. Firmware may detect it (I
-  flat while V_SWEEP keeps moving) and must not report the plateau region
-  as DUT behaviour.
+  (`final_audit.md` §3.1, §7): the expected plateau is 45…65 mA; the two
+  polarities differ (the sinking limit is typically up to about 8 mA higher
+  than the sourcing one); the plateau falls by about 0.2 mA per kelvin as
+  U5 warms, so it sags by several mA during a long hold on the plateau; a
+  board is in family anywhere from 30 to 75 mA, and the stack of the
+  limit's errors runs from 8 to 89 mA. A unit whose limit is above the
+  79…87 mA that the series resistors pass into a short has no plateau
+  there. Firmware may detect the plateau (the Kelvin-independent estimate
+  of VO_SENSE falling short of the command; I flat while V_SWEEP keeps
+  moving) and must not report the plateau region as DUT behaviour. On a
+  fast step into limit the first samples can overshoot the plateau.
   **[firmware]** Records on the plateau carry the `CLIM` flag; the threshold
   comes from the `i_plateau` calibration coefficient, nominal 49 mA until the
   bring-up measurement replaces it.

@@ -40,12 +40,15 @@ could fix it. Two changes, both needed:
      its current (V_K / R_total) from SENSE+ to SENSE- through the DUT's
      return, i.e. through the R10 shunt, and appear as a fake parallel
      conductance in every I-V curve. Here the SENSE+ leg returns to AGND
-     directly, and the SENSE- leg only diverts V(SENSE-)/50.2k = I*R10/50.2k
-     (0.02 % of I, proportional, calibrates out).
+     directly, and the SENSE- leg only diverts V(SENSE-)/50.2k =
+     I*(R10 + R_F2)/50.2k around the shunt (0.03 % of I; proportional, but
+     F2 is a PTC, so it calibrates out only as far as F2 holds still).
 
 Divider mismatch converts common mode into error only through V(SENSE-), which
-sits at I*R10 (< 1 V): with 0.1 % parts the worst case is ~0.32 % * 0.92 V
-= 3 mV at the 92 mA physical current bound, and it scales with I.
+sits at I*(R10 + R_F2): F2 (3.0..7.5 ohm) lies between FORCE- and the shunt.
+With 0.1 % parts the worst case is ~0.32 % * 1.62 V = 5 mV at the 92 mA
+physical current bound (7.5 ohm in F2), and it scales with I. Bring-up
+measures it: both Kelvin leads on the DUT's low terminal, current flowing.
 
 RANGES ON THIS PATH, KEPT DISTINCT
 ----------------------------------

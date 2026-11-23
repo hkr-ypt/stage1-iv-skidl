@@ -66,9 +66,10 @@ synthesized generic rectangle:
   the last one, is cross-checked against TI SBOS070D and SBOS056F
   (`RESOLVED`). If a future part needs the
   flag, it will show on the sheet the same way.
-- **DNP parts** (R14, R38, C49) are emitted with `(in_bom no)` and
-  `(dnp yes)`, so KiCad greys them out and leaves them out of BOM exports.
-  Their footprints carry `exclude_from_bom` and `dnp` on the board.
+- **The DNP part** (R14) is emitted with `(in_bom no)` and `(dnp yes)`, so
+  KiCad greys it out and leaves it out of BOM exports. Its footprint
+  carries `exclude_from_bom` and `dnp` on the board. (R38 and C49, the U5
+  output network, were DNP until the final audit and are now fitted.)
 
 ## Connectivity model (label classes)
 

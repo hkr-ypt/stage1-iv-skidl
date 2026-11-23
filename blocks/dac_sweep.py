@@ -35,7 +35,7 @@ zero scale and V_SWEEP = 8.03 * (0 - 0) = 0, residual offsets only.
                      (V+) - 1.2 V = +13.8 V (SBOS079C), so
                      the real ceiling is 13.8 V..the +15 V
                      rail, past U5's specified input range
-                     ((V+) - 3 V = +12 V, SBOS070D).
+                     ((V+) - 3 V = +12 V, SBOS056F).
 
 The firmware requirements this creates are listed in docs/firmware_handoff.md
 and are not hardware protection.
@@ -124,7 +124,7 @@ def create_dac_block(n):
     # during U11's ~50 ms disarm. To +5VA, the DAC's own rail, because only
     # that rail is on this side of the AGND/DGND split here; 100 k keeps the
     # current into PA4 when it is an input or driven to 3.3 V at <= 17 uA
-    # (DS10314 allows +/-5 mA injection on TC pins; FT pins take 5 V). SYNC's
+    # (PA4 is an FT pin, DS10314 Table 8: 5 V tolerant, nothing is injected). SYNC's
     # VINH is 2.4 V, so the MCU's 3.3 V drive still reads high.
     R34 = R()(ref="R34", tag="R34", value="100k")
 

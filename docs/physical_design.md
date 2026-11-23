@@ -1,5 +1,13 @@
 # Physical design as source: the routed, bipolar board of record
 
+> **Later changes.** This note is kept as written. No copper, pad or
+> placement described here has changed since. The final design audit
+> ([`final_audit.md`](final_audit.md)) changed what is fitted on it: U5 is
+> an **OPA547T** (the "OPA548 holes" below are its holes: same package and
+> footprint); R30 dissipates up to **1.96 W** in the rail fault, not the
+> 1.6 W given below; and the snubber **R38/C49 is fitted** (R38 = 100 Ω),
+> not DNP.
+
 This repository used to generate an auto-placed, **unrouted** board and keep
 the board that actually gets built — placed and routed by a person in KiCad —
 as a separate, hand-maintained project in `unipolar-routed/`. The two could only drift

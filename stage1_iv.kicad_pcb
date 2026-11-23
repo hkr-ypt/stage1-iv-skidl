@@ -19131,7 +19131,7 @@
 				)
 			)
 		)
-		(property "MPN" "generic"
+		(property "MPN" "TCJB106M035R0200E"
 			(at 0 0 0)
 			(layer "F.Fab")
 			(hide yes)
@@ -19362,7 +19362,7 @@
 				)
 			)
 		)
-		(property "MPN" "generic"
+		(property "MPN" "TCJB106M035R0200E"
 			(at 0 0 90)
 			(layer "F.Fab")
 			(hide yes)
@@ -20127,7 +20127,7 @@
 				)
 			)
 		)
-		(property "Value" "10R"
+		(property "Value" "100R"
 			(at 0 1.65 90)
 			(layer "F.Fab")
 			(effects
@@ -20209,7 +20209,7 @@
 				)
 			)
 		)
-		(attr smd exclude_from_bom dnp)
+		(attr smd)
 		(fp_line
 			(start -0.227064 -0.735)
 			(end 0.227064 -0.735)
@@ -20396,7 +20396,7 @@
 				)
 			)
 		)
-		(attr smd exclude_from_bom dnp)
+		(attr smd)
 		(fp_line
 			(start -0.261252 -0.735)
 			(end 0.261252 -0.735)

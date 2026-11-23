@@ -169,7 +169,7 @@ NETCLASSES = {
                  # R30 -> U12 (photorelay) and F2 -> R10 (shunt high side):
                  # the same current and the same +/-11 V as FORCE+/FORCE-.
                  "FORCE_SW", "ISENSE_HI",
-                 # U5 output snubber midpoint (R38/C49, DNP): sits on the
+                 # U5 output snubber midpoint (R38/C49): sits on the
                  # +/-11 V output node, so it keeps the output's clearance.
                  "VO_SNUB"],
     },

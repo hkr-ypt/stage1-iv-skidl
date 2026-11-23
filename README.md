@@ -414,7 +414,7 @@ assertions on their own.
 - `DAC_ARM` has no DC path from any rail or GPIO: it is driven only through
   the charge-pump diode from a capacitively coupled heartbeat
 - the DAC's `/SYNC` (CS_DAC) has a pull-up
-- FORCE+ path = `power amp (U5) → R9 → F1(fuse) → R30 → D5(TVS) → J4`
+- FORCE+ path = `power amp (U5) → R9 → F1(fuse) → R30 → U12 (photorelay) → D5(TVS) → J4`
 - Kelvin sense (`SENSE±`) is independent from the force path
 - ADC uses **SPI2**, DAC uses **SPI1**
 - SPI1 and SPI2 are physically **separate buses**
@@ -532,11 +532,13 @@ and `manifest.yaml → schematic_assumptions`.
   pulls the DAC reference to 0 V, and V_SWEEP returns to ≈ 0 V within about
   50 ms, whatever codes the DAC holds. R34 holds the DAC's /SYNC high while
   the MCU's pins float.
-- **OPA547 native current limit** R7 = 348 kΩ → a plateau centred on 49 mA
-  (§C.4) at this board's ±15 V rails: typically 42…59 mA with polarity and
-  temperature, 9…89 mA with every data-sheet error stacked. Nothing relies on
-  its exact value. (The OPA548 first fitted here could not be set this low:
-  49 mA lay inside its limit tolerance. `docs/final_audit.md`.)
+- **OPA547 native current limit** R7 = 348 kΩ → a plateau designed for
+  49 mA (§C.4): expected 45…65 mA at this board's ±15 V rails, depending on
+  polarity and temperature, and 8…89 mA with every error of the limit
+  stacked. Nothing relies on its exact value. (The OPA548 first fitted here
+  could not be set this low: 49 mA lay inside its limit tolerance.) The
+  output R-C network R38/C49 (100 Ω + 10 nF) is fitted, for stability on
+  the plateau. `docs/final_audit.md`.
 - **In-the-loop isolation resistor** R9 with feedback tapped on its far side
   (§C.6) — which is why the independent Kelvin sense still exists.
 - **Bipolar measurement, zero at mid-scale.** Both INA128 `REF` pins and the

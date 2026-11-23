@@ -26,12 +26,12 @@ sign, so |I| <= |V_SWEEP| / (R30 + R10 + R_F1) <= 10.04 V / 110 ohm = 91.3 mA
 whatever U5's current limit does (Sheet 3 sets V_SWEEP, Sheet 8 holds R30).
 The NEGATIVE half of that bound is hardware; the positive half holds while
 firmware keeps DAC channel B at full scale (Sheet 3, "firmware contract").
-A sweep commanded past it can reach the ~127 mA fault-envelope current and
+A sweep commanded past it can reach the ~128 mA fault-envelope current and
 over-range this channel; validation/measurement_range.py reports both.
 That independence matters: the current limit is a plateau with a tolerance,
 not a bound. U5 is an OPA547 (Sheet 4): its plateau, centred near 49 mA by
-R7, shifts with polarity and temperature (typically 42..59 mA) and by up to
-+/-30 mA between units (SBOS056F), 9..89 mA in all. At the old G = 4.846 the
+R7, shifts with polarity and temperature (expected 45..65 mA) and by up to
++/-30 mA between units (SBOS056F), 8..89 mA in all. At the old G = 4.846 the
 channel would clip at ~48-52 mA, i.e. inside that span, and every forward-bias
 plateau of a hysteresis sweep would be lost. At G = 2.40:
 
