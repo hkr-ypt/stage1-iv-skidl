@@ -13,7 +13,7 @@ and on the FORCE- return:
 What each stage does, and what it does NOT do:
 
   * U5's ILIM (OPA547, Sheet 4) sets the normal current plateau: design
-    centre 49 mA, expected 45..65 mA depending on polarity and U5's
+    centre 49 mA, expected 40..65 mA depending on polarity and U5's
     temperature, and anywhere from 8 to 89 mA once the data sheet's
     +/-30 mA maximum unit tolerance is stacked on its typical supply and
     temperature shifts (SBOS056F; an extrapolation, see Sheet 4). It is a
@@ -50,8 +50,8 @@ What each stage does, and what it does NOT do:
     the current is <= 15.5 V / (3.0 + 9.99) ohm = 1.19 A, inside F2's 2 A
     Imax, and R10 is a 3 W wirewound (Sheet 5) whose short-time-overload
     rating (5 x 3 W for 5 s) covers the ~14 W it carries until F2 trips
-    (~0.6 s typical at 1.2 A, Bel curve A; the data sheet bounds it only at
-    0.5 A, <= 10 s). Recalibrate R10 after any such event. F2 is in SERIES:
+    (well under 1 s typical at 1.2 A by Bel's time-to-trip curves, which
+    are guidance only; the data sheet bounds it only at 0.5 A, <= 10 s). Recalibrate R10 after any such event. F2 is in SERIES:
     nothing is connected across the shunt, so it adds no leakage path, does
     not touch the Kelvin pair (J5/J6), is symmetric for signed current and
     leaves AGND where it was. Its 3..7.5 ohm sits outside both measurements;

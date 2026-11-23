@@ -171,6 +171,12 @@ def write_component_manifest(circuit):
         f"board ({len(rows) - n_virtual - n_dnp} fitted, {n_dnp} DNP "
         f"footprints) and {n_virtual} schematic-only PWR_FLAG symbols.",
         "",
+        "**Before buying.** A line whose MPN is `generic` is not a free "
+        "choice. The tolerance, dielectric, power and voltage ratings that "
+        "the values below do not carry, and the parts that must be bought by "
+        "exact code, are in `docs/final_audit.md` §6 (\"Buying the parts\") "
+        "and `docs/bringup_checklist.md` §1.",
+        "",
         "| Ref | Value | MPN | KiCad Library | Footprint | Sheet | Fit | Status |",
         "|-----|-------|-----|---------------|-----------|-------|-----|--------|",
     ]

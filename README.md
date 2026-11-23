@@ -3,7 +3,8 @@
 A complete, **executable** [SKiDL](https://github.com/devbisme/skidl) source
 design for a Stage 1 I–V characterization instrument: a precision bipolar
 **±10 V** voltage-source with 4-wire **Kelvin** sensing, **bipolar voltage and
-current measurement over the whole sweep** (±11.8 V, ±97.8 mA guaranteed, for a
+current measurement over the whole sweep** (±11.8 V, ±97.8 mA guaranteed at the
+nominal channel gain; ±11.76 V, ±97.3 mA with gain and offset at their limits; for a
 source that can reach ±10.04 V and ±91.3 mA), hardware current limiting
 (~49 mA), defense-in-depth protection, and a **shared 2.500 V reference** for
 ratiometric measurement.
@@ -395,9 +396,9 @@ so the build **aborts** on any failure. Five hard checks:
    `UNCONNECTED_PAD_ALLOWLIST` with a written reason
 5. no part carries `Pins_Verified == "PLACEHOLDER-REMAP"`
 
-Current result: 135 parts (9 virtual PWR_FLAGs), 392 pads, **345 netted, 47
+Current result: 141 parts (9 virtual PWR_FLAGs), 406 pads, **359 netted, 47
 declared no-connect, 0 unaccounted**. `tools/test_guard_fails.sh` reintroduces real defects one
-at a time (27 cases, among them the five structural ones above and, since the
+at a time (40 cases, among them the five structural ones above and, since the
 audit corrections, the midpoint back on VREF_2V5, the DAC reference wired
 around U11, a DC path onto DAC_ARM and R30 back to 1/4 W) and confirms every
 one is caught. `python3 validation/assertions.py` runs the connectivity
@@ -507,6 +508,27 @@ and `manifest.yaml → schematic_assumptions`.
 
 ---
 
+## Operating rules (hardware; `docs/final_audit.md` §6)
+
+The instrument is built for passive, non-inductive two-terminal DUTs.
+Four rules follow from the hardware as it is:
+
+- **A DUT that holds voltage** (a battery, a charged capacitor, a powered
+  circuit): power the board before connecting it, disconnect it before
+  power-off, keep it floating, never above ±15 V. The SENSE clamps D1–D4
+  connect the jacks to the ±15 V rails.
+- **Switching off:** `DISARM` first; switch ±15 V off first, or all three
+  rails together.
+- **An inductive DUT** (a coil, a relay, a motor, a transformer winding):
+  do not take it into current limit until the bring-up test of the fast
+  exit from the negative limit has passed on the board
+  (`docs/bringup_checklist.md` §7). In TI's model that exit can leave U5
+  oscillating with current still in the DUT.
+- **Nothing capacitive directly on VO_RAW or TP2** (a coaxial cable, a ×1
+  probe): use a ×10 probe.
+
+---
+
 ## Key design points (from the source spec, enforced in code)
 
 - **Two separate SPI buses** (§C.1) — SPI1→DAC (write-only), SPI2→ADC.
@@ -533,12 +555,15 @@ and `manifest.yaml → schematic_assumptions`.
   50 ms, whatever codes the DAC holds. R34 holds the DAC's /SYNC high while
   the MCU's pins float.
 - **OPA547 native current limit** R7 = 348 kΩ → a plateau designed for
-  49 mA (§C.4): expected 45…65 mA at this board's ±15 V rails, depending on
-  polarity and temperature, and 8…89 mA with every error of the limit
-  stacked. Nothing relies on its exact value. (The OPA548 first fitted here
-  could not be set this low: 49 mA lay inside its limit tolerance.) The
+  49 mA (§C.4): expected 40…65 mA at this board's ±15 V rails, depending on
+  polarity and temperature, and 8…89 mA once the ±30 mA maximum unit
+  tolerance is stacked on the typical supply and temperature shifts (an
+  extrapolation). Nothing relies on its exact value. (The OPA548 first
+  fitted here could not be relied on this low: 49 mA lay inside its limit
+  tolerance.) The
   output R-C network R38/C49 (100 Ω + 10 nF) is fitted, for stability on
-  the plateau. `docs/final_audit.md`.
+  the plateau; see the operating rule above for inductive DUTs.
+  `docs/final_audit.md`.
 - **In-the-loop isolation resistor** R9 with feedback tapped on its far side
   (§C.6) — which is why the independent Kelvin sense still exists.
 - **Bipolar measurement, zero at mid-scale.** Both INA128 `REF` pins and the
@@ -556,7 +581,7 @@ and `manifest.yaml → schematic_assumptions`.
     guaranteed** (±12.55 V at nominal full scale), so no sweep point can
     over-range it.
 - **Current sense** — R10 = 10 Ω shunt, U6 at G = 2.4006 (R11 = 35.7 k),
-  `I_SENSE_OUT = 2.500 V + 24.0 V/A·I`: **±97.8 mA guaranteed**. The gain is
+  `I_SENSE_OUT = 2.500 V + 24.0 V/A·I`: **±97.8 mA guaranteed** (nominal channel gain; ±97.3 mA from limits). The gain is
   sized to the largest current *any passive DUT can draw*,
   `10.04 V/(R30 + R10) = 91.3 mA`, not to U5's ~49 mA current limit, which
   is a plateau with a wide tolerance — so the current-limit plateau of a

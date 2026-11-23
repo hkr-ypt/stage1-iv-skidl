@@ -29,8 +29,8 @@ firmware keeps DAC channel B at full scale (Sheet 3, "firmware contract").
 A sweep commanded past it can reach the ~128 mA fault-envelope current and
 over-range this channel; validation/measurement_range.py reports both.
 That independence matters: the current limit is a plateau with a tolerance,
-not a bound. U5 is an OPA547 (Sheet 4): its plateau, centred near 49 mA by
-R7, shifts with polarity and temperature (expected 45..65 mA) and by up to
+not a bound. U5 is an OPA547 (Sheet 4): its plateau, designed for 49 mA by
+R7, shifts with polarity and temperature (expected 40..65 mA) and by up to
 +/-30 mA between units (SBOS056F), 8..89 mA in all. At the old G = 4.846 the
 channel would clip at ~48-52 mA, i.e. inside that span, and every forward-bias
 plateau of a hysteresis sweep would be lost. At G = 2.40:
@@ -62,8 +62,8 @@ Footprint: KiCad DIN0614 (14.3 x 5.7 mm) at 20.32 mm pitch, horizontal:
 the body lies flat, so its two terminations sit at the same height and
 temperature (no lead-length asymmetry to turn self-heating into thermal EMF
 across the shunt). Why a 3 W part for a 24 mW job: R10 must survive an
-external source on J7 until F2 trips — up to 1.19 A, ~14 W, ~0.6 s typical
-(Sheet 8) — and the RS02B's short-time overload test (5 x rated power,
+external source on J7 until F2 trips — up to 1.19 A, ~14 W, well under 1 s
+typical (Sheet 8) — and the RS02B's short-time overload test (5 x rated power,
 5 s, dR <= 0.2 % + 0.05 ohm) covers that. A 0.5 W metal film does not:
 Vishay CMF (doc. 31018) tests 2.5 x rated voltage for 5 s, i.e. ~3 W. Costs, stated: the element is CuNi or
 NiCr depending on value (data sheet), so thermal EMF at the terminations is

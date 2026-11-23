@@ -3,7 +3,7 @@ output_buffer.py — SHEET 4: Power Buffer (Voltage Source Output Stage)
 =====================================================================
 
 OPA547 power buffer with native current limit (R7 sets the plateau: design
-centre ~49 mA, expected 45..65 mA in this board's conditions, spec §C.4), an
+centre ~49 mA, expected 40..65 mA in this board's conditions, spec §C.4), an
 in-the-loop output isolation resistor R9 (spec §C.6) and an output R-C
 network R38/C49.
 
@@ -62,7 +62,7 @@ tabulates or plots (lowest: 100 mA). Carrying them down as fixed currents
 is an extrapolation, chosen because it is the pessimistic one for the
 question that matters: can the limit come out at zero? If the shifts
 instead scaled with the setting, the plateau would be near +61 / -62 mA.
-So: EXPECTED plateau 45..65 mA (the table above at its low end, the bare
+So: EXPECTED plateau 40..65 mA (the table above, to a hot case, at its low end, the bare
 equation at its high end); with the +/-30 mA unit tolerance a board can
 come out anywhere between the two ends of the stack; and the stack stays
 8 mA clear of zero. The plateau is not a precision quantity on any part of
@@ -73,7 +73,7 @@ validation/measurement_range.py recomputes the stack on every build and
 fails if its low end is under 5 mA, or if a typical unit would limit above
 what the series path passes into a shorted DUT (79..87 mA; then there is no
 plateau). 453 k, the value the bare equation gives for 49 mA, fails the
-first test (-5 mA); values below 301 k fail the second. The upper end of the
+first test (-5 mA); values below 309 k fail the second. The upper end of the
 maximum-tolerance stack (89 mA) is above 79..87 mA: a unit in the top few
 mA shows no plateau into a dead short, which is harmless (R30 bounds the
 current) and is reported, not failed. To move one unit's plateau change R7:
@@ -134,38 +134,52 @@ This design is driven into current limit by intent. The pads were added by
 the first audit (V1) and left unfitted, with 10 ohm + 10 nF to be fitted if
 bring-up saw oscillation. Two things changed that:
 
-  * On the plateau the output is a current source, and the limiter's loop
-    gain follows the impedance at the output node. A resistive or capacitive
-    DUT leaves it flat or falling; an INDUCTIVE one (a winding, a coil, a
-    wire-wound resistor: roughly 30 uH .. 10 mH with a few ohms) makes it
-    rise with frequency. In TI's OPA547 macromodel the plateau then
-    oscillates, up to rail to rail in the negative polarity, with no network
-    fitted. With 10 nF behind 100 ohm from VO_RAW to AGND it is quiet in
-    every case run: 10 uH .. 100 mH with 0.3 .. 20 ohm in series, both
-    polarities, and resistive and capacitive DUTs as before; 47 and 220 ohm
-    did the same where they were run (docs/final_audit.md §4.1).
-    The bring-up test that was to decide the matter used capacitors across
-    the jacks, which is the one condition that hides it.
+  * In TI's OPA547 macromodel the output in current limit has a
+    negative-real, capacitive impedance from about 25 kHz to 1 MHz. An
+    INDUCTIVE DUT (a winding, a coil, a wire-wound resistor: roughly
+    30 uH .. 10 mH with a few ohms) resonates with it, and with no network
+    fitted the plateau oscillates, up to rail to rail in the negative
+    polarity. With 10 nF behind 100 ohm from VO_RAW to AGND the STEADY
+    plateau is quiet in every case run: 10 uH .. 100 mH with 0.3 .. 20 ohm
+    in series, both polarities, and resistive and capacitive DUTs as before
+    (docs/final_audit.md §4.1). The bring-up test that was to decide the
+    matter used capacitors across the jacks, which is the one condition
+    that hides it.
+    WHAT THE NETWORK DOES NOT CURE IN THE MODEL: (1) a window about 20 mV
+    wide at the positive knee where the output carries about 0.3 V p-p;
+    (2) a FAST fall of the command (0.4 V/us or more; U3 gives 0.8) out of
+    the NEGATIVE limit with a 0.3 .. 10 mH DUT, which leaves U5 oscillating
+    with about 60 mA still in the DUT although the command is at 0 V. Ramps
+    do not do it; the immediate-zero paths (firmware cut-off and fault
+    handlers, the reference gate) do. Until bring-up shows the board does
+    not do it, an inductive DUT is not to be taken into current limit. The
+    remedy, if silicon needs it, takes no copper: 10 nF C0G on top of each
+    of R4 and R6 (Sheet 3), which slows every edge of V_SWEEP to
+    0.05 V/us (docs/final_audit.md §3.7).
   * The values on the pads were wrong for this amplifier. TI's 3 ohm +
     10 nF is shown on an inverting gain-of-4 stage. On a unity-gain OPA547 a
     10 nF capacitor behind 3 or 10 ohm is still a capacitive load at the
     1 MHz crossover (10 nF is 16 ohm there), and TI's own curve puts 4.5 nF
-    at 50 % overshoot: an amplifier model fitted to that curve loses 25..35
-    degrees of phase margin with either. Behind 100 ohm the network is a
-    resistor where it matters: 100 ohm in parallel with the >= 112 ohm DUT
-    path is 53 ohm, the load TI characterises the part with (RL = 50 ohm for
-    gain-bandwidth, slew rate and the open-loop gain/phase plot). The same
-    fitted model puts the phase margin within 2 degrees of the unfitted
-    stage, or better, for any DUT and for an output resistance half or
-    twice the fitted one.
+    at 50 % overshoot: models of the amplifier fitted to TI's curves lose
+    10..27 degrees of phase margin with 10 ohm and 20..40 with 3 ohm, down
+    to 2..3 dB of gain margin. Behind 100 ohm the network is a resistor
+    where it matters: 100 ohm in parallel with the >= 112 ohm DUT path is
+    53 ohm, the load TI characterises the part with (RL = 50 ohm for
+    gain-bandwidth, slew rate and the open-loop gain/phase plot, which
+    reads about 60 degrees and 14 dB of margin). In the same models the
+    fitted network moves the phase margin by a few degrees either way and
+    never lowers the worst case over DUTs.
 
-So R38 is 100 ohm and both parts are fitted. C49 draws no direct current
-and its alternating current returns to AGND, not through the shunt: nothing
-in the measurement sees it. On a full-scale slew (0.8 V/us from U3) it
-takes 8 mA for 25 us. All of this is model and data-sheet evidence, not a
-measurement: bring-up checks a small step in the linear region and the
-plateau with an inductive load, in both polarities
-(docs/bringup_checklist.md §7). Removing R38 returns the stage to the
+So R38 is 100 ohm and both parts are fitted. C49 is 10 nF C0G, +/-5 %: in
+the model 5 nF is too little near the negative entry and 6 nF is enough,
+and a 10 nF X7R can be near 7 nF once tolerance, temperature, bias and
+ageing are stacked; a C0G part stays at 9.5 nF or more. It
+draws no direct current and its alternating current returns to AGND, not
+through the shunt: nothing in the measurement sees it. On a full-scale slew
+(0.8 V/us from U3) it takes 8 mA for 25 us. All of this is model and
+data-sheet evidence, not a measurement: bring-up checks U5's margin in the
+linear region, the plateau with resistive, capacitive and inductive loads
+in both polarities, and the fast exit (docs/bringup_checklist.md §7). Removing R38 returns the stage to the
 unfitted state. Do not lower R38 below about 47 ohm, and do not fit TI's
 3 ohm here.
 
@@ -179,7 +193,7 @@ from skidl import Net
 def create_output_buffer_block(n):
     U5 = OPA548()(ref="U5", tag="U5", value="OPA547T")
     # R_CL for the OPA547 (header): 62.6 mA by the data-sheet equation;
-    # expected 45..65 mA at +/-15 V, less when sourcing and when U5 is warm.
+    # expected 40..65 mA at +/-15 V, less when sourcing and when U5 is warm.
     R7 = R()(ref="R7", tag="R7", value="348k 1%",
              footprint="Resistor_SMD:R_1206_3216Metric")
     R8 = R()(ref="R8", tag="R8", value="10k")
@@ -200,7 +214,10 @@ def create_output_buffer_block(n):
     # tantalum, 3528" ends up with a part that does not fit, or with a 16 V
     # or 25 V one on a 15 V rail. Kyocera AVX TCJ, case B (TCJ data sheet):
     # 10 uF, 35 V, ESR <= 0.2 ohm at 100 kHz, 125 C, recommended up to 80 %
-    # of rated voltage. Same pads, same polarity mark.
+    # of rated voltage. Same pads, same polarity mark. The maker does not
+    # allow an iron on it: solder paste and hot air or reflow, from a dry
+    # pack (MSL 3). Iron-only fallback: 4.7 uF / 35 V MnO2, case B
+    # (T491B475K035AT, TAJB475K035RNJ); see docs/final_audit.md 3.8.
     for cap in (C17, C18):
         cap.fields["MPN"] = "TCJB106M035R0200E"
     R9 = R()(ref="R9", tag="R9", value="10R 1% 0.25W",
@@ -210,7 +227,7 @@ def create_output_buffer_block(n):
     # Output snubber, FITTED (header): 100 ohm + 10 nF from VO_RAW to AGND.
     R38 = R()(ref="R38", tag="R38", value="100R",
               footprint="Resistor_SMD:R_0805_2012Metric")
-    C49 = C()(ref="C49", tag="C49", value="10nF 50V X7R",
+    C49 = C()(ref="C49", tag="C49", value="10nF 50V C0G 5%",
               footprint="Capacitor_SMD:C_0805_2012Metric")
 
     # ---- input ----

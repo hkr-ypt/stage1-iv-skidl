@@ -2,7 +2,7 @@
   (version "D")
   (design
     (source "main.py")
-    (date "11/23/2026 06:12 AM")
+    (date "11/23/2026 03:28 PM")
     (tool "SKiDL (2.2.3)")
     (sheet
       (number 1)
@@ -561,7 +561,7 @@
         (field
           (name "SKiDL Tag") "C14")
         (field
-          (name "SKiDL Line") "blocks/output_buffer.py:186"))
+          (name "SKiDL Line") "blocks/output_buffer.py:200"))
       (libsource
         (lib "NO_LIB")
         (part "C"))
@@ -595,7 +595,7 @@
         (field
           (name "SKiDL Tag") "C15")
         (field
-          (name "SKiDL Line") "blocks/output_buffer.py:188"))
+          (name "SKiDL Line") "blocks/output_buffer.py:202"))
       (libsource
         (lib "NO_LIB")
         (part "C"))
@@ -629,7 +629,7 @@
         (field
           (name "SKiDL Tag") "C16")
         (field
-          (name "SKiDL Line") "blocks/output_buffer.py:190"))
+          (name "SKiDL Line") "blocks/output_buffer.py:204"))
       (libsource
         (lib "NO_LIB")
         (part "C"))
@@ -663,7 +663,7 @@
         (field
           (name "SKiDL Tag") "C17")
         (field
-          (name "SKiDL Line") "blocks/output_buffer.py:192"))
+          (name "SKiDL Line") "blocks/output_buffer.py:206"))
       (libsource
         (lib "NO_LIB")
         (part "C_Polarized"))
@@ -697,7 +697,7 @@
         (field
           (name "SKiDL Tag") "C18")
         (field
-          (name "SKiDL Line") "blocks/output_buffer.py:194"))
+          (name "SKiDL Line") "blocks/output_buffer.py:208"))
       (libsource
         (lib "NO_LIB")
         (part "C_Polarized"))
@@ -731,7 +731,7 @@
         (field
           (name "SKiDL Tag") "C19")
         (field
-          (name "SKiDL Line") "blocks/output_buffer.py:208"))
+          (name "SKiDL Line") "blocks/output_buffer.py:225"))
       (libsource
         (lib "NO_LIB")
         (part "C"))
@@ -1762,7 +1762,7 @@
       (tstamps "49e1076a-f8bb-5f05-bd16-5665e5660893"))
     (comp
       (ref "C47")
-      (value "100nF")
+      (value "100nF 10% X7R")
       (description "Unpolarized capacitor")
       (footprint "Capacitor_SMD:C_0603_1608Metric")
       (fields
@@ -1796,7 +1796,7 @@
       (tstamps "e10b3125-5155-567a-b9ae-5b1b2d6efbcc"))
     (comp
       (ref "C48")
-      (value "470nF 16V X7R")
+      (value "470nF 16V X7R 10%")
       (description "Unpolarized capacitor")
       (footprint "Capacitor_SMD:C_0603_1608Metric")
       (fields
@@ -1830,7 +1830,7 @@
       (tstamps "8362b6d6-e0c2-5188-9331-efbbf9255579"))
     (comp
       (ref "C49")
-      (value "10nF 50V X7R")
+      (value "10nF 50V C0G 5%")
       (description "Unpolarized capacitor")
       (footprint "Capacitor_SMD:C_0805_2012Metric")
       (fields
@@ -1853,7 +1853,7 @@
         (field
           (name "SKiDL Tag") "C49")
         (field
-          (name "SKiDL Line") "blocks/output_buffer.py:213"))
+          (name "SKiDL Line") "blocks/output_buffer.py:230"))
       (libsource
         (lib "NO_LIB")
         (part "C"))
@@ -3827,7 +3827,7 @@
         (field
           (name "SKiDL Tag") "R38")
         (field
-          (name "SKiDL Line") "blocks/output_buffer.py:211"))
+          (name "SKiDL Line") "blocks/output_buffer.py:228"))
       (libsource
         (lib "NO_LIB")
         (part "R"))
@@ -3997,7 +3997,7 @@
         (field
           (name "SKiDL Tag") "R7")
         (field
-          (name "SKiDL Line") "blocks/output_buffer.py:183"))
+          (name "SKiDL Line") "blocks/output_buffer.py:197"))
       (libsource
         (lib "NO_LIB")
         (part "R"))
@@ -4031,7 +4031,7 @@
         (field
           (name "SKiDL Tag") "R8")
         (field
-          (name "SKiDL Line") "blocks/output_buffer.py:185"))
+          (name "SKiDL Line") "blocks/output_buffer.py:199"))
       (libsource
         (lib "NO_LIB")
         (part "R"))
@@ -4065,7 +4065,7 @@
         (field
           (name "SKiDL Tag") "R9")
         (field
-          (name "SKiDL Line") "blocks/output_buffer.py:206"))
+          (name "SKiDL Line") "blocks/output_buffer.py:223"))
       (libsource
         (lib "NO_LIB")
         (part "R"))
@@ -4167,7 +4167,7 @@
         (field
           (name "SKiDL Tag") "TP2")
         (field
-          (name "SKiDL Line") "blocks/output_buffer.py:209"))
+          (name "SKiDL Line") "blocks/output_buffer.py:226"))
       (libsource
         (lib "NO_LIB")
         (part "TestPoint"))
@@ -4643,7 +4643,7 @@
         (field
           (name "SKiDL Tag") "U5")
         (field
-          (name "SKiDL Line") "blocks/output_buffer.py:180"))
+          (name "SKiDL Line") "blocks/output_buffer.py:194"))
       (libsource
         (lib "NO_LIB")
         (part "OPA548T"))

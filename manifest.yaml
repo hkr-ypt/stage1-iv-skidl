@@ -301,7 +301,7 @@ added_beyond_source_bom:
       while DAC_ARM is high; otherwise R35 pulls it to AGND and both DAC
       outputs are 0 V whatever codes the DAC holds.
   - ref: R36, C47, D6, C48, R37
-    value: 1k, 100nF, BAT54S, 470nF 16V X7R, 100k
+    value: 1k, 100nF 10% X7R, BAT54S, 470nF 16V X7R 10%, 100k
     reason: >
       Charge pump that turns a software-toggled heartbeat on PC5 into DAC_ARM.
       No DC path reaches DAC_ARM, so a reset, halt, crash or stuck pin disarms
@@ -312,7 +312,7 @@ added_beyond_source_bom:
       CS_DAC (/SYNC) pull-up to +5VA at the DAC: holds /SYNC high while PA4
       floats, so no frame can be clocked in during a reset (audit F2).
   - ref: R38, C49
-    value: 100R, 10nF 50V X7R (both fitted)
+    value: 100R, 10nF 50V C0G 5% (both fitted)
     reason: >
       U5 output R-C network, VO_RAW to AGND (pads: audit V1). TI: an R-C
       network may be required when the OPA547 is driven into current limit
@@ -320,7 +320,11 @@ added_beyond_source_bom:
       TI's OPA547 model oscillates on the plateau with an inductive DUT
       without it. 100 ohm, not TI's 3 ohm (shown at gain -4) or the earlier
       10 ohm: on this unity-gain follower a 10 nF capacitor behind a few
-      ohms costs phase margin (docs/final_audit.md 3.7).
+      ohms costs phase margin (docs/final_audit.md 3.7). It keeps the
+      STEADY plateau quiet in the model. It does not make a fast exit from
+      the negative limit safe for an inductive DUT: see the operating rule
+      in docs/final_audit.md 6. C49 is a C0G part (5 nF is too little in
+      the model, and an X7R can lose a third of its value).
   - ref: R32, R33
     value: 10.0k 0.1%
     reason: >
@@ -499,17 +503,18 @@ validation:
       (U5 driven into a 15.5 V rail) against the power ratings of R9, R30
       and R10.
     result: >
-      PASS - V +/-11.78 V and I +/-97.8 mA guaranteed vs +/-10.04 V and
+      PASS - V +/-11.78 V and I +/-97.8 mA guaranteed at the nominal channel
+      gain (+/-11.76 V, +/-97.3 mA from limits) vs +/-10.04 V and
       +/-91.3 mA reachable; worst-case headroom 334 mV (V), 115 mV (I).
-      Fault: 127 mA; R30 1.63 W of 2 W, R9 0.16 W of 0.25 W, R10 0.16 W of
-      0.5 W.
+      Fault: 128 mA (DUT short), 143 mA (FORCE+ to AGND); R30 1.96 W of
+      2 W, R9 0.21 W of 0.25 W, R10 0.16 W of 3 W.
   footprint_check:
     module: validation/footprint_check.py
     checks: [KiCad_Lib resolves to library+symbol, footprint resolves to
              library+footprint, pin numbers subset of pad names, every pad
              netted or allow-listed no-connect, no PLACEHOLDER-REMAP]
     result: >
-      PASS - 135 parts (9 virtual), 392 pads: 345 netted, 47 declared
+      PASS - 141 parts (9 virtual), 406 pads: 359 netted, 47 declared
       no-connect, 0 unaccounted. Fault injection (tools/test_guard_fails.sh) confirms all
       five checks fail when a real defect is reintroduced.
   schematic_check:
@@ -613,24 +618,30 @@ assumptions:
     absolute input window, AGND - 0.1 .. AVDD + 0.1 V (SBAS288K): with the
     zero on AGND every negative reading fell below it.
   - >
-    Measurable Kelvin range +/-11.8 V guaranteed (+/-12.55 V at nominal full
+    Measurable Kelvin range +/-11.8 V guaranteed at the nominal channel gain,
+    +/-11.76 V from limits (+/-12.55 V at nominal full
     scale): two matched dividers to AGND, k = 10.0k/(40.2k + 10.0k) = 0.1992,
     ahead of U7 at G = 1 (R14 DNP). V_SENSE_OUT = 2.500 V + 0.1992 * V_K.
     Covers the whole +/-10.04 V source span.
   - >
-    Measurable current +/-97.8 mA guaranteed: U6 G = 1 + 50k/35.7k = 2.4006,
+    Measurable current +/-97.8 mA guaranteed at the nominal channel gain,
+    +/-97.3 mA from limits: U6 G = 1 + 50k/35.7k = 2.4006,
     I_SENSE_OUT = 2.500 V + 24.0 V/A * I. Sized to the physical bound
     10.04 V/(R30 + R10) = 91.3 mA for any passive DUT, because U5's current
     limit is a plateau with a wide tolerance, not a bound.
   - >
     Current limit: U5 is an OPA547T and R7 = 348k, a plateau designed for
     49 mA at +/-15 V (62.6 mA by the SBOS056F equation at +/-30 V, 25 C;
-    expected 45..65 mA with polarity and temperature; 8..89 mA with every
-    error of the limit stacked). validation/measurement_range.py fails the
+    expected 40..65 mA with polarity and temperature; 8..89 mA with the
+    maximum unit tolerance stacked on the typical supply and temperature
+    shifts, an extrapolation). validation/measurement_range.py fails the
     build if that stack falls under 5 mA or if a typical unit would show no
-    plateau. An OPA548 cannot be set this low (49 mA is inside its limit
+    plateau. An OPA548 cannot be relied on this low (49 mA is inside its limit
     tolerance). R38 100R + C49 10nF at U5's output are fitted for stability
-    on the plateau: docs/final_audit.md. The passive bound is
+    on the plateau: docs/final_audit.md. Not yet shown safe (model): an
+    inductive DUT in negative current limit when the command falls at
+    once; do not take an inductive DUT into current limit before the
+    bring-up test of that exit (docs/final_audit.md 3.7, 6). The passive bound is
     R30 (128 mA DUT short, 143 mA FORCE+ to AGND, up to 1.96 W in a 2 W
     PR02); F1 is not a backstop at that current.
   - E/S MCU control of U5 deferred (needs level shifting) — tied enabled.

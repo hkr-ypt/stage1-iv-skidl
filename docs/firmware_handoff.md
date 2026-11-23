@@ -142,7 +142,7 @@ V_SWEEP = (R4/R3)·(V_A − V_B/2) = 8.0321·(V_A − V_B/2), with V_A, V_B in 0
 * **Current-limit plateau** (designed for ~49 mA by R7 = 348 kΩ on the
   OPA547T now fitted as U5; a design centre, not yet measured) is normal
   operation, not a fault. Hardware facts firmware should expect
-  (`final_audit.md` §3.1, §7): the expected plateau is 45…65 mA; the two
+  (`final_audit.md` §3.1, §7): the expected plateau is 40…65 mA; the two
   polarities differ (the sinking limit is typically up to about 8 mA higher
   than the sourcing one); the plateau falls by about 0.2 mA per kelvin as
   U5 warms, so it sags by several mA during a long hold on the plateau; a
@@ -156,6 +156,24 @@ V_SWEEP = (R4/R3)·(V_A − V_B/2) = 8.0321·(V_A − V_B/2), with V_A, V_B in 0
   **[firmware]** Records on the plateau carry the `CLIM` flag; the threshold
   comes from the `i_plateau` calibration coefficient, nominal 49 mA until the
   bring-up measurement replaces it.
+* **The software current cut-off and the plateau** (final audit, hardware
+  facts; no firmware was changed). `i_compliance` defaults to 50 mA, which
+  `firmware_spec.md` calls "effectively off, under the hardware plateau".
+  With the plateau expected at 40…65 mA, and the sinking one typically
+  above 50 mA, that default acts *before* U5 limits on many units: the
+  output is zeroed instead of sitting on the plateau. Where the hardware
+  plateau is meant to act, set `i_compliance` to its 100 mA maximum (the
+  bring-up checklist does this before its plateau tests).
+* **An inductive DUT in negative current limit** (final audit, model
+  evidence, `final_audit.md` §3.7). In TI's OPA547 model, when the command
+  falls at once out of the negative limit with 0.3…10 mH in the DUT, U5 is
+  left oscillating with about 60 mA still in the DUT although the command
+  is 0 V. The cut-off above, the fault paths, the dead-man and the
+  hardware reference gate all make that edge; the firmware's ramps
+  (≤ 10 V/s) do not. Until bring-up has tested it on the board, an
+  inductive DUT is not to be taken into current limit. The state is left
+  by commanding the limit again and ramping out, or by switching ±15 V
+  off; a reading of current at a 0 V command is its signature.
 
 ## 6. USB
 
@@ -168,6 +186,12 @@ V_SWEEP = (R4/R3)·(V_A − V_B/2) = 8.0321·(V_A − V_B/2), with V_A, V_B in 0
   accordingly. **[firmware]** PA0 is measured by ADC1 (attach > 3.8 V VBUS for
   20 ms, detach < 3.0 V); losing VBUS, enumeration or DTR, or 30 s without a
   byte from the host, disarms the output (`docs/firmware/protocol.md` §1).
+  Hardware note (final audit, review estimate; the USBLC6-2 data sheet
+  could not be read): after the cable is pulled, U10's diode from D+ to its
+  VBUS pin can hold the sensed node near 2.7…3.0 V while the D+ pull-up is
+  on, so a 3.0 V detach threshold has little margin; about 3.6 V would
+  have plenty (a valid VBUS is ≥ 4.4 V). The other detach mechanisms still
+  act.
 * The board is powered from the bench supply at J1, never from VBUS.
 
 ## 7. Other pins

@@ -1,5 +1,12 @@
 # Identifier resolution report
 
+> **Later changes.** This report is kept as written. The symbol, footprint
+> and pin numbers it resolves have not changed. The final design audit
+> ([`final_audit.md`](final_audit.md)) changed the part fitted at U5 to an
+> **OPA547T**: same pinout, package (KVT) and footprint, so "U5 OPA548T"
+> below names the symbol, not the part to order. The symbol's pins are now
+> cross-checked against both data sheets (SBOS070D and SBOS056F).
+
 Every symbol name, footprint name and pin number in this project is now **read
 from an installed library file** by `tools/resolve_kicad_libs.py`. Nothing below
 is asserted from memory; every row carries the file and line the value came

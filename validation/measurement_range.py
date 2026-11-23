@@ -42,8 +42,12 @@ circuit it recomputes
     RAIL_MIN, the case at U5_CASE_HOT and the maximum unit tolerance. It
     also fails if the setting is so high that a TYPICAL unit would show no
     plateau at all into a shorted DUT (the series path, not U5, would set
-    the current), if U5's value and order code name different parts, or if
-    R7 is not fitted (an open ILIM pin programs zero output current);
+    the current; the path is taken with R30, R10 and the sweep at the
+    tolerance limits that pass least), if U5's value and order code name
+    different parts, or if R7 is not fitted, by a 'DNP' value or by the
+    dnp() mark (an open ILIM pin programs zero output current). The high
+    end of the stack takes a 25 C case as the coldest; a colder case adds
+    0.19 mA/K;
   * an external source on J7 (FORCE-): only F2 + R10 limit it, so R10's
     short-time overload rating must cover that current until F2 trips;
 
@@ -182,9 +186,11 @@ _MULT = {"": 1.0, "R": 1.0, "k": 1e3, "K": 1e3, "M": 1e6}
 
 
 def ohms(part):
-    """'40.2k 0.1%' -> 40200.0; 'DNP (...)' -> None (an open pad pair)."""
+    """'40.2k 0.1%' -> 40200.0; None for an open pad pair: a value that
+    starts with 'DNP', or a part marked with libraries.custom_symbols.dnp()
+    (which leaves the value text as it was)."""
     text = str(part.value)
-    if text.strip().upper().startswith("DNP"):
+    if text.strip().upper().startswith("DNP") or getattr(part, "dnp", False):
         return None
     m = _VALUE.match(text)
     if not m:
@@ -227,6 +233,16 @@ def compute(circuit):
          ("R1", "R2", "R3", "R4", "R5", "R6", "R7", "R9", "R10", "R11",
           "R12", "R13", "R14", "R30", "R32", "R33")}
     problems = []
+    # An open RG (R11, R14) is a legitimate gain of 1, and an open R7 is
+    # judged below. Every other resistor read here must be fitted: the
+    # arithmetic that follows has no meaning without it.
+    unfitted = sorted(ref for ref, value in R.items()
+                      if value is None and ref not in ("R7", "R11", "R14"))
+    if unfitted:
+        raise MeasurementRangeError(
+            f"{', '.join(unfitted)} not fitted (DNP): the source span, the "
+            f"fault envelope and both channels are computed from "
+            f"{'it' if len(unfitted) == 1 else 'them'}")
 
     # ---- source ------------------------------------------------------------
     if (R["R3"], R["R4"]) != (R["R5"], R["R6"]):
@@ -323,11 +339,17 @@ def compute(circuit):
     # A dead short across the jacks at full sweep: what the series path
     # (outside U5's loop) passes with U5 NOT limiting. A unit whose limit is
     # above this shows no plateau; that is reported, and is a failure only
-    # if a typical unit would do it.
+    # if a typical unit would do it. i_short is the range with the PTCs and
+    # U12 at their limits and the resistors nominal (the figure reported);
+    # i_short_floor is its low end with R30, R10 and the sweep at their
+    # tolerance limits as well, which is what the typical-unit test uses.
     i_short = (v_sweep / (PTC_R_MAX + R["R30"] + U12_RON_MAX + PTC_R_MAX
                           + R["R10"]),
                v_sweep / (PTC_R_MIN + R["R30"] + U12_RON_MIN + PTC_R_MIN
                           + R["R10"]))
+    r30_hi = R["R30"] * (1 + tolerance(parts["R30"], UNSPECIFIED_R_TOL))
+    i_short_floor = (v_sweep * (1 - SWEEP_TOL)
+                     / (PTC_R_MAX + r30_hi + U12_RON_MAX + PTC_R_MAX + r10_hi))
     if R["R7"] is None:
         problems.append(
             f"R7 is not fitted: an open ILIM pin programs zero output "
@@ -363,7 +385,7 @@ def compute(circuit):
         if any(lim["supply"]):
             terms.append(f"+/-{RAIL_MIN:g} V rails")
         if lim["temp"]:
-            terms.append(f"a {U5_CASE_HOT:g} C case")
+            terms.append(f"an {U5_CASE_HOT:g} C case")
         terms.append(f"the +/-{ilim_max * 1e3:.0f} mA maximum tolerance")
         if ilim_lo < ILIM_FLOOR:
             problems.append(
@@ -374,13 +396,13 @@ def compute(circuit):
                 f"{ilim_lo * 1e3:.1f} mA, below the {ILIM_FLOOR * 1e3:g} mA "
                 f"floor: the real limit can be zero, i.e. U5 unable to drive "
                 f"the DUT")
-        if ilim_typ_hi > i_short[0]:
+        if ilim_typ_hi > i_short_floor:
             problems.append(
                 f"U5 ({u5_value}) current limit: R7 sets "
                 f"{i_ilim * 1e3:.1f} mA by the {lim['doc']} equation, so a "
                 f"typical unit can limit as high as "
                 f"{ilim_typ_hi * 1e3:.0f} mA, but the series path passes only "
-                f"{i_short[0] * 1e3:.0f} mA into a shorted DUT: no "
+                f"{i_short_floor * 1e3:.0f} mA into a shorted DUT: no "
                 f"current-limit plateau")
 
     # ---- voltage channel: Kelvin attenuator -> U7 (G from R14) -------------

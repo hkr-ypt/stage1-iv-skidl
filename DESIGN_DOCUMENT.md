@@ -51,7 +51,7 @@ design decisions, and where a reviewer's attention is most useful.
   is 348 kΩ. A 49 mA limit is 1 % of the OPA548's range and lies inside that
   part's ±100 mA typical / ±250 mA maximum limit tolerance, so the plateau
   could have been anywhere from zero upward; on the OPA547 the expected
-  plateau at this board's ±15 V rails is 45…65 mA (design centre 49 mA), and
+  plateau at this board's ±15 V rails is 40…65 mA (design centre 49 mA), and
   the worst-case stack of its errors, 8…89 mA, stays clear of zero. The
   U5 output network R38/C49 is now **fitted, with R38 = 100 Ω**: TI's model
   of the OPA547 oscillates on the plateau with an inductive DUT without
@@ -140,7 +140,7 @@ rationale written in the SKiDL source, `README.md` or `manifest.yaml`.
 | 0 V output whenever firmware is not running | `blocks/dac_sweep.py`, `blocks/mcu.py` | DAC reference gate U11, held on only by a software heartbeat through the D6 charge pump (§5.2) |
 | Measure DUT voltage without lead or shunt drops | `blocks/voltage_sense.py` | 4-wire Kelvin: separate SENSE± jacks into an INA128 |
 | Signed V and I over the whole sweep (hysteresis on a fixed DUT) | `blocks/current_sense.py`, `blocks/voltage_sense.py`, `blocks/adc.py` | INA128 REF pins and ADC AINCOM on VREF_2V5; Kelvin attenuator k = 0.1992; current gain sized to the physical current bound. Checked by `validation/measurement_range.py` |
-| Hardware current limit ≈ 50 mA | `blocks/output_buffer.py` | OPA547 programmable current limit, R7 = 348 kΩ → expected plateau 45…65 mA at ±15 V (design centre 49 mA), depending on polarity and temperature; ±30 mA maximum between units (SBOS056F; §5.3) |
+| Hardware current limit ≈ 50 mA | `blocks/output_buffer.py` | OPA547 programmable current limit, R7 = 348 kΩ → expected plateau 40…65 mA at ±15 V (design centre 49 mA), depending on polarity and temperature; ±30 mA maximum between units (SBOS056F; §5.3) |
 | Protection in depth for DUT and instrument | `blocks/protection.py`, `blocks/power.py` | U5 ILIM (plateau ≈ 49 mA by design; 8…89 mA with its errors stacked, §5.3) → 100 Ω 2 W R30 (the passive bound that holds whatever ILIM does) → photorelay U12 (open unless both ±15 V rails are up) → TVS D5. F1 (FORCE+) and F2 (FORCE−) are series PTCs; F1 is **not** a backstop at the fault current (§10); F2 limits an external source on J7. D8/D9 clamp a dead ±15 V rail. Rail clamps on the sense inputs |
 | Ratiometric accuracy | `blocks/power.py`, `blocks/adc.py` | One REF5025 (2.500 V) feeds the DAC reference (through U11), the ADC reference, and the measurement zero (INA128 REF pins, ADC AINCOM). The sweep midpoint is DAC channel B, so it shares the DAC's reference pin |
 | Keep analog and digital apart | `blocks/power.py`, `docs/pcb_generation.md` | Separate AGND/DGND nets and pours, joined only at R31 (0 Ω). Separate SPI buses for DAC and ADC |
@@ -161,7 +161,7 @@ document are therefore analysis only. They are not requirements.
 | Sweep range (V_SWEEP) | −10.040 V … +10.040 V, ≈ 306 µV/LSB. The negative limit is set by hardware; the positive limit holds only while firmware keeps channel B at full scale | TP1 |
 | Output safe state | U11 (TMUX1101) connects VREF_2V5 to the DAC only while the PC5 heartbeat keeps DAC_ARM high. Without the heartbeat both DAC outputs are 0 V and V_SWEEP ≈ 0, reached ≈ 50 ms after the heartbeat stops | U11, R35, D6, C47, C48, R36, R37 |
 | Output stage | OPA547T power op-amp (drawn with the OPA548T symbol and footprint: same pinout and package), unity-gain follower, feedback taken after R9 (10 Ω) | U5, R9, C19 |
-| Current limit | R7 = 348 kΩ → **≈ 49 mA plateau** by design at ±15 V; expected 45…65 mA (≈ 47 mA sourcing / 55 mA sinking with U5 warm by TI's typical curves; 62.6 mA by the SBOS056F equation, which holds at ±30 V and 25 °C); ±10 mA typical, ±30 mA maximum between units | R7, C14 |
+| Current limit | R7 = 348 kΩ → **≈ 49 mA plateau** by design at ±15 V; expected 40…65 mA (≈ 47 mA sourcing / 55 mA sinking with U5 warm by TI's typical curves; 62.6 mA by the SBOS056F equation, which holds at ±30 V and 25 °C); ±10 mA typical, ±30 mA maximum between units | R7, C14 |
 | Output network | R38 100 Ω + C49 10 nF from U5's output to AGND, fitted: keeps the current-limit plateau stable with an inductive DUT (TI model) without loading the unity-gain loop (§5.3) | R38, C49 |
 | Series elements outside the loop | F1 (PTC, 100 mA hold at 23 °C) + R30 100 Ω 2 W (PR02) + U12 (≤ 2 Ω) + F2 (PTC) + R10 10.00 Ω 0.1 % 20 ppm/°C 3 W | F1, R30, U12, F2, R10 |
 | DUT compliance | ±10.04 V at I → 0, about ±4.65 V at 49 mA (less by F1's, F2's and U12's resistance) | §5.4 |
@@ -290,7 +290,7 @@ what the hardware allows and requires. It is not taken from existing code.
    that needs a specific **DUT** voltage has to iterate on the measured Kelvin
    voltage, or accept the load line. **Inference.**
 7. **Current limit.** If the DUT demands more than about 49 mA (expected
-   45…65 mA on a given board, §5.3), U5 enters
+   40…65 mA on a given board, §5.3), U5 enters
    current limit and behaves as a current source. The Kelvin and shunt
    measurements stay valid in that state. **Inference.**
 
@@ -549,7 +549,7 @@ both outputs are `VREF·code/65536`, and both channels share one VREF pin
   with ±10 mA typical and ±30 mA maximum between units. That is an
   extrapolation: the curves are typical, and 62.6 mA is below anything TI
   tabulates or plots. If the shifts scaled with the setting the plateau
-  would be near +61 / −62 mA. So the **expected plateau is 45…65 mA**. With
+  would be near +61 / −62 mA. So the **expected plateau is 40…65 mA**. With
   everything stacked (R7's 1 %, rails 14.5…15.5 V, a 25…85 °C case, the
   ±30 mA unit tolerance) the range is **8 mA** to **89 mA**: clear of zero
   and inside the measurable ±97.8 mA. A shorted DUT passes only 79…87 mA
@@ -602,8 +602,9 @@ both outputs are `VREF·code/65536`, and both channels share one VREF pin
   about 10 % small-signal overshoot with no load capacitance and 50 % at
   4.5 nF (the OPA548: none up to 2.5 nF). As built, U5's direct load is tens
   of pF, and the DUT and its cable sit behind F1 + R30 (≥ 102 Ω), a
-  resistive load where it matters; a model fitted to TI's curve gives the
-  stage 53…65° of phase margin (`docs/final_audit.md` §4.1). Do not connect
+  resistive load where it matters; TI's open-loop plot (50 Ω load) reads
+  about 60° of phase margin and 14 dB of gain margin, and models fitted to
+  TI's curves put this stage at 47…66° (`docs/final_audit.md` §4.1). Do not connect
   a capacitance (a coaxial cable, a ×1 probe, a filter capacitor) directly
   to VO_RAW or TP2; use a ×10 probe.
 - **Output R-C network (pads: audit V1; fitted: final audit).** TI: "if the
@@ -613,10 +614,18 @@ both outputs are `VREF·code/65536`, and both channels share one VREF pin
   **R38 = 100 Ω and C49 = 10 nF, from VO_RAW to AGND, are fitted.** Without
   them TI's OPA547 macromodel oscillates on the plateau when the DUT is
   inductive (roughly 30 µH…10 mH), up to rail to rail in the negative
-  polarity; with them it is quiet in every case run, inductive, resistive
-  and capacitive. The resistor is 100 Ω, not TI's 3 Ω or the 10 Ω first put
+  polarity; with them the steady plateau is quiet in every case run,
+  inductive, resistive and capacitive. What they do not cure in the model
+  is a fast fall of the command out of the *negative* limit with an
+  inductive DUT (0.3…10 mH), which leaves U5 oscillating with current
+  still in the DUT; ramps do not do it, the immediate-zero paths of the
+  safe state do. Until bring-up has tested that exit, an inductive DUT is
+  not to be taken into current limit; the remedy, if the board needs it,
+  is 10 nF C0G on each of R4 and R6 and takes no copper
+  (`docs/final_audit.md` §3.7). C49 is a C0G part: 5 nF is too little in
+  the model. The resistor is 100 Ω, not TI's 3 Ω or the 10 Ω first put
   on these pads: on a unity-gain OPA547 a 10 nF capacitor behind a few ohms
-  is still a capacitive load at the 1 MHz crossover and costs 25…35° of
+  is still a capacitive load at the 1 MHz crossover and costs 10…40° of
   phase margin, whereas behind 100 Ω it is a resistive load no heavier
   than the 50 Ω TI characterises the part with. C49 passes no direct
   current, and its alternating current returns to AGND, not through the
@@ -718,9 +727,11 @@ ADC reads AIN0 − AINCOM = 24.006 V/A · I     → ±1.176 V at ±49 mA, ±2.19
 - **Why G = 2.40.** The gain is sized to the largest current any passive DUT
   can draw, `V_SWEEP / (R30 + R10) = 10.04 V / 110 Ω = 91.3 mA`, which holds
   whatever U5's limit does. The limit is a plateau with a spread (expected
-  45…65 mA, 8…89 mA with every OPA547 error stacked, §5.3), not a
+  40…65 mA; 8…89 mA with the maximum unit tolerance stacked on the typical
+  supply and temperature shifts, an extrapolation, §5.3), not a
   bound the measurement may rely on, and the gain does not rely on it: it
-  covers the passive bound. Measurable: ±97.8 mA guaranteed (ADC pin
+  covers the passive bound. Measurable: ±97.8 mA guaranteed at the nominal
+  channel gain, ±97.3 mA with gain and offset at their limits (ADC pin
   window at AVDD = 4.75 V), ±104.1 mA at PGA 2 full scale. The previous
   G = 4.846 would clip at ±48.5 mA once the zero sits at 2.5 V.
 - **Polarity.** Both signs are measured: negative current gives
@@ -788,13 +799,13 @@ ADC reads AIN0 − AINCOM = 24.006 V/A · I     → ±1.176 V at ±49 mA, ±2.19
 | Physical Kelvin voltage | ±10.04 V as I → 0, about ±4.65 V at ILIM |
 | At U7's inputs | k·V: ±2.0 V differential, common mode < 2.2 V — far inside (V−)+2 … (V+)−2 V **[DS]** |
 | U7 output | 0.50 … 4.50 V |
-| ADS1256, PGA 2, buffer off | ±2.500 V full scale ↔ ±12.55 V; pin window ↔ **±11.8 V guaranteed** (§6) |
+| ADS1256, PGA 2, buffer off | ±2.500 V full scale ↔ ±12.55 V; pin window ↔ **±11.8 V guaranteed** at the nominal channel gain, ±11.76 V with gain and offset at their limits (§6) |
 
 **Loading of the DUT.** Each Kelvin input now has 50.2 kΩ to AGND. SENSE+
 draws up to 200 µA at 10 V; it is supplied through FORCE+ and returns directly
 to AGND, not through R10, so the current reading is unaffected and the Kelvin
 error is 200 µA × the sense-lead resistance (≈20 µV for 0.1 Ω). SENSE−
-diverts `I·(R10 + R_F2)/50.2 kΩ` around the shunt: a 0.03 % gain term (F2,
+diverts `I·(R10 + R_F2)/50.2 kΩ` around the shunt: a gain term of 0.035 % at most (F2,
 3.0…7.5 Ω, lies between FORCE− and the shunt). D1–D4 leakage
 (nA class, rising with temperature **[DS-check]**) is unchanged; on SENSE− it
 bypasses the shunt and matters only at nA currents, already below the current
@@ -802,7 +813,7 @@ channel's floor (§5.5). With the SENSE leads unplugged, R32/R33 pull U7's
 inputs to AGND and the channel reads 0 V instead of saturating.
 
 **Divider matching.** Mismatch between the two dividers converts common mode
-into error only through V(SENSE−) ≈ I·(R10 + R_F2): ≤ 5 mV at the 92 mA
+into error only through V(SENSE−) ≈ I·(R10 + R_F2): ≤ 5.2 mV at the 92.6 mA
 bound for 0.1 % parts with F2 at 7.5 Ω, proportional to I and moving a
 little with F2's temperature; bring-up measures it. Use one thin-film
 series (≤ 25 ppm/°C) for
@@ -880,7 +891,7 @@ and each channel is converted as AINx − AINCOM.
 
 | Quantity | Physically applied | Presented to ADC (AINx; AINx − AINCOM) | Measurable (PGA 2, buffer off) |
 |---|---|---|---|
-| DUT voltage V_K | −10.04 … +10.04 V | 0.50 … 4.50 V; 0.1992·V_K = ±2.000 V | **±11.8 V guaranteed** at AVDD = 4.75 V; ±12.55 V at nominal full scale |
+| DUT voltage V_K | −10.04 … +10.04 V | 0.50 … 4.50 V; 0.1992·V_K = ±2.000 V | **±11.8 V guaranteed** at AVDD = 4.75 V (nominal channel gain; ±11.76 V with gain and offset at their limits); ±12.55 V at nominal full scale |
 | DUT current I | −91.3 … +91.3 mA (any passive DUT, any ILIM) | 0.31 … 4.69 V; 24.0 V/A·I = ±2.19 V | **±97.8 mA guaranteed** (nominal channel gain; ±97.3 mA with gain and offset at their limits); ±104.1 mA at nominal full scale |
 | Worst-case tolerances stacked | V_SWEEP +0.5 %, R30 ±1 %, R10 ±0.1 %, INA128 gain ±0.5 %, VREF ±0.1 %, INA128 offset | AIN span V 0.484…4.516 V, I 0.265…4.735 V | headroom to the pin limit: V 334 mV, I 115 mV |
 
@@ -1097,7 +1108,7 @@ Notes and review points:
 
 | Layer | Part | Intended role (repository) | Observations (analysis) |
 |---|---|---|---|
-| 1 | U5 ILIM (R7) | Normal current plateau (≈ 49 mA) | OPA547, SBOS056F: expected 45…65 mA with polarity and U5's temperature, ±10 mA typical and ±30 mA maximum between units, 8…89 mA with everything stacked (§5.3). A plateau, not a bound: nothing else relies on its value. U5 also has internal thermal shutdown |
+| 1 | U5 ILIM (R7) | Normal current plateau (≈ 49 mA) | OPA547, SBOS056F: expected 40…65 mA with polarity and U5's temperature, ±10 mA typical and ±30 mA maximum between units, 8…89 mA with everything stacked (§5.3). A plateau, not a bound: nothing else relies on its value. U5 also has internal thermal shutdown |
 | 2 | F1 PTC 0ZRM0010FF1E | Series PTC. **Not a backstop** | Holds 100 mA and trips at 200 mA at 23 °C. The whole fault envelope (≤ 143 mA) lies between the two, where the data sheet promises neither. Hold current derates to 80 mA at 40 °C, 68 mA at 50 °C, 56 mA at 60 °C and 45 mA at 70 °C. So on the **normal** plateau it can trip above about 65 °C ambient at 49 mA, above about 57 °C at the typical upper end (59 mA) and above about 32 °C at the far upper end of the spread (89 mA). A trip there is benign and self-resetting: the current falls, and V and I are still measured. Contingency if bench tests show nuisance trips: 0ZRM0017FF1E (170 mA hold, same body and footprint), as a conditional swap only |
 | 3 | R30 100 Ω 1 % 2 W, Vishay PR02 | **The current bound**, passive | Bounds a DUT short to 128 mA and FORCE+ to AGND to 143 mA, carrying up to 1.96 W (98 % of rating) in that stacked worst case (§5.4) |
 | 3a | U12 TLP176AM photorelay | Disconnects FORCE+ unless both ±15 V rails are up | Guaranteed open with either rail absent, closed at the nominal ±15 V rails (from ±14.3 V at 25 °C, about ±14.75 V at 50 °C; rails to be set to ±15.0 V ±0.2 V); ≤ 2 Ω, 0.7 A when on (`docs/final_corrections.md` §2.5, `docs/final_audit.md` §3.2) |
@@ -1108,7 +1119,7 @@ Notes and review points:
 
 | Scenario | Expected behavior | Point to check |
 |---|---|---|
-| DUT short, ILIM working | I ≈ 49 mA (8…89 mA over the plateau's whole spread). R30 about 0.24 W (≤ 0.79 W), U5 about 0.44 W (≤ 0.50 W) plus 0.30 W quiescent | U5 temperature (R6): ≤ 62 K rise with no heat sink (≤ 66 K with FORCE+ shorted to AGND) |
+| DUT short, ILIM working | I ≈ 49 mA (8…89 mA over the plateau's whole spread). R30 about 0.24 W (≤ 0.79 W), U5 about 0.44 W (≤ 0.50 W) plus 0.30 W quiescent (0.47 W maximum) | U5 temperature (R6): about 48 K typical, ≤ 62 K rise with no heat sink (≤ 66 K with FORCE+ shorted to AGND) |
 | DUT short, ILIM failed or set wrong, or U5 driven into a rail | Current is limited only by the series parts at their minima: 15.5 V / 121.2 Ω = 128 mA (DUT short), 143 mA (FORCE+ to AGND). R30 ≤ 1.96 W (rated 2 W), R9 ≤ 0.21 W, R10 ≤ 0.16 W. F1 may or may not trip | Checked on every build by `validation/measurement_range.py`. The PR02 runs hot, so it is mounted raised and 7 mm from the divider; F1 is 14 mm from it (§5.4) |
 | External voltage applied to FORCE+ (charged capacitor, powered DUT) | D5 clamps a transient. **Nothing on the board limits D5's sustained current**: F1, R30 and U12 are on the amplifier side of it. D5 holds about 1.25 W continuously (about 70 mA at its clamp voltage); a stiff source above 16.7…18.5 V destroys it. Outside the envelope (`docs/final_audit.md` §6) | A stored-energy source is absorbed (100 µF at 30 V is about 24 mJ into a 600 W part). U5's output is back-driven only through R30/F1 |
 | External voltage applied to FORCE− | F2 limits it: ≤ 1.19 A at 15.5 V until F2 trips (typically < 1 s), R10 ≤ 14.3 W against 15 W for 5 s; the shunt node reaches ≈ 12 V, inside the INA128's ±40 V input rating. Above ≈ 26 V F2's 2 A Imax is exceeded: outside the board's envelope | Recalibrate R10 after such an event (`docs/final_corrections.md` §2.6) |
@@ -1116,6 +1127,7 @@ Notes and review points:
 | Board unpowered, or one ±15 V rail absent, DUT connected | U12 is open, so U5 is disconnected from FORCE+. With a **passive** DUT nothing flows. D8/D9 only stop a dead rail being pulled to the wrong polarity: a DUT that **holds voltage** forward-biases D1–D4 from the SENSE jacks, charges the rail capacitors and feeds the analog section, limited only by F2 + R10 and by nothing if it shares ground with the board. Rule: power the board first, disconnect before power-off, DUT floating, never above ±15 V | Bring-up §5; `docs/final_audit.md` §6 |
 | +5 V collapsing before ±15 V while the output is armed | U12 interlocks only the ±15 V rails, and the gate stays armed for 17…79 ms after the MCU stops, while the DAC and the reference pass through their unspecified supply region: a positive excursion of a volt or two at the DUT for tens of milliseconds is plausible (bounded by 8 × the falling +5 V) | Rule: `DISARM` before switching off; switch ±15 V off first or all rails together. Measured at bring-up §5–§6 (`docs/final_audit.md` §6) |
 | Power-up / MCU reset / halt / crash | V_SWEEP ≈ 0 at power-up (midpoint from channel B). On reset, halt or crash the heartbeat stops and U11 removes the DAC reference within ≈ 50 ms (§5.2, §8.2) | Measured at bring-up (`docs/bringup_checklist.md`) |
+| **Inductive DUT (0.3…10 mH) held in negative current limit, and the command falls at once** (firmware cut-off or fault handler writes zero, heartbeat lost, reference gated) | In TI's model U5 is left oscillating (4…14 V p-p at 150…230 kHz at its output) with about 60 mA still in the DUT although the command is 0 V. A ramp out of the limit does not do it, nor does the positive polarity or a resistive or capacitive DUT. Model evidence, not measured; the stated DUTs are not inductive | Rule: no inductive DUT in current limit until `docs/bringup_checklist.md` §7 has tested this exit. Way out of the state: re-enter the limit and ramp out, or switch ±15 V off. Remedy without copper if the board does it: 10 nF C0G on each of R4 and R6 (`docs/final_audit.md` §3.7) |
 | Firmware loads channel B below full scale while armed | The positive ceiling rises above +10.04 V, up to U3B's saturation (+13.8 V … +15 V) | Firmware contract, not hardware protection (`docs/firmware_handoff.md`) |
 
 ### 10.2 DNP and configuration options
@@ -1128,7 +1140,7 @@ Notes and review points:
 | R4/R6 20.0 kΩ | Fitted | ±10.04 V sweep | 10.0 kΩ gives ±5.02 V, the previous configuration |
 | R7 348 kΩ 1 % | Fitted | Plateau ≈ 49 mA at ±15 V (62.6 mA by the OPA547 equation at ±30 V, 25 °C) | Sets the current plateau; about 6 kΩ per mA if one unit is to be moved. `validation/measurement_range.py` fails the build if the plateau's worst-case stack (R7 tolerance, low rail, hot case, maximum unit tolerance) falls under 5 mA, or if a typical unit would show no plateau |
 | DAC channel B (U4 VOUTB) | Fitted, drives V_DACB | Sets the sweep midpoint (V_B/2) | Must be loaded to full scale while armed (firmware contract) |
-| **R38 / C49** (0805, U5 OUT to AGND) | Fitted (DNP until the final audit) | Output R-C network, 100 Ω + 10 nF | Keeps the current-limit plateau stable with an inductive DUT (TI model). Not TI's 3 Ω + 0.01 µF and not the earlier 10 Ω: this is a unity-gain stage (§5.3). Removing R38 returns the stage to the unfitted state |
+| **R38 / C49** (0805, U5 OUT to AGND) | Fitted (DNP until the final audit) | Output R-C network, 100 Ω + 10 nF | Keeps the steady current-limit plateau stable with an inductive DUT (TI model); it does not make a fast exit from the negative limit safe for such a DUT (§5.3). Not TI's 3 Ω + 0.01 µF and not the earlier 10 Ω: this is a unity-gain stage. C49 is C0G. Removing R38 returns the stage to the unfitted state |
 | ADS1256 AIN4–AIN7, D0–D3 | Not connected | Spare | These could only be used after rework, because the pads are not connected |
 | U5 E/S | Tied enabled through R8 | No software shutdown | "Deferred extension point" (`output_buffer.py`). Not a safe state anyway: a disabled output still leaks (about 0.1 mA typical, SBOS056F) |
 
@@ -1405,7 +1417,7 @@ a list of confirmed defects. Items are ordered roughly by consequence.
 - **R4 — U5 current limit. Resolved (final audit).** On an OPA548 the 49 mA
   setting lay inside the limit circuit's tolerance; U5 is now an OPA547T with
   R7 = 348 kΩ, chosen from SBOS056F's supply-voltage and temperature curves
-  so that the expected plateau is 45…65 mA at ±15 V and the stack of its
+  so that the expected plateau is 40…65 mA at ±15 V and the stack of its
   errors stays between 8 and 89 mA (§5.3). SBOS056F plots those curves at
   250–500 mA; that the shifts are the same mA at this lower setting is an
   extrapolation, and the design does not depend on it (with no shift at all
@@ -1499,6 +1511,12 @@ a list of confirmed defects. Items are ordered roughly by consequence.
   off) and drive D1–D3 as outputs low, because those pins are not connected.
 - Disable hardware VBUS sensing on the USB OTG peripheral (PA9 is used as
   RESET_ADC).
+- A software current cut-off set below the hardware plateau acts before U5
+  limits. The plateau is expected at 40…65 mA and is different in the two
+  polarities, so a 50 mA cut-off sits inside it (`docs/final_audit.md` §7).
+- Reactions that write zero at once are the edge that, in TI's model,
+  leaves U5 oscillating when an inductive DUT is in negative current limit
+  (§10.1). A ramp is safe there.
 - Calibrate offset and gain for both channels, including a zero point at the
   start of every session (INA128 offset referred to the DUT is up to 2.8 mV and
   26 µA before calibration). Iterate the set-point on the measured Kelvin
@@ -1591,7 +1609,7 @@ Taken from `stage1_iv.net` (ref.pin).
 | Zero | code_A = code_B/2 = 32767.5 | ±0.15 mV at 32767/32768 |
 | U5 ILIM, equation (OPA547, SBOS056F; ±30 V, 25 °C) | 5000 × 4.75 V / (31.6 kΩ + 348 kΩ) | 62.6 mA; ±10 mA typ, ±30 mA max between units |
 | U5 plateau at ±15 V, typical | 62.6 − 12 (sourcing) or − 4 (sinking) − 0.19 mA/K × (T_case − 25 °C) | +50.6 / −58.5 mA at 25 °C; +42.0 / −50.0 mA at 70 °C |
-| U5 plateau, every error stacked | 62.6 − 12 − 0.19 × 60 − 30; 62.6 − 4 + 30 | 9 mA … 89 mA |
+| U5 plateau, extrapolated stack (R7 ±1 %, rails 14.5…15.5 V, 25…85 °C case, ±30 mA unit) | 62.0 − 12.4 − 0.19 × 60 − 30; 63.1 − 3.9 + 30 | 8 mA … 89 mA |
 | U5 output required | 10.04 V + 49 mA × 10 Ω (91.3 mA × 10 Ω at the passive bound) | 10.53 V (10.95 V) |
 | Out-of-loop resistance | R30 + R10 (+ R_F1 + R_U12 + R_F2) | 110 Ω + 6 … 17 Ω |
 | DUT voltage at a 49 mA plateau | 10.04 − 0.049 × 110 | ≈ 4.65 V (− I·(R_F1 + R_U12 + R_F2)) |

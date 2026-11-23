@@ -479,7 +479,7 @@
   (symbol (lib_id "stage1_iv:C") (at 179.07 73.66 0) (unit 1) (in_bom yes) (on_board yes) (dnp no)
     (uuid eacd7000-1c80-5a33-b677-5f3a5648c128)
     (property "Reference" "C49" (at 175.26 68.58 0) (effects (font (size 1.27 1.27)) (justify left)))
-    (property "Value" "10nF 50V X7R" (at 175.26 78.74 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "10nF 50V C0G 5%" (at 175.26 78.74 0) (effects (font (size 1.27 1.27)) (justify left)))
     (property "Pins_Verified" "RESOLVED" (at 175.26 81.28 0) (effects (font (size 1.27 1.27)) (justify left)))
     (property "Footprint" "Capacitor_SMD:C_0805_2012Metric" (at 179.07 73.66 0) (effects (font (size 1.27 1.27)) hide))
     (property "Datasheet" "" (at 179.07 73.66 0) (effects (font (size 1.27 1.27)) hide))

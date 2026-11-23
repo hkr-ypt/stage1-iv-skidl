@@ -462,7 +462,7 @@ p.write_text(s.replace(old, "value=\"412k 1%\""))
 '
 
 # 36. R7 = 200 k: a 100 mA setting, above what R30 + R10 and the PTCs pass into
-#     a shorted DUT, so no unit would show a current-limit plateau at all
+#     a shorted DUT, so a typical unit would show no current-limit plateau
 expect_fail range "U5 current limit set above what the series path passes" '
 import pathlib
 p = pathlib.Path("blocks/output_buffer.py"); s = p.read_text()
@@ -479,6 +479,37 @@ p = pathlib.Path("libraries/custom_symbols.py"); s = p.read_text()
 old = "\"OPA547T\", \"RESOLVED\""
 assert s.count(old) == 1
 p.write_text(s.replace(old, "\"OPA548T\", \"RESOLVED\""))
+'
+
+# 38. R7 = 374 k: the worst-case stack is still above zero (4 mA) but under
+#     the 5 mA floor that covers leakage at the ILIM node. Proves the floor
+expect_fail range "U5 current limit above zero but under the floor" '
+import pathlib
+p = pathlib.Path("blocks/output_buffer.py"); s = p.read_text()
+old = "value=\"348k 1%\""
+assert old in s
+p.write_text(s.replace(old, "value=\"374k 1%\""))
+'
+
+# 39. R7 left unfitted with the dnp() mark, its value text unchanged: an open
+#     ILIM pin programs zero output current
+expect_fail range "R7 marked do-not-populate" '
+import pathlib
+p = pathlib.Path("blocks/output_buffer.py"); s = p.read_text()
+old = "R7 = R()(ref=\"R7\", tag=\"R7\", value=\"348k 1%\",\n             footprint=\"Resistor_SMD:R_1206_3216Metric\")"
+assert old in s
+s = s.replace(old, "R7 = R()(ref=\"R7\", tag=\"R7\", value=\"348k 1%\",\n             footprint=\"Resistor_SMD:R_1206_3216Metric\")\n    R7.dnp = True")
+p.write_text(s)
+'
+
+# 40. U5 named by family only ("OPA547"): the value must be the whole
+#     orderable name, or the limit would be judged for a part nobody can buy
+expect_fail range "U5 value is not an orderable part name" '
+import pathlib
+p = pathlib.Path("blocks/output_buffer.py"); s = p.read_text()
+old = "value=\"OPA547T\""
+assert old in s
+p.write_text(s.replace(old, "value=\"OPA547\""))
 '
 
 echo "----------------------------------------------------------------------"

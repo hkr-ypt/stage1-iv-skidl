@@ -5,7 +5,8 @@
 > to an **OPA547T**, R7 to **348 kΩ**, D7 to **BZT52B24** (±2 %), C26/C27 to
 > **18 pF** and R30's order code to **PR02000201000FA100**; it fitted
 > **R38 (now 100 Ω) and C49**, which are listed as DNP below, and gave
-> C17/C18 the order code **TCJB106M035R0200E**. The current parts list is
+> C17/C18 the order code **TCJB106M035R0200E**. U12 is closed from ±14.3 V
+> at 25 °C, not the ±14.45 V given below. The current parts list is
 > [`component_manifest.md`](../component_manifest.md).
 
 Every change made to the design after commit `bfbb140` (the merge of the
