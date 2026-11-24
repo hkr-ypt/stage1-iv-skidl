@@ -1113,10 +1113,7 @@ static err_t h_cal_set(ctx_t *c)
         return fail(c, E_ARG, "usage: CAL.SET key=value ...");
     }
     cal_coeffs_t n = *engine_cal();
-    cal_coeffs_t nom;
-    calib_nominal(&nom);
     uint32_t given = 0u;
-    uint32_t measured = 0u;
     for (unsigned i = 0; i < 7u; i++) {
         const tok_t *t = kv_get(c, k_cal_keys[i].key);
         if (t == NULL) {
@@ -1128,18 +1125,14 @@ static err_t h_cal_set(ctx_t *c)
             return e;
         }
         *cal_field(&n, i) = (double)v / k_cal_keys[i].to_si;
-        /* CAL_M_* follow the key order. The nominal value, as CAL? prints it,
-         * is not a measurement: a CAL? round trip or a restored partial
-         * calibration keeps CAL_NOMINAL. */
-        given |= 1u << i;
-        if (v != rnd(*cal_field(&nom, i) * k_cal_keys[i].to_si)) {
-            measured |= 1u << i;
-        }
+        given |= 1u << i;      /* CAL_M_* follow the key order */
     }
     if (!calib_plausible(&n)) {
         return fail(c, E_RANGE, "implausible coefficients");
     }
-    engine_cal_set(&n, given, measured);
+    /* The nominal value, as CAL? prints it, is not a measurement: a CAL?
+     * round trip or a restored partial calibration keeps CAL_NOMINAL. */
+    engine_cal_set(&n, given, calib_differs_from_nominal(&n));
     return E_OK;
 }
 

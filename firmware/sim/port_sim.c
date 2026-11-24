@@ -559,6 +559,12 @@ void psim_set_vbus_mv(uint32_t mv)
 void psim_set_configured(bool c)
 {
     ensure();
+    if (c && !S.configured_flag) {
+        /* SET_CONFIGURATION: TinyUSB's cdcd_open() clears the CDC TX FIFO
+         * (CFG_TUD_CDC_TX_PERSISTENT 0), so an old tail does not survive a
+         * re-enumeration. */
+        ring_clear(&s_tx);
+    }
     S.configured_flag = c;
 }
 

@@ -27,6 +27,7 @@
  */
 #include "calib.h"
 
+#include <math.h>
 #include <string.h>
 
 #include "nominal.h"
@@ -89,10 +90,12 @@ static bool within_rel(double x, double nominal, double rel)
  * error 12 mV, gain error 0.2 % FSR at mid-scale 2.5 mV and half of channel
  * B's 0.5 % FSR full-scale error 6.25 mV, i.e. 20.75 mV or 544 codes of
  * 38.15 uV; with INL, the R1/R2 ratio, the difference amplifier's resistors
- * and the OPA2277 offsets the corner case is about 615 codes. A dropped or
- * extra digit still lands far outside (a thousands-digit slip can land
- * inside; iv-cal computes c_dac, and a calibrated board with a wrong c_dac
- * flags KELVIN on every point). */
+ * and the OPA2277 offsets the corner case is about 615 codes (initial
+ * resistor tolerance; their drift over temperature comes on top, hence the
+ * margin). A dropped or extra digit still lands far outside. A
+ * thousands-digit slip can land inside: iv-cal computes c_dac, and a value
+ * typed by hand that is that wrong flags KELVIN below about 0.8 i_plateau
+ * only (calibration.md §2). */
 #define C_DAC_WINDOW_CODES 1000.0
 
 bool calib_plausible(const cal_coeffs_t *c)
@@ -233,11 +236,6 @@ static void scan_port(const uint32_t uid[3], calib_scan_t *scan)
     }
 }
 
-/* A record written before the mask existed (no CAL_MEASURED_MARK): a
- * coefficient CAL.SET never touched is still the exact nominal double, so it
- * is not counted as measured. The bring-up record (i_plateau alone) thereby
- * stays CAL_NOMINAL; a real calibration's fitted values are never bit-equal
- * to the nominal ones. */
 static const double *coeff(const cal_coeffs_t *c, unsigned k)
 {
     switch (k) {
@@ -251,13 +249,21 @@ static const double *coeff(const cal_coeffs_t *c, unsigned k)
     }
 }
 
-static uint32_t legacy_measured(const cal_coeffs_t *c)
+/* CAL.SET resolution of each coefficient, as its inverse in SI units (the
+ * to_si of commands.c's k_cal_keys: 1 uV/code to 6 decimals is 1e-12 V/code,
+ * and so on). CAL? prints, and CAL.SET accepts, exactly these steps. */
+static const double k_cal_to_si[7] = { 1e12, 1e4, 1e12, 1e15, 1e4, 1e4, 1e9 };
+
+uint32_t calib_differs_from_nominal(const cal_coeffs_t *c)
 {
     cal_coeffs_t nom;
     calib_nominal(&nom);
     uint32_t m = 0u;
     for (unsigned k = 0; k < 7u; k++) {
-        if (memcmp(coeff(c, k), coeff(&nom, k), sizeof(double)) != 0) {
+        /* the products are far below 2^53: floor() gives exact integers */
+        double v = floor(*coeff(c, k) * k_cal_to_si[k] + 0.5);
+        double n = floor(*coeff(&nom, k) * k_cal_to_si[k] + 0.5);
+        if (v < n || v > n) {
             m |= 1u << k;   /* CAL_M_* follow the field order */
         }
     }
@@ -280,8 +286,10 @@ bool calib_load(cal_coeffs_t *out, calib_scan_t *scan_out, uint32_t *seq_out,
         if (check_bytes(port_cal_sector((unsigned)scan.newest), uid, &rec) == CALREC_VALID) {
             *out = rec.c;
             stored = true;
+            /* a record without the mark (written before it existed): what
+             * CAL.SET would count as measured */
             measured = (rec.measured & CAL_MEASURED_MARK) ? (rec.measured & CAL_M_ALL)
-                                                          : legacy_measured(&rec.c);
+                                                          : calib_differs_from_nominal(&rec.c);
         }
     }
     if (!stored) {

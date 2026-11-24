@@ -32,7 +32,8 @@ typedef enum { CALSRC_NOMINAL = 0, CALSRC_STORED, CALSRC_RAM } cal_source_t;
 const cal_coeffs_t *engine_cal(void);
 cal_source_t        engine_cal_source(void);
 const char         *engine_cal_source_name(void);
-uint32_t            engine_cal_seq(void);           /* 0 if none stored      */
+uint32_t            engine_cal_seq(void);           /* newest stored record's
+                                                     * sequence, 0 if none  */
 const calib_scan_t *engine_cal_scan(void);
 /* source := ram; for the coefficients in `given` (CAL_M_* bits), `measured`
  * says which now hold a measured value; the other coefficients keep theirs. */

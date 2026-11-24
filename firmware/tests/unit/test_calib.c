@@ -252,15 +252,15 @@ static void test_small_sector_refused(void)
 
 /* The c_dac window holds the DAC8552 worst case (zero-code error 12 mV, gain
  * error 0.2 % FSR at mid-scale, half of B's 0.5 % FSR full-scale error: 544
- * codes; about 580 with the divider and difference amplifier), while a
- * dropped or extra digit is still refused. */
+ * codes; about 615 with INL, the divider, the difference amplifier and the
+ * OPA2277 offsets, calib.c), while a dropped or extra digit is still refused. */
 static void test_c_dac_window_holds_the_dac8552_worst_case(void)
 {
     cal_coeffs_t c;
     const double lsb_v = 2.5 / 65536.0;
     double shift = (12e-3 + 0.002 * 2.5 / 2.0 + 0.005 * 2.5 / 2.0) / lsb_v;
     TEST_ASSERT_DOUBLE_WITHIN(1.0, 544.0, shift);
-    const double ok[] = { 32767.5 + 580.0, 32767.5 - 580.0 };
+    const double ok[] = { 32767.5 + 616.0, 32767.5 - 616.0 };
     for (size_t i = 0; i < 2; i++) {
         calib_nominal(&c);
         c.c_dac = ok[i];
@@ -296,8 +296,9 @@ static uint32_t load_legacy(const cal_coeffs_t *c, uint32_t seq)
 
 /* Which coefficients were measured survives a save and a load. In a record
  * written before the mask existed (field 0) a coefficient counts as measured
- * unless it is bit-equal to the nominal one: the bring-up record (i_plateau
- * alone) must not load as a full calibration. */
+ * by the CAL.SET rule: unless it equals the nominal one at CAL.SET resolution.
+ * The bring-up record (i_plateau alone) must not load as a full calibration,
+ * nor nominal gains that went through a CAL? round trip. */
 static void test_measured_mask_round_trip_and_legacy_records(void)
 {
     uint32_t seq, m = 0xFFu;
@@ -326,6 +327,33 @@ static void test_measured_mask_round_trip_and_legacy_records(void)
     TEST_ASSERT_EQUAL_HEX32(CAL_M_ALL, load_legacy(&l, 5));
     calib_nominal(&l);                                     /* nominal, as saved */
     TEST_ASSERT_EQUAL_HEX32(0u, load_legacy(&l, 6));
+    /* nominal gains as CAL? printed them and CAL.SET stored them: not
+     * bit-equal to the computed nominal doubles, still nominal */
+    l.g_dac = floor(l.g_dac * 1e12 + 0.5) / 1e12;
+    l.g_v = floor(l.g_v * 1e12 + 0.5) / 1e12;
+    l.g_i = floor(l.g_i * 1e15 + 0.5) / 1e15;
+    l.c_dac = 32790.3;                                     /* measured */
+    l.r_s = 118.7;                                         /* measured */
+    TEST_ASSERT_EQUAL_HEX32(CAL_M_C_DAC | CAL_M_R_S, load_legacy(&l, 7));
+}
+
+/* The rule itself, key by key: one CAL.SET step either side of nominal is a
+ * measurement, the nominal value as CAL? prints it is not. */
+static void test_differs_from_nominal_at_cal_set_resolution(void)
+{
+    static const double step[7] = { 1e-12, 1e-4, 1e-12, 1e-15, 1e-4, 1e-4, 1e-9 };
+    for (unsigned k = 0; k < 7u; k++) {
+        cal_coeffs_t c;
+        calib_nominal(&c);
+        double *f[7] = { &c.g_dac, &c.c_dac, &c.g_v, &c.g_i, &c.r_s, &c.r_top, &c.i_plateau };
+        double printed = floor(*f[k] / step[k] + 0.5) * step[k];
+        *f[k] = printed;
+        TEST_ASSERT_EQUAL_HEX32(0u, calib_differs_from_nominal(&c));
+        *f[k] = printed + step[k];
+        TEST_ASSERT_EQUAL_HEX32(1u << k, calib_differs_from_nominal(&c));
+        *f[k] = printed - step[k];
+        TEST_ASSERT_EQUAL_HEX32(1u << k, calib_differs_from_nominal(&c));
+    }
 }
 
 int main(void)
@@ -336,6 +364,7 @@ int main(void)
     RUN_TEST(test_plausibility_window);
     RUN_TEST(test_c_dac_window_holds_the_dac8552_worst_case);
     RUN_TEST(test_measured_mask_round_trip_and_legacy_records);
+    RUN_TEST(test_differs_from_nominal_at_cal_set_resolution);
     RUN_TEST(test_empty_flash_gives_nominal);
     RUN_TEST(test_alternating_sectors_and_sequence);
     RUN_TEST(test_torn_erase_keeps_newest);

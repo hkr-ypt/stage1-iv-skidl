@@ -14,7 +14,8 @@
  *  3. PT records stream from the result ring only while a margin for 1 and
  *     2 stays free; records are never dropped (results.h).
  * Nothing is sent while no host session exists (session.h); session start
- * discards stale input and output.
+ * discards this module's buffered input and output (the port's CDC TX FIFO
+ * keeps the old session's unread tail, protocol.md §1).
  */
 #ifndef PROTO_H
 #define PROTO_H

@@ -291,12 +291,16 @@ err_t engine_cal_save(const cal_coeffs_t *c, uint32_t measured, uint32_t timesta
     cal_coeffs_t check;
     uint32_t seq_now = 0;
     bool stored = calib_load(&check, &s_scan, &seq_now, NULL);
-    /* RAM is "stored" only if it still holds what was saved: a CAL.SAVE can
-     * outlive its session, and the next one may have changed RAM meanwhile. */
-    if (e == E_OK && stored && seq_now == *seq
-        && memcmp(&s_cal, c, sizeof s_cal) == 0 && s_cal_measured == measured) {
-        s_cal_src = CALSRC_STORED;
-        s_cal_seq = seq_now;
+    if (e == E_OK && stored && seq_now == *seq) {
+        s_cal_seq = seq_now;           /* the newest stored record */
+        /* RAM is "stored" only if it holds that record: a CAL.SAVE can
+         * outlive its session, and the next one may have changed RAM
+         * meanwhile (CAL.SET, CAL.DEFAULT, or CAL.RELOAD of the older one). */
+        if (memcmp(&s_cal, c, sizeof s_cal) == 0 && s_cal_measured == measured) {
+            s_cal_src = CALSRC_STORED;
+        } else if (s_cal_src == CALSRC_STORED) {
+            s_cal_src = CALSRC_RAM;
+        }
     }
     return e;
 }

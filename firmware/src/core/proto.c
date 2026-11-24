@@ -380,7 +380,8 @@ void proto_session_start(void)
     /* An empty line first. Output of the old session that the port already
      * took cannot be withdrawn: a host that stopped reading and closed the
      * port gets it when it opens the port again (on the target, up to the
-     * 4 KB CDC TX FIFO, which TinyUSB's DWC2 driver may be sending from).
+     * 4 KB CDC TX FIFO, which TinyUSB's DWC2 driver may be sending from,
+     * plus one 64-byte packet in the OTG FIFO).
      * It can end mid-line; the newline ends it, so EVT HELLO always starts
      * a line. Hosts ignore empty lines (protocol.md §2) and everything
      * before the session's EVT HELLO (§1). */

@@ -58,8 +58,8 @@ enum {
     W_CAL_DAMAGED  = 1u << 10, /* a sector holds a damaged record (bad magic,
                                 * version or CRC, implausible): an older record
                                 * or nominal constants may be in use; the next
-                                * CAL.SAVE overwrites it (the second one if no
-                                * sector held a valid record)                 */
+                                * CAL.SAVE, or at most the one after it,
+                                * overwrites it                               */
 };
 
 /* ---- protocol error codes (docs/firmware/protocol.md) --------------------- */

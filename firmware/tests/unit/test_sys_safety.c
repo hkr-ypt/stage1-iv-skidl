@@ -727,12 +727,54 @@ static void test_calsave_pending_across_session_saves_its_own_record(void)
     TEST_ASSERT_FALSE(engine_job_active());
     char c[400];
     snprintf(c, sizeof c, "%s", h_cmd("CAL?"));
-    TEST_ASSERT_EQUAL_MESSAGE(0, strncmp(c, "OK CAL source=nominal ", 22), c);
+    /* RAM holds the nominal constants; seq names the record just written */
+    TEST_ASSERT_EQUAL_MESSAGE(0, strncmp(c, "OK CAL source=nominal seq=1 ", 28), c);
+    TEST_ASSERT_EQUAL(1, h_kv_ll(h_cmd("STAT?"), "cal_seq"));
     psim_mcu_reset();
     app_init();
     TEST_ASSERT_TRUE(h_run_until_state(ST_DISARMED, 2000000));
     snprintf(c, sizeof c, "%s", h_cmd("CAL?"));
     TEST_ASSERT_EQUAL_MESSAGE(0, strncmp(c, "OK CAL source=stored seq=1 measured=0x10 ", 41), c);
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(c, " r_s=118.0000"), c);
+}
+
+/* The same with CAL.RELOAD in the new session: RAM then holds the older
+ * record, which must not be reported as the stored calibration once the
+ * pending save has written a newer one. */
+static void test_calsave_pending_across_session_then_reload_reports_ram(void)
+{
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("CAL.SET r_s=119"));
+    TEST_ASSERT_EQUAL_STRING("OK seq=1", h_cmd("CAL.SAVE TS=1"));
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("CAL.SET r_s=118"));
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("CFG adc_rate=2.5"));
+    h_run_us(3000000);
+    psim_obs_t o;
+    psim_observe(&o);
+    uint32_t e0 = o.cal_erases;
+    h_send("CAL.SAVE TS=2");
+    h_run_us(200);
+    TEST_ASSERT_TRUE_MESSAGE(engine_job_active(), "CAL.SAVE should wait for the conversion in flight");
+    psim_set_dtr(false);
+    h_run_us(1000);
+    psim_set_dtr(true);
+    h_run_us(1000);
+    TEST_ASSERT_EQUAL_STRING("OK source=stored seq=1", h_cmd("CAL.RELOAD"));
+    uint64_t t0 = psim_time_us();
+    do {
+        h_run_us(1000);
+        psim_observe(&o);
+    } while (o.cal_erases == e0 && psim_time_us() - t0 < 3000000u);
+    TEST_ASSERT_TRUE_MESSAGE(o.cal_erases != e0, "the save never ran");
+    h_run_us(100000);
+    char c[400];
+    snprintf(c, sizeof c, "%s", h_cmd("CAL?"));
+    TEST_ASSERT_EQUAL_MESSAGE(0, strncmp(c, "OK CAL source=ram seq=2 ", 24), c);
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(c, " r_s=119.0000"), c);
+    psim_mcu_reset();
+    app_init();
+    TEST_ASSERT_TRUE(h_run_until_state(ST_DISARMED, 2000000));
+    snprintf(c, sizeof c, "%s", h_cmd("CAL?"));
+    TEST_ASSERT_EQUAL_MESSAGE(0, strncmp(c, "OK CAL source=stored seq=2 ", 27), c);
     TEST_ASSERT_NOT_NULL_MESSAGE(strstr(c, " r_s=118.0000"), c);
 }
 
@@ -963,6 +1005,7 @@ int main(void)
     RUN_TEST(test_compliance_at_zero_is_reported_once);
     RUN_TEST(test_calsave_pending_across_session_never_erases_armed);
     RUN_TEST(test_calsave_pending_across_session_saves_its_own_record);
+    RUN_TEST(test_calsave_pending_across_session_then_reload_reports_ram);
     RUN_TEST(test_arm_refused_while_reset_pending);
     RUN_TEST(test_reset_writes_the_zero_pair_first);
     RUN_TEST(test_arm_answers_fault_when_zero_write_fails);
