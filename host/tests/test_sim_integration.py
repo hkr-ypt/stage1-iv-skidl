@@ -521,3 +521,15 @@ def test_cli_tools_wait_for_boot(tmp_path, monkeypatch):
                          "--out", str(tmp_path / "boot")])
     assert rc == 0
     assert len(W.read_csv(tmp_path / "boot.csv")) == 3
+
+
+def test_arm_right_after_an_adc_rate_change(sim, inst):
+    """ARM sent while the ADC still reconfigures after CFG adc_rate=... (it
+    answers before the self-calibration ends) is refused 'adc'; arm() waits
+    it out. At 2.5 SPS the self-calibration alone takes 1.23 s."""
+    assert wait_state(inst, "DISARMED")
+    for rate in ("3750", "2.5", "1000"):
+        inst.cfg(adc_rate=rate)
+        inst.arm()
+        assert inst.stat()["state"] == "ARMED"
+        inst.disarm()

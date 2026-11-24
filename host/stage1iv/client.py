@@ -100,6 +100,11 @@ READY_POLL_S = 0.1
 #: :meth:`Instrument.arm` retries ``ERR PRECOND afe`` for this long plus two
 #: conversion periods at the configured ADC rate.
 ARM_AFE_RETRY_S = 2.0
+#: ... plus this much when ARM is refused ``adc``: the ADS1256 reconfigures
+#: after an ``adc_rate`` change (``CFG`` answers before it is done): the
+#: conversion in flight at the old rate (<= 0.4 s) and the self-calibration
+#: at the new one (1.23 s at 2.5 SPS, SBAS288K Table 21).
+ARM_ADC_RECONF_S = 2.0
 ARM_RETRY_POLL_S = 0.05
 _SLOWEST_SPS = Decimal("2.5")
 
@@ -1200,13 +1205,15 @@ class Instrument:
             afe_retry: float | None = None) -> P.Event | None:
         """``ARM``; with ``wait`` block until ``EVT STATE ARMED``.
 
-        ``ERR PRECOND afe`` is retried for a bounded time: ARM needs a
-        gate-open front-end check younger than 1 s, which the firmware runs
-        only in DISARMED, on its next monitor I/V pair, so an ARM right after a
-        DISARM is refused for up to about a second (longer at low ADC rates).
-        ``afe_retry`` is that retry time in seconds (default 2 s plus two
-        conversion periods at the configured ``adc_rate``; 0 = no retry); a
-        front-end check that keeps failing raises :class:`ErrPrecond` after it.
+        ``ERR PRECOND afe`` and ``adc`` are retried for a bounded time. ARM
+        needs a gate-open front-end check younger than 1 s, which the firmware
+        runs only in DISARMED, on its next monitor I/V pair, so an ARM right
+        after a DISARM is refused ``afe`` for up to about a second (longer at
+        low ADC rates); right after a ``CFG adc_rate=...`` the ADC is still
+        reconfiguring and ARM is refused ``adc``. ``afe_retry`` is that retry
+        time in seconds (default 2 s plus two conversion periods at the
+        configured ``adc_rate``, plus 2 s for a reconfiguration; 0 = no
+        retry); a refusal that persists raises :class:`ErrPrecond` after it.
 
         Raises :class:`ErrPrecond` etc. if refused, :class:`StateChangeFailed`
         if the instrument goes to FAULT/DISARMING/DISARMED instead, the
@@ -1221,12 +1228,17 @@ class Instrument:
                     try:
                         resp = self.command("ARM")
                     except ErrPrecond as exc:
-                        if exc.precondition.lower() != "afe":
+                        reason = exc.precondition.lower()
+                        if reason not in ("afe", "adc"):
                             raise
                         now = time.monotonic()
                         if give_up is None:
-                            window = (self._afe_retry_window() if afe_retry is None
-                                      else max(0.0, float(afe_retry)))
+                            if afe_retry is not None:
+                                window = max(0.0, float(afe_retry))
+                            else:
+                                window = self._afe_retry_window()
+                                if reason == "adc":
+                                    window += ARM_ADC_RECONF_S
                             give_up = now + window
                         if now >= give_up:
                             raise

@@ -360,7 +360,7 @@ def test_arm_retries_a_stale_front_end_check(device, inst):
     assert device.received.count("ARM") == 4
 
 
-def test_arm_retry_is_bounded_and_only_for_afe(device, inst):
+def test_arm_retry_is_bounded_and_only_for_transient_refusals(device, inst):
     device.override["ARM"] = ["ERR PRECOND afe"] * 1000
     t0 = time.monotonic()
     with pytest.raises(ErrPrecond) as e:
@@ -372,6 +372,23 @@ def test_arm_retry_is_bounded_and_only_for_afe(device, inst):
     with pytest.raises(ErrPrecond):
         inst.arm()
     assert device.received.count("ARM") == n + 1
+
+
+def test_arm_retries_while_the_adc_reconfigures(device, inst):
+    """Right after CFG adc_rate=... the ADC self-calibrates at the new rate and
+    ARM is refused 'adc' (CFG answers first): retried like a stale 'afe'
+    check, and bounded the same way."""
+    device.override["ARM"] = ["ERR PRECOND adc"] * 2
+    inst.arm()
+    assert inst.state == "ARMED"
+    assert device.received.count("ARM") == 3
+    inst.disarm()
+    device.override["ARM"] = ["ERR PRECOND adc"] * 1000
+    t0 = time.monotonic()
+    with pytest.raises(ErrPrecond) as e:
+        inst.arm(afe_retry=0.3)
+    assert e.value.precondition == "adc"
+    assert 0.25 <= time.monotonic() - t0 < 2.0
 
 
 def test_arm_retry_window_includes_two_conversions(device, inst):

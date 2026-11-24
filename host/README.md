@@ -76,7 +76,9 @@ with Instrument.open_serial(serial="0034002B3436511233353533") as inst:
   (POST after power-up); the tools do this, except `iv-diag`.
 * `arm()` retries `ERR PRECOND afe` for about 2 s plus two ADC conversions:
   ARM needs a front-end check younger than 1 s, which the firmware runs only
-  while DISARMED, so an ARM right after a DISARM is briefly refused.
+  while DISARMED, so an ARM right after a DISARM is briefly refused. It
+  retries `ERR PRECOND adc` 2 s longer: right after `cfg(adc_rate=...)` the
+  ADC is still self-calibrating at the new rate (`CFG` answers first).
 * Values are checked for exactness before sending (1 µV, 1 nA, 1 µs, 0.1 SPS,
   1 µV/s; calibration resolutions in protocol.md §5.6). A list point without
   its own settle time (`ListPoint(v)`, `volts` alone in a `--list` file, `v`
