@@ -84,11 +84,11 @@ Each invariant names how it is enforced and how it is verified (§9).
 | **SI-1** | Every DAC frame a release build can emit has B = 0xFFFF and PD1:PD0 = 00, and every A update is followed by `0x34 FF FF` | `dac8552_frames()` has no B/PD parameter. The bring-up-only `DAC.RAW` is compiled out of release builds | exhaustive unit test over all A codes; ELF symbol check (no bring-up symbols in release); analyser decode (L3) |
 | **SI-2** | PC5 makes edges only in thread mode, in `hb_service()`, only while the health predicate holds, on the fixed 250 µs grid, with every edge spacing ≤ 1.0 ms (§4.4). The one exception: the zero-only writers (fault handlers, dead-man ISR) may force PC5 **low**, never high | single edge generator; IPSR assert; grid scheduler; gap fault | unit tests; link check (only `main.o` references `hb_service`; only `heartbeat.o` and `dac_zero_safe` access GPIOC BSRR); analyser over a soak (L3) |
 | **SI-3** | Before the first heartbeat edge after any reset, and at every `ARM`, this boot has written A = zero code and B = 0xFFFF | boot step 1; the `ARM` sequence | state-machine tests; analyser (reset → frames before PC5 activity) |
-| **SI-4** | Every orderly disarm and every fault entry writes A = zero code **before** the heartbeat stops (unless the DAC transport is the fault) | the FAULT/DISARM entry sequences (§6.3) | unit tests on every state × fault; bench drills (M9) |
+| **SI-4** | Every orderly disarm writes A = zero code **before** the heartbeat stops. Every fault entry (and every software reset) writes it within microseconds of forcing PC5 low (`dac_zero_safe()` stops edges first), long before the gate can open (≥ 50 ms of decay), unless the DAC transport is the fault | the FAULT/DISARM entry sequences (§6.3) | unit tests on every state × fault; bench drills (M9) |
 | **SI-5** | No DAC code is produced except by `scaling_v_to_code()` (or the zero constant), which rejects \|V\| > `v_limit` ≤ 10.000 V | the code-producing API takes volts, not codes | unit tests; sweep definitions validated before running |
 | **SI-6** | After any reset the instrument is `DISARMED`; nothing but an `ARM` command in a live session arms it | no persistent "armed" state; boot always ends in `DISARMED` or `FAULT` | sim reset drills; bench reset/watchdog drills |
 | **SI-7** | `ARMING`, `ARMED` and `SWEEPING` need a host session (VBUS, configured, DTR); losing it starts `DISARMING` | session service | sim (VBUS/DTR drop); bench unplug |
-| **SI-8** | Flash erase/program only in `DISARMED`, ≥ `T_DISARM` after the last heartbeat edge | `CAL.SAVE` state gate | unit test; timed bench test |
+| **SI-8** | Flash erase/program only in `DISARMED`, ≥ `T_DISARM` after the last heartbeat edge | `CAL.SAVE` state gate, re-checked by the save job at the erase; `ARM` refused while a job runs | unit test; timed bench test |
 | **SI-9** | When the state requires the output armed, any failing health item (loop timing, heartbeat gap, DAC transport, ADC freshness and integrity, stack canary, invariant cross-checks such as the B shadow and `DBG_TIM2_STOP`) causes a **FAULT entry**, not merely a missing heartbeat. Host-session loss is **not** a health item: it is a state trigger (SI-7) handled by a bounded ramp with the heartbeat still running | `safety_service()` evaluates; `hb_service()` re-checks as a second gate | unit tests; fault injection (sim) |
 | **SI-10** | No ISR writes PC5, SPI1 or SPI2, except the zero-only writers (fault handlers and the dead-man ISR): they may force PC5 low and send the zero pair through `dac_zero_safe()`, nothing else (§7.1, §7.9) | ISR set fixed (§7.1) | code review checklist; link check |
 | **SI-11** | The IWDG runs in every build and is kicked only at the end of a healthy pass | `iwdg_service()` | injected hang (L3) |
@@ -1020,9 +1020,10 @@ For both kinds:
   maps to a code in 0…65535 under the current calibration. Total points
   ≤ 1 000 000. The estimated duration is returned. A definition is rejected,
   never clipped.
-- **Ramps:** DAC steps of ≤ 10 mV (≈ 33 codes), one per ≥ 1 ms (hence the
-  10 V/s maximum). They are not recorded; the monitor watches compliance
-  meanwhile.
+- **Ramps:** setpoint steps of ≤ 10 mV (≤ 33 codes, so up to 10.1 mV of
+  output), on a 1 ms grid (hence the 10 V/s maximum; §15 item 12). They are
+  not recorded; the monitor watches compliance meanwhile (back to back while
+  the output moves, §15 item 36).
 - **Sweep identity:** each run gets a `sweep_id`. `EVT SWEEP_BEGIN` echoes
   the full configuration, the calibration record **and the session zero**
   (o_v, o_i, its time and data rate), so a data file is self-describing and
@@ -1693,8 +1694,9 @@ here. Each item says what the code does and why; the code and
 12. *Ramps* step on a 1 ms **grid** (`next += 1 ms`, resynchronised when more
     than a period late) so that the 10 V/s disarm ramp finishes ±10 V in
     1.0 s, inside the 1.1 s deadline whatever the pass jitter. An individual
-    step may therefore follow a late one by less than 1 ms (§7.6 "one per
-    ≥ 1 ms"); the average rate is exact and no step exceeds 10 mV.
+    step may therefore follow a late one by less than 1 ms; the average rate
+    is exact and no step exceeds 10 mV of setpoint (33 DAC codes, 10.1 mV at
+    nominal g_dac).
 13. *`RESET` and `CRASH`* run 50–200 ms after their `OK` is queued, so the
     response reaches the host before the USB device disappears.
 14. *Monitor.* In `DISARMED` every monitor pair runs the gate-open front-end

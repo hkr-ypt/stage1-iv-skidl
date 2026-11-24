@@ -63,8 +63,11 @@
 #define V_LIMIT_MAX_UV           10000000 /* 10.000 V absolute software ceiling  */
 #define SETTLE_MIN_US            100u
 #define SETTLE_MAX_US            60000000u
-#define RAMP_STEP_MAX_UV         10000    /* <= 10 mV per ramp step               */
-#define RAMP_STEP_PERIOD_US      1000u    /* >= 1 ms between ramp steps           */
+#define RAMP_STEP_MAX_UV         10000    /* <= 10 mV of setpoint per ramp step
+                                           * (<= 33 DAC codes, 10.1 mV)          */
+#define RAMP_STEP_PERIOD_US      1000u    /* ramp steps on a 1 ms grid (mean
+                                           * period; one after a late step can
+                                           * come sooner, spec §15 item 12)     */
 
 /* ---- capacities --------------------------------------------------------- */
 #define RESULTS_CAPACITY         1024u
