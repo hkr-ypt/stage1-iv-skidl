@@ -50,7 +50,7 @@ responses.
 Session loss - a serial error, the port vanishing, a new ``EVT HELLO``
 after the first command was sent, or ``EVT STATE ... reason=
 session_lost`` - surfaces as :class:`SessionLost` in every waiting call.
-Before the first command, ``HELLO``\ s, responses and records can be an
+Before the first command, ``HELLO``\\ s, responses and records can be an
 earlier session's unread output (protocol.md section 1): responses and
 records are dropped and a later ``HELLO`` replaces an earlier one.
 """

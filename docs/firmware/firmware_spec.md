@@ -1861,8 +1861,10 @@ audited hardware requires; a regression test accompanies each (verification.md).
     longer skew every later byte (stale RXNE/OVR drained at the next
     transfer).
 42. *USB.* Device mode is forced and confirmed before `tusb_init()`, and PA10
-    is pulled up (§4.7). The `.bin` image is filled with 0xFF, so it erases
-    the calibration sectors as build.md says.
+    is pulled up (§4.7); a core that is not in device mode after
+    `tusb_init()` leaves USB off with its interrupt masked. The `.bin` image
+    is filled with 0xFF, so it erases the calibration sectors as build.md
+    says.
 **Hardware documentation updated with this work:** `bringup_checklist.md`
 (§3 REF5025AI tolerance; §6 disarm limits 70/85 ms with rationale, the
 firmware commands, never re-arm after reset; §7 plateau as a nominal value
