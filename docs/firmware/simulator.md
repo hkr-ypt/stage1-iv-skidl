@@ -55,9 +55,14 @@ CTL <control socket path>
   send one transaction to the freshly powered ADC model before that (the
   model counts it as a command while busy). That traffic does not exist on
   the target.
-* The device-side TX ring stands for TinyUSB's CDC TX FIFO: what the host has
-  not read stays there across a DTR drop and reaches the next session ahead
-  of its empty line and `EVT HELLO`, as on the target (protocol.md §1).
+* The device-side TX ring stands for TinyUSB's CDC TX FIFO, 4 KB by default
+  (`tx_limit`): what the host has not read stays there when it drops DTR or
+  closes the pty, and reaches the next session ahead of its empty line and
+  `EVT HELLO`, cut off mid-line, as on the target (protocol.md §1); what the
+  departed client's pty queues held is dropped, like a host's tty buffers.
+  A re-enumeration (`configured` 0 → 1) clears it, as SET_CONFIGURATION does
+  in TinyUSB. The one 64-byte packet the target's OTG FIFO can also hold is
+  not modelled.
 
 From Python: `stage1iv.sim.SimulatorProcess` starts the simulator, opens an
 `Instrument` on the pty and gives a control client (`sim.ctl`).
@@ -80,7 +85,7 @@ UNIX stream socket; one command per line; reply `OK [key=value ...]` or
 | `adc_stuck none\|low\|high`, `adc_drdy_dead 0\|1`, `adc_reset` | ADC faults (DOUT stuck, no /DRDY, spontaneous reset) |
 | `stall <µs>` | the next loop pass takes this long (dead-man / gap tests) |
 | `bor 0..3`, `tim2_frozen 0\|1` | option-byte BOR level, DBG_TIM2_STOP |
-| `tx_limit <bytes>\|-1` | stall the host link (−1 = unlimited) |
+| `tx_limit <bytes>\|-1` | limit the device-side TX FIFO (0 stalls the host link; −1 = the default, 4096 bytes like the target's CDC TX FIFO) |
 | `mcu_reset`, `power_cycle` | MCU reset (DAC/pump/ADC/flash/crash record survive) or full power cycle (flash survives) |
 | `crash hardfault\|hang\|hang_irqoff` | emulated fault handler, hang (dead-man or IWDG) |
 | `obs?` | one line of key=value: `t_us v_sweep vref_dac v_arm gate gate_on_events gate_off_events v_dut i_dut v_hi v_lo i_shunt in_limit dac_a dac_b dac_pd_a dac_pd_b dac_frames dac_aborted dac_reserved_violations dac_b_not_fs_loads hb_edges hb_level hb_last_edge_us led passes resets resets_requested reset_flags crash crash_cause iwdg_kicks iwdg_fires deadman_enabled deadman_fires adc_conversions adc_selfcals adc_viol_*  vbus_mv dtr configured connected client cal_erases cal_programs hung` |

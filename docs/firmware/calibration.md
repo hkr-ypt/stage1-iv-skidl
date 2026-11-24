@@ -17,9 +17,11 @@ The firmware keeps track of which coefficients were measured (set with
 `CAL.SET` to a value other than the nominal one; `CAL?` `measured=`, saved
 with the record). A coefficient set to its nominal value, as `CAL?` prints
 it, counts as nominal, so a `CAL?` round trip or a restored partial record
-keeps the marking below. While any of `g_dac`,
-`c_dac`, `g_v`, `g_i`, `r_s` is still nominal, every record carries
-`CAL_NOMINAL`, `STAT?` warns, and the Kelvin tolerance is the wide one. A
+keeps the marking below; a measured value that happens to equal the nominal
+one at that resolution is entered one step away (`iv-cal` does this). While
+any of `g_dac`, `c_dac`, `g_v`, `g_i`, `r_s` is still nominal, every record
+carries `CAL_NOMINAL`, `STAT?` warns, and the Kelvin tolerance is the wide
+one. A
 partial calibration, such as `i_plateau` alone after the bring-up plateau
 test (checklist §7), therefore does not switch to the tight tolerance on
 uncalibrated gains.
@@ -53,9 +55,14 @@ accepted (g_dac ±2 %, c_dac ±1000 codes, g_v/g_i ±5 %, r_s 80–200 Ω, r_top
 DAC8552 worst case (zero-code error 12 mV, gain error 0.2 % FSR at mid-scale,
 half of channel B's 0.5 % FSR full-scale error: 544 codes; about 615 with INL,
 the divider, the difference amplifier and the OPA2277 offsets) and still
-refuses a dropped or extra digit. A slip in the thousands digit can land
-inside the window; `iv-cal` computes `c_dac` itself, and once the board is
-calibrated a wrong `c_dac` flags `KELVIN` on every point.
+refuses a dropped or extra digit. The 615-code figure uses the resistors'
+initial 0.1 % tolerance; their drift over temperature comes on top, which is
+why the window keeps its margin. A slip in the thousands digit (about
+0.31 V of output error) can land inside the window. `iv-cal` computes
+`c_dac` itself, so only a value typed by hand is at risk. On a calibrated
+board such an error flags `KELVIN` on points below about 0.8·`i_plateau`;
+nearer the plateau it can show as `CLIM` instead, and above about 55 mA
+not at all.
 
 ## 3. Storage
 
@@ -70,8 +77,8 @@ previous record (tested with torn erases/programs at every word). At boot the
 valid record with the highest sequence wins; a record of another MCU (UID)
 is ignored (`W_CAL_UID`), and so is a damaged one (bad magic, version or CRC,
 implausible coefficients: `W_CAL_DAMAGED`, since an older record may then be
-in use; the next `CAL.SAVE` overwrites that sector, or the one after it if
-neither sector held a valid record). `CAL.SAVE` is legal only in `DISARMED`, 100 ms after
+in use; the next `CAL.SAVE` overwrites that sector, or at most the one after
+it). `CAL.SAVE` is legal only in `DISARMED`, 100 ms after
 the last heartbeat edge, and waits until no ADC conversion is in flight (the
 erase stalls the bus for up to 500 ms).
 
