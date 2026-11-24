@@ -93,9 +93,10 @@ static bool within_rel(double x, double nominal, double rel)
  * and the OPA2277 offsets the corner case is about 615 codes (initial
  * resistor tolerance; their drift over temperature comes on top, hence the
  * margin). A dropped or extra digit still lands far outside. A
- * thousands-digit slip can land inside: iv-cal computes c_dac, and a value
- * typed by hand that is that wrong flags KELVIN below about 0.8 i_plateau
- * only (calibration.md §2). */
+ * thousands-digit slip can land inside: iv-cal computes c_dac; a value
+ * typed by hand that is that wrong flags KELVIN below about 0.8 i_plateau,
+ * nearer the plateau KELVIN or a false CLIM by polarity, and above about
+ * 55 mA nothing (calibration.md §2). */
 #define C_DAC_WINDOW_CODES 1000.0
 
 bool calib_plausible(const cal_coeffs_t *c)

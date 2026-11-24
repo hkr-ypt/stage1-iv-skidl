@@ -1409,6 +1409,121 @@ static void test_reopened_port_hello_starts_a_line_after_the_old_tail(void)
     TEST_ASSERT_NULL(strstr(hello, "\nPT "));
 }
 
+/* As above, without reading the reopened port: the old session's tail. */
+static void leave_a_tail(void)
+{
+    TEST_ASSERT_EQUAL(0, strncmp(h_cmd("SWP.WP 0 2 STEP=0.001"), "OK SWP", 6));
+    arm();
+    h_send("SWP.RUN");
+    psim_set_tx_space_limit(4096);           /* the CDC TX FIFO size */
+    for (int k = 0; k < 20000; k++) {        /* the host is not reading */
+        app_pass();
+    }
+    TEST_ASSERT_TRUE(psim_host_tx_pending() > 3000u);
+    psim_set_dtr(false);                     /* it closes the port */
+    for (int k = 0; k < 2000; k++) {
+        app_pass();
+    }
+}
+
+/* Like h_run_us(), but the host reads nothing (h_run_us() drains it). */
+static void run_unread_us(uint64_t us)
+{
+    uint64_t end = psim_time_us() + us;
+    while (psim_time_us() < end) {
+        app_pass();
+    }
+}
+
+static const char *reopen_and_read(void)
+{
+    static uint8_t buf[8192];
+    psim_set_dtr(true);
+    size_t n = 0;
+    for (int k = 0; k < 2000 && n < sizeof buf - 1u; k++) {
+        app_pass();
+        n += psim_host_take_tx(buf + n, sizeof buf - 1u - n);
+    }
+    buf[n] = 0;
+    psim_set_tx_space_limit(PSIM_TX_NO_LIMIT);
+    return (const char *)buf;
+}
+
+/* A re-enumeration (here a cable pulled and plugged in again, or the
+ * configuration dropped and set again) clears TinyUSB's CDC TX FIFO at
+ * SET_CONFIGURATION: no old tail precedes the next session's HELLO. */
+static void test_cable_replug_clears_the_old_tail(void)
+{
+    leave_a_tail();
+    psim_set_vbus_mv(0);
+    run_unread_us(500000);
+    TEST_ASSERT_FALSE(psim_host_connected());
+    psim_set_vbus_mv(5000);
+    run_unread_us(500000);
+    TEST_ASSERT_TRUE(psim_host_connected());
+    const char *text = reopen_and_read();
+    TEST_ASSERT_EQUAL_STRING_LEN_MESSAGE("\nEVT HELLO ", text, 11, text);
+}
+
+static void test_reconfiguration_clears_the_old_tail(void)
+{
+    leave_a_tail();
+    psim_set_configured(false);
+    run_unread_us(10000);
+    psim_set_configured(true);
+    run_unread_us(10000);
+    const char *text = reopen_and_read();
+    TEST_ASSERT_EQUAL_STRING_LEN_MESSAGE("\nEVT HELLO ", text, 11, text);
+}
+
+/* The printed value with its last digit moved by delta (all CAL? values are
+ * positive fixed-point numbers). */
+static void step_printed(const char *v, int delta, char *out, size_t cap)
+{
+    const char *dot = strchr(v, '.');
+    TEST_ASSERT_NOT_NULL(dot);
+    int d = (int)strlen(dot + 1);
+    char digits[64];
+    size_t j = 0;
+    for (const char *p = v; *p != '\0' && j < sizeof digits - 1u; p++) {
+        if (*p != '.') {
+            digits[j++] = *p;
+        }
+    }
+    digits[j] = '\0';
+    long long x = strtoll(digits, NULL, 10) + delta;
+    char tmp[64];
+    snprintf(tmp, sizeof tmp, "%0*lld", d + 1, x);
+    int len = (int)strlen(tmp);
+    snprintf(out, cap, "%.*s.%s", len - d, tmp, tmp + len - d);
+}
+
+/* CAL.SET's measured rule (calib_differs_from_nominal) and CAL.SET/CAL?
+ * (commands.c) use the same resolution for every key: the nominal value as
+ * CAL? prints it counts as nominal, one step either side as measured. */
+static void test_measured_rule_matches_the_cal_set_resolution(void)
+{
+    static const char *const keys[7] = {
+        "g_dac_uv", "c_dac", "g_v_uv", "g_i_na", "r_s", "r_top", "i_plateau",
+    };
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("CAL.DEFAULT"));
+    char c[400];
+    snprintf(c, sizeof c, "%s", h_cmd("CAL?"));
+    for (unsigned k = 0; k < 7u; k++) {
+        char nom[64], v[64], cmd[128];
+        TEST_ASSERT_TRUE(h_kv(c, keys[k], nom, sizeof nom));
+        static const int deltas[3] = { -1, 1, 0 };   /* ends on nominal */
+        for (unsigned i = 0; i < 3u; i++) {
+            int delta = deltas[i];
+            step_printed(nom, delta, v, sizeof v);
+            snprintf(cmd, sizeof cmd, "CAL.SET %s=%s", keys[k], v);
+            TEST_ASSERT_EQUAL_STRING_MESSAGE("OK", h_cmd(cmd), cmd);
+            unsigned m = (unsigned)h_kv_ll(h_cmd("CAL?"), "measured");
+            TEST_ASSERT_EQUAL_HEX32_MESSAGE(delta == 0 ? 0u : 1u << k, m, cmd);
+        }
+    }
+}
+
 /* After a cable pull the D+ pull-up can back-feed the VBUS node through U10
  * to about 2.7...3.0 V (firmware_handoff.md §6; up to 3.09 V as read with the
  * ADC1 tolerances). That must read as "VBUS absent", or the pull-up holds
@@ -1604,6 +1719,9 @@ int main(void)
     RUN_TEST(test_adc_traffic_obeys_the_data_sheet);
     RUN_TEST(test_late_sample_time_is_its_conversion_centroid);
     RUN_TEST(test_reopened_port_hello_starts_a_line_after_the_old_tail);
+    RUN_TEST(test_cable_replug_clears_the_old_tail);
+    RUN_TEST(test_reconfiguration_clears_the_old_tail);
+    RUN_TEST(test_measured_rule_matches_the_cal_set_resolution);
     RUN_TEST(test_vbus_backfeed_releases_the_pullup);
     RUN_TEST(test_partial_calibration_stays_nominal);
     RUN_TEST(test_each_core_coefficient_keeps_cal_nominal);

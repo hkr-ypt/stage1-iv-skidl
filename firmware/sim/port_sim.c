@@ -114,6 +114,7 @@ typedef struct {
     bool     configured_flag;
     bool     dtr_flag;
     bool     connected;
+    bool     link_up;       /* host_configured() at the last link_update() */
     size_t   tx_limit;
     /* system */
     int      bor;
@@ -550,22 +551,20 @@ void psim_host_give_rx(const uint8_t *buf, size_t n)
     S.ext.rx_dropped += (uint64_t)(n - k);
 }
 
+static void link_update(void);
+
 void psim_set_vbus_mv(uint32_t mv)
 {
     ensure();
     S.vbus_mv = mv;
+    link_update();
 }
 
 void psim_set_configured(bool c)
 {
     ensure();
-    if (c && !S.configured_flag) {
-        /* SET_CONFIGURATION: TinyUSB's cdcd_open() clears the CDC TX FIFO
-         * (CFG_TUD_CDC_TX_PERSISTENT 0), so an old tail does not survive a
-         * re-enumeration. */
-        ring_clear(&s_tx);
-    }
     S.configured_flag = c;
+    link_update();
 }
 
 void psim_set_dtr(bool d)
@@ -996,6 +995,19 @@ static bool host_configured(void)
     return S.configured_flag && S.connected && S.vbus_mv >= VBUS_DETACH_MV;
 }
 
+/* The link coming up again (configured 0 -> 1, VBUS back, a soft reconnect)
+ * is a re-enumeration on the target: SET_CONFIGURATION runs TinyUSB's
+ * cdcd_open(), which clears the CDC TX FIFO (CFG_TUD_CDC_TX_PERSISTENT 0),
+ * so the old tail is gone. A DTR drop alone keeps it (protocol.md 1). */
+static void link_update(void)
+{
+    bool up = host_configured();
+    if (up && !S.link_up) {
+        ring_clear(&s_tx);
+    }
+    S.link_up = up;
+}
+
 static size_t tx_space(void)
 {
     size_t free_bytes = PSIM_HOST_RING_BYTES - s_tx.count;
@@ -1060,6 +1072,7 @@ uint32_t port_vbus_mv(void)
 bool port_host_configured(void)
 {
     ensure();
+    link_update();
     return host_configured();
 }
 
@@ -1076,6 +1089,7 @@ void port_host_connect(bool connect)
         return;
     }
     S.connected = connect;
+    link_update();
 }
 
 /* ---- port.h: calibration flash --------------------------------------------------------------------- */

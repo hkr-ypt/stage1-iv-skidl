@@ -58,10 +58,13 @@ bool stm32_usb_init(void)
     } else {
         /* Initialised but not in device mode: USB stays off. dcd_init() has
          * already powered the transceiver and soft-connected (DCTL.SDIS
-         * cleared), and nothing would disconnect again, so mask the stack's
-         * interrupt, soft-disconnect and power the FS PHY down: bounded
-         * register writes. tusb_deinit() is not used: its core reset
-         * busy-waits without a bound on the core that just misbehaved. */
+         * cleared), and nothing would disconnect again. Mask the stack's
+         * interrupt and power the FS PHY down (GCCFG.PWRDWN = 0): with the
+         * transceiver off no pull-up is possible in either mode. The
+         * soft-disconnect is a safeguard should the core reach device mode
+         * after all (a core in host mode ignores DCTL). Bounded register
+         * writes only: tusb_deinit()'s core reset busy-waits without a
+         * bound on the core that just misbehaved. */
         NVIC_DisableIRQ(OTG_FS_IRQn);
         (void)tud_disconnect();
         USB_OTG_FS->GCCFG &= ~USB_OTG_GCCFG_PWRDWN;
