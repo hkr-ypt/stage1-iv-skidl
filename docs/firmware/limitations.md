@@ -98,9 +98,13 @@ The user-visible ones:
   connected only when that carries more than this at 0 V output. Its
   procedure needs all four jacks open; the limits do not check it.
 * Every session starts with an empty line before `EVT HELLO` (protocol.md §1).
+  Output a host left unread when it closed the port (up to 4 KB) is not
+  discarded: it arrives ahead of the next session's `EVT HELLO`, and hosts
+  skip it.
 * `CAL_NOMINAL` stays set until `g_dac`, `c_dac`, `g_v`, `g_i` and `r_s` have
-  all been set with `CAL.SET`; a partial calibration keeps the wide Kelvin
-  tolerance.
+  all been set with `CAL.SET` to measured values (a value equal to the
+  nominal one, as `CAL?` prints it, counts as nominal); a partial
+  calibration keeps the wide Kelvin tolerance.
 
 ## 4. Residual risks (unchanged from spec §3.3)
 
@@ -119,6 +123,12 @@ The user-visible ones:
   behaviour (DTR on open/close, port naming) is untested.
 * The pty used by the simulator has no DTR line; `SerialTransport` tolerates
   that, the simulator emulates DTR from client presence.
+* If writing a command line is interrupted after its bytes left (Ctrl-C at
+  that instant, or a partial write when a serial write times out), the
+  client forgets the command while the device still answers it; later
+  responses are then attributed one command late until a tagged response
+  shows the mismatch (`ProtocolError`, `resync()`). This predates the audit
+  and needs an interruption at that instant.
 
 ## 6. Owner actions outside the software
 

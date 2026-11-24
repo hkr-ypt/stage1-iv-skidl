@@ -372,14 +372,16 @@ again afterwards.
 while armed** (`host_timeout_s`, default 30). Every hold in this section
 and in §5, §7 and §8 would end that way if commands are typed into a
 terminal: the output ramps to 0 V, and a reading taken afterwards looks
-like a dead output. Either send the commands through the Python client
-(it sends `PING` every 5 s), or set **`CFG host_timeout_s=0`** for the
-bring-up session. `EVT WARN HOST_TIMEOUT` and `EVT STATE DISARMING
-reason=host_timeout` mean this, not a hardware fault. Before every reading
-on a held output confirm `STAT?` reports `state=ARMED`. **`CFG` settings
-are not stored**: they return to their defaults at every reset, re-flash
-or power cycle (`CFG?` shows them), so repeat `host_timeout_s` and, in §7
-and §8, `i_compliance` after each one.
+like a dead output. Either hold the output through the Python client
+inside `with inst.hold():` (the client sends `PING` only during its own
+calls and `hold()`; an idle client is disarmed like a terminal), or set
+**`CFG host_timeout_s=0`** for the bring-up session. `EVT WARN
+HOST_TIMEOUT` and `EVT STATE DISARMING reason=host_timeout` mean this, not
+a hardware fault. Before every reading on a held output confirm `STAT?`
+reports `state=ARMED`. **`CFG` settings are not stored**: they return to
+their defaults at every reset, re-flash or power cycle (`CFG?` shows
+them), so repeat `host_timeout_s` and, in §7 and §8, `i_compliance` after
+each one.
 
 - [ ] **Arm** (`ARM`, release image, 2 kHz). DAC_ARM: simulated 2.70 V
   nominal, 2.15 V worst case; U11 needs 1.49 V. Record it.

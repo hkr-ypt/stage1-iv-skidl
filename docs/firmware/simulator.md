@@ -56,8 +56,8 @@ CTL <control socket path>
   model counts it as a command while busy). That traffic does not exist on
   the target.
 * The device-side TX ring stands for TinyUSB's CDC TX FIFO: what the host has
-  not read stays there across a DTR drop, as on the target, and
-  `port_host_discard_tx()` clears it at a session boundary.
+  not read stays there across a DTR drop and reaches the next session ahead
+  of its empty line and `EVT HELLO`, as on the target (protocol.md §1).
 
 From Python: `stage1iv.sim.SimulatorProcess` starts the simulator, opens an
 `Instrument` on the pty and gives a control client (`sim.ctl`).

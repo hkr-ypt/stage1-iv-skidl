@@ -14,7 +14,10 @@ The firmware converts raw codes with a linear model (spec §7.10):
 
 `o_v`, `o_i` come from the **session zero** (`ZERO`), not from flash.
 The firmware keeps track of which coefficients were measured (set with
-`CAL.SET`; `CAL?` `measured=`, saved with the record). While any of `g_dac`,
+`CAL.SET` to a value other than the nominal one; `CAL?` `measured=`, saved
+with the record). A coefficient set to its nominal value, as `CAL?` prints
+it, counts as nominal, so a `CAL?` round trip or a restored partial record
+keeps the marking below. While any of `g_dac`,
 `c_dac`, `g_v`, `g_i`, `r_s` is still nominal, every record carries
 `CAL_NOMINAL`, `STAT?` warns, and the Kelvin tolerance is the wide one. A
 partial calibration, such as `i_plateau` alone after the bring-up plateau
@@ -48,15 +51,18 @@ All values are checked against the plausibility window before they are
 accepted (g_dac ±2 %, c_dac ±1000 codes, g_v/g_i ±5 %, r_s 80–200 Ω, r_top
 70–180 Ω and < r_s, i_plateau 20–100 mA). The `c_dac` window covers the
 DAC8552 worst case (zero-code error 12 mV, gain error 0.2 % FSR at mid-scale,
-half of channel B's 0.5 % FSR full-scale error: 544 codes, about 580 with the
-divider and difference amplifier) and still refuses a dropped or extra digit.
+half of channel B's 0.5 % FSR full-scale error: 544 codes; about 615 with INL,
+the divider, the difference amplifier and the OPA2277 offsets) and still
+refuses a dropped or extra digit. A slip in the thousands digit can land
+inside the window; `iv-cal` computes `c_dac` itself, and once the board is
+calibrated a wrong `c_dac` flags `KELVIN` on every point.
 
 ## 3. Storage
 
 A 128-byte record (magic `CCA1`, version 1, size, sequence, MCU UID,
 host timestamp, the measured-coefficient bits (`0x80000000` | bit k for the
-k-th `CAL.SET` key; a record written before this field existed holds 0 there
-and loads as fully measured), the seven coefficients as IEEE doubles, a
+k-th `CAL.SET` key; a record written before this field existed holds 0 there,
+and its coefficients count as measured unless bit-equal to the nominal ones), the seven coefficients as IEEE doubles, a
 32-byte note, CRC-32/IEEE) in flash sector 1 or 2 (16 KB each). A save erases the sector
 that does **not** hold the newest valid record, programs, reads back and
 verifies; an interrupted erase or program therefore never destroys the
@@ -64,7 +70,8 @@ previous record (tested with torn erases/programs at every word). At boot the
 valid record with the highest sequence wins; a record of another MCU (UID)
 is ignored (`W_CAL_UID`), and so is a damaged one (bad magic, version or CRC,
 implausible coefficients: `W_CAL_DAMAGED`, since an older record may then be
-in use; the next `CAL.SAVE` overwrites that sector). `CAL.SAVE` is legal only in `DISARMED`, 100 ms after
+in use; the next `CAL.SAVE` overwrites that sector, or the one after it if
+neither sector held a valid record). `CAL.SAVE` is legal only in `DISARMED`, 100 ms after
 the last heartbeat edge, and waits until no ADC conversion is in flight (the
 erase stalls the bus for up to 500 ms).
 

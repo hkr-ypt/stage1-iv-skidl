@@ -22,7 +22,9 @@ command, field or error code is a protocol change and increments
 - **Liveness.** Any received byte counts as host activity. While the output is
   armed (`ARMING`, `ARMED`, `SWEEPING`) the firmware disarms if no byte
   arrives for `host_timeout_s` seconds (default 30; `0` disables the timeout).
-  The host library sends `PING` every 5 s from a background thread.
+  The host library sends `PING` only while one of its calls is in progress
+  or a `with inst.hold():` block runs, every `min(5 s, host_timeout_s / 3)`;
+  a program that stops calling it is disarmed, as the timeout intends.
 - **Losing the session** (any of 1–3 false, or the liveness timeout) while
   armed ends any sweep with `status=session_lost` (or `host_timeout`) and
   disarms: the output ramps to 0 V at ≥ 10 V/s (deadline 1.1 s), the DAC is set
@@ -31,12 +33,20 @@ command, field or error code is a protocol change and increments
   reported in `STAT?` (`disarm_reason=`) and in the `HELLO` event of the next
   session.
 - **Session start** (all three conditions become true): the firmware discards
-  any stale output (its own buffers and the USB transmit FIFO, which keeps
-  what a host that stopped reading left behind), skips unsent records (they
-  remain fetchable with `DATA.FETCH`) and sends an empty line, then
-  `EVT HELLO`. A packet of at most 64 bytes already handed to the bus cannot
-  be withdrawn and may still arrive first, possibly ending mid-line; the
-  empty line ends it, so `HELLO` always starts a line.
+  its own unsent output, skips unsent records (they remain fetchable with
+  `DATA.FETCH`) and sends an empty line, then `EVT HELLO`. Output the USB
+  stack already holds cannot be withdrawn (TinyUSB may be sending from it):
+  a host that stopped reading and closed the port receives up to 4 KB of the
+  old session (the CDC transmit FIFO) ahead of that empty line when it opens
+  the port again, possibly cut off mid-line. The empty line ends a cut-off
+  line, so `HELLO` always starts a line. **Hosts ignore every line before the
+  session's `EVT HELLO`.** The old tail can itself hold an earlier session's
+  `HELLO` (a session that ended before its `HELLO` was read). The tail and
+  the new `HELLO` are queued together and arrive back to back, so a host
+  waits for its input to pause after a `HELLO` before its first command, and
+  a `HELLO` that still arrives before the response to that command replaces
+  the earlier one; a `HELLO` after it means a new session. The host library
+  does this.
 
 ## 2. Framing
 
@@ -143,7 +153,8 @@ States: `BOOT`, `DISARMED`, `ARMING`, `ARMED`, `SWEEPING`, `DISARMING`,
 been measured (set with `CAL.SET`; `CAL?` `measured=`), so nominal constants
 are in use for it. `CAL_DAMAGED`: a calibration sector holds a damaged record
 (bad magic, version or CRC, or implausible coefficients), so an older record
-or nominal constants may be in use; the next `CAL.SAVE` overwrites it.
+or nominal constants may be in use; the next `CAL.SAVE` overwrites it (the
+one after it, if neither sector held a valid record).
 
 `reset=` lists the causes joined by `+`: `por`, `bor`, `sft`, `iwdg`, `wwdg`,
 `lpwr`, `pin` (`pin` only when it is the sole cause: every internal reset
@@ -230,8 +241,8 @@ ends with `status=compliance trip_idx=<idx> trip_i_a=<A>`; with
 
 | Command | States | Effect / response |
 |---|---|---|
-| `CAL?` | any | `OK CAL source=<stored\|nominal\|ram> seq=<n> measured=0x<hh> g_dac_uv=<x> c_dac=<x> g_v_uv=<x> g_i_na=<x> r_s=<x> r_top=<x> i_plateau=<x>` (`ram`: changed by `CAL.SET`, not saved). `measured`: which coefficients were set with `CAL.SET` rather than nominal, bit k = the k-th key in this order (0x7F: all); saved with the record. While any of bits 0–4 is clear, records carry `CAL_NOMINAL` and the nominal Kelvin tolerance applies |
-| `CAL.SET key=value ...` | DISARMED | Sets RAM coefficients (keys as in `CAL?`, units and resolutions below) and marks them measured. Rejected with `ERR RANGE implausible coefficients` if the merged set is outside the plausibility window, `ERR ARG <key> inexact` beyond the resolution. `OK` |
+| `CAL?` | any | `OK CAL source=<stored\|nominal\|ram> seq=<n> measured=0x<hh> g_dac_uv=<x> c_dac=<x> g_v_uv=<x> g_i_na=<x> r_s=<x> r_top=<x> i_plateau=<x>` (`ram`: changed by `CAL.SET`, not saved). `measured`: which coefficients were set with `CAL.SET` to a value other than the nominal one, bit k = the k-th key in this order (0x7F: all); saved with the record. While any of bits 0–4 is clear, records carry `CAL_NOMINAL` and the nominal Kelvin tolerance applies |
+| `CAL.SET key=value ...` | DISARMED | Sets RAM coefficients (keys as in `CAL?`, units and resolutions below) and marks them measured, except a key set to its nominal value at that resolution (as `CAL?` prints it), which counts as nominal: a `CAL?` round trip keeps the mask. Rejected with `ERR RANGE implausible coefficients` if the merged set is outside the plausibility window, `ERR ARG <key> inexact` beyond the resolution. `OK` |
 | `CAL.SAVE TS=<unix seconds> [NOTE=<word>]` | DISARMED, ≥ 100 ms after the last heartbeat edge | Deferred. Waits for the ADC to be idle, writes the RAM coefficients to the alternate flash sector and verifies: `OK seq=<n>`, `ERR FLASH erase/program/verify failed`, `ERR RANGE implausible coefficients`. `NOTE` ≤ 31 characters |
 | `CAL.DEFAULT` | DISARMED | RAM coefficients ← nominal, none marked measured (not saved): `OK` |
 | `CAL.RELOAD` | DISARMED | RAM coefficients ← newest valid stored record (or nominal): `OK source=<stored\|nominal> seq=<n>` |

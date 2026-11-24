@@ -1209,8 +1209,9 @@ calibration record and the session zero, so the host can reprocess any data.
 **Storage.**
 - A 128-byte record: magic, version, board UID (96-bit), sequence, a
   host-supplied UTC timestamp, which coefficients were measured (a bit per
-  `CAL.SET` key, with a marker bit; a record without it loads as fully
-  measured), the coefficients above, a 32-character note, CRC-32.
+  `CAL.SET` key, with a marker bit; in a record without it, the coefficients
+  that differ from the nominal ones), the coefficients above, a 32-character
+  note, CRC-32.
 - Written to flash **sectors 1 and 2** (16 KB each) alternately. A new record
   goes to the sector *not* holding the newest valid record, so an interrupted
   erase or program leaves the previous one intact. At boot the valid record
@@ -1260,7 +1261,7 @@ the host process exiting, drops it.
 | Session starts | `EVT HELLO` with IDN, state, reset cause and crash flag |
 | Session lost in `ARMING`/`ARMED`/`SWEEPING` | sweep aborted (`status=session_lost`) → `DISARMING`: ramp to 0 at ≥ 10 V/s with the heartbeat still on, a 1.1 s deadline, zero code, then heartbeat off (§6.3) |
 | VBUS absent | `tud_disconnect()`: D+ pull-up off. A self-powered device must not drive D+ without VBUS. Reconnect when VBUS returns |
-| No command for `host_timeout_s` (default **30 s**; 0 = off) in `ARMING`, `ARMED` or `SWEEPING` | `DISARMING`. This covers a host program that hangs with the port open, which DTR cannot see. The host library sends `PING` every 5 s from a background thread. Raw-terminal users can set 0 |
+| No command for `host_timeout_s` (default **30 s**; 0 = off) in `ARMING`, `ARMED` or `SWEEPING` | `DISARMING`. This covers a host program that hangs with the port open, which DTR cannot see. The host library sends `PING` while one of its calls or a `with inst.hold():` block runs (every `min(5 s, host_timeout_s/3)`), so an idle or hung program is disarmed. Raw-terminal users can set 0 |
 
 Hardware VBUS sensing is disabled (§4.7). PA9 is never given its OTG
 alternate function: it is RESET_ADC.
@@ -1831,14 +1832,20 @@ audited hardware requires; a regression test accompanies each (verification.md).
     compliance trip acts within about one conversion instead of up to 100 ms
     (1 V at 10 V/s).
 38. *Calibration.* The `c_dac` window is ±1000 codes (it was ±400, narrower
-    than the DAC8552 worst case of about 580). The record stores which
-    coefficients were measured (`CAL?` `measured=`); `CAL_NOMINAL` and the
-    nominal Kelvin tolerance stay until `g_dac`, `c_dac`, `g_v`, `g_i` and
-    `r_s` are all measured. A damaged record raises warning bit 10
-    `CAL_DAMAGED`.
-39. *Session start* clears the USB transmit FIFO (`port_host_discard_tx()`) and
-    begins with an empty line, so a reopened port never receives the old
-    session's tail and `EVT HELLO` always starts a line.
+    than the DAC8552 worst case of about 615). The record stores which
+    coefficients were measured (`CAL?` `measured=`; a value set equal to the
+    nominal one counts as nominal); `CAL_NOMINAL` and the nominal Kelvin
+    tolerance stay until `g_dac`, `c_dac`, `g_v`, `g_i` and `r_s` are all
+    measured. A damaged record raises warning bit 10 `CAL_DAMAGED`. A
+    `CAL.SAVE` saves the coefficients RAM held when it was accepted, also
+    when the job outlives its session.
+39. *Session start* begins with an empty line, so `EVT HELLO` always starts a
+    line, also after an old session's tail that was cut off mid-line. That
+    tail (up to the 4 KB CDC TX FIFO, which a host that stopped reading and
+    closed the port receives when it opens the port again) is not discarded:
+    TinyUSB's DWC2 driver can be sending from that FIFO, and clearing it
+    under a transfer would corrupt the IN endpoint. Hosts skip it
+    (protocol.md §1).
 40. *VBUS detach below 3.6 V* (was 3.0 V, the top of the D+ back-feed
     estimate, which could hold the pull-up on by itself).
 41. *ADS1256.* Init and reconfiguration send SYNC, WAKEUP, SELFCAL (§7.4), and
