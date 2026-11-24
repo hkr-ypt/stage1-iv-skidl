@@ -458,6 +458,70 @@ def test_hello_after_the_first_command_is_still_a_restart(device, inst):
             time.sleep(0.01)
 
 
+def test_hello_between_the_first_command_and_its_response_is_a_restart():
+    """protocol.md section 1, as the library implements it: once a command is
+    written, a new HELLO means the session restarted (commands in flight may
+    be lost), also before the first response arrived."""
+    t, dev, i = _open_after(["", HELLO])
+    try:
+        dev.override["PING"] = [HELLO.replace("crash=0", "crash=0 again=1")]
+        with pytest.raises(SessionLost):
+            i.ping()
+    finally:
+        i.close()
+        dev.stop()
+        t.close()
+
+
+def test_open_waits_for_a_hello_that_follows_an_old_one():
+    """HOST-3: the session's HELLO can arrive a little after an old session's
+    HELLO from the unread tail; open() waits for the input to pause, so the
+    first command is not sent in between (that would read as a restart)."""
+    from stage1iv.transport import LoopbackTransport
+    from conftest import FakeDevice
+    t = LoopbackTransport()
+    for ln in ["", HELLO.replace("session_lost", "none"), "OK"]:
+        t.device_write_line(ln)
+    threading.Timer(0.05, lambda: (t.device_write_line(""),
+                                   t.device_write_line(HELLO + " this=1"))).start()
+    dev = FakeDevice(t)
+    i = Instrument(t, keepalive_interval=None, command_timeout=2.0, hello_timeout=1.0)
+    try:
+        i.open()
+        assert "this=1" in i.last_hello.line
+        assert i.ping() > 0 and i.session_lost is None
+    finally:
+        i.close()
+        dev.stop()
+        t.close()
+
+
+def test_old_events_and_fragments_before_hello_are_not_delivered():
+    """HOST-3: an old tail's events (a fault, a state) are not the session's:
+    callbacks and the event history see only the HELLO and what follows; its
+    cut-off lines are not protocol errors."""
+    from stage1iv.transport import LoopbackTransport
+    from conftest import FakeDevice
+    t = LoopbackTransport()
+    for ln in ["SION_LOST t=1", "EVT FAULT code=OVERTEMP detail=old", "EVT STATE FAULT",
+               "PT 1,5,4,1,4000,4300,46", "", HELLO, "EVT WARN AFTER_HELLO n=1"]:
+        t.device_write_line(ln)
+    dev = FakeDevice(t)
+    seen = []
+    i = Instrument(t, keepalive_interval=None, command_timeout=2.0, hello_timeout=1.0)
+    i.add_event_callback(lambda ev: seen.append(ev.type))
+    try:
+        i.open()
+        assert i.ping() > 0
+        assert seen == ["HELLO", "WARN"]
+        assert [e.type for e in i.events] == ["HELLO", "WARN"]
+        assert i.state == "DISARMED" and not i.protocol_errors and not i.records
+    finally:
+        i.close()
+        dev.stop()
+        t.close()
+
+
 def test_unanswered_pings_do_not_delay_an_urgent_command():
     """HOST-2: an urgent command's deadline is not pushed back by the chained
     deadlines of keep-alive PINGs ahead of it."""
@@ -498,11 +562,15 @@ def test_keepalive_continues_past_the_pending_cap_during_a_long_command(device):
         i.close()
 
 
-def test_wait_ready_waits_out_boot(device, inst):
-    """HOST-9: CFG/ZERO/SWP.* answer ERR STATE in BOOT; wait_ready() polls."""
-    device.state = "BOOT"
+@pytest.mark.parametrize("busy", ["BOOT", "DISARMING"])
+def test_wait_ready_waits_out_boot_and_disarming(device, inst, busy):
+    """HOST-9: CFG/ZERO/SWP.* answer ERR STATE in BOOT and in DISARMING (a
+    previous session's disarm ramp); wait_ready() polls through both."""
+    device.state = busy
     threading.Timer(0.3, lambda: setattr(device, "state", "DISARMED")).start()
     assert inst.wait_ready(timeout=3.0) == "DISARMED"
-    device.state = "BOOT"
+    device.state = "FAULT"
+    assert inst.wait_ready(timeout=3.0) == "FAULT"     # returned as it is
+    device.state = busy
     with pytest.raises(S1Timeout):
         inst.wait_ready(timeout=0.2)

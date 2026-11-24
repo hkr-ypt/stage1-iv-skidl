@@ -66,14 +66,18 @@ with Instrument.open_serial(serial="0034002B3436511233353533") as inst:
   (timeout, Ctrl-C, an exception in `on_record`, a protocol error, a failing
   `DATA.FETCH`), then re-raises; `inst.last_sweep` keeps the records
   collected so far.
-* Opening the port can first deliver up to 4 KB that an earlier program left
-  unread when it closed the port (protocol.md §1). `open()` (with
-  `hello_timeout`, as `open_serial` sets it) waits for `EVT HELLO` and for
-  the input to pause; responses and records that arrive before the first
-  command are dropped, and a later `HELLO` replaces an earlier one. After
-  the first command, a new `HELLO` means the instrument restarted
-  (`SessionLost`). `inst.wait_ready()` waits while the instrument is in BOOT
-  (POST after power-up); the tools do this, except `iv-diag`.
+* Opening the port can first deliver up to about 4 KB that an earlier
+  program left unread when it closed the port (protocol.md §1). `open()`
+  (with `hello_timeout`, as `open_serial` sets it) waits for `EVT HELLO` and
+  for the input to pause, 0.1 s; until then events are held back, and those
+  before the last `HELLO` are dropped. Responses, records and cut-off lines
+  that arrive before the first command are dropped as well. After the first
+  command, a new `HELLO` means the instrument restarted (`SessionLost`;
+  this also happens if the program was too busy to read for the 0.1 s
+  between an old and the new `HELLO`: open the port again).
+  `inst.wait_ready()` waits while the instrument is in BOOT (POST after
+  power-up) or DISARMING (a disarm ramp the previous session left); the
+  tools do this, except `iv-diag`.
 * `arm()` retries `ERR PRECOND afe` for about 2 s plus two ADC conversions:
   ARM needs a front-end check younger than 1 s, which the firmware runs only
   while DISARMED, so an ARM right after a DISARM is briefly refused. It
@@ -90,13 +94,14 @@ with Instrument.open_serial(serial="0034002B3436511233353533") as inst:
   unwrapped times) and `<base>.json` (IDN, SWEEP_BEGIN/END, CFG, CAL, host
   metadata). The suffixes are appended (`--out diode_0.5V` writes
   `diode_0.5V.csv`); existing files are replaced unless `overwrite=False`
-  (`--no-overwrite`). `iv-sweep` checks that the output directory is
-  writable before it starts, and if writing still fails afterwards it writes
-  the files to the temporary directory instead and says where. It also
-  writes what it collected when the sweep,
-  the session or the final DISARM fails (sidecar `host.error`; `host.partial`
-  and `sweep.status` `unknown` if the sweep did not end) and exits non-zero;
-  errors are one-line messages, not tracebacks. `--keep-armed` only skips the final
+  (`--no-overwrite`). `iv-sweep` checks that both files can be written
+  before it starts; if writing still fails afterwards, it writes them to a
+  new directory of their own in the temporary directory (`iv-sweep-*`,
+  nothing there is overwritten) and says where. It also writes what it
+  collected when the sweep, the session or the final DISARM fails (sidecar
+  `host.error`; `host.partial` and `sweep.status` `unknown` if the sweep did
+  not end) and exits non-zero; errors are one-line messages, not tracebacks.
+  `--keep-armed` only skips the final
   DISARM: it has no lasting effect, because the tool closes the port when it
   exits, DTR drops and the instrument disarms (session lost).
   Accuracy figures are provisional until the bring-up measurements.

@@ -163,9 +163,12 @@ def test_sweep_refuses_a_missing_output_directory_before_opening(tmp_path, monke
     assert "No such file or directory" in capsys.readouterr().err
 
 
-def test_sweep_results_fall_back_to_the_temp_dir(tmp_path, monkeypatch, capsys, use_fake):
+@pytest.mark.parametrize("no_overwrite", [False, True])
+def test_sweep_results_are_rescued_into_a_new_temp_dir(tmp_path, monkeypatch, capsys, use_fake,
+                                                        no_overwrite):
     """HOST-7: if the results cannot be written where asked once the sweep is
-    done, they are written to the temporary directory instead of being lost."""
+    done, they go to a new directory of their own in the temporary directory:
+    never lost (also with --no-overwrite), never over an earlier rescue."""
     real = cli.write_sweep
     calls = []
 
@@ -176,13 +179,51 @@ def test_sweep_results_fall_back_to_the_temp_dir(tmp_path, monkeypatch, capsys, 
         return real(base, *a, **k)
     fallback = tmp_path / "fallback"
     fallback.mkdir()
+    (fallback / "r.csv").write_text("EARLIER RESCUE")       # a name clash in the temp dir
     monkeypatch.setattr(cli, "write_sweep", flaky)
-    monkeypatch.setattr(cli.tempfile, "gettempdir", lambda: str(fallback))
-    rc = cli.sweep_main(["--wp", "0", "1", "--step", "0.5", "--out", str(tmp_path / "r")])
+    monkeypatch.setattr(cli.tempfile, "tempdir", str(fallback))
+    argv = ["--wp", "0", "1", "--step", "0.5", "--out", str(tmp_path / "r")]
+    rc = cli.sweep_main(argv + (["--no-overwrite"] if no_overwrite else []))
     out, err = capsys.readouterr()
     assert rc == 1 and "disk full" in err
-    assert (fallback / "r.csv").exists() and str(fallback / "r.csv") in out
-    assert len(W.read_csv(fallback / "r.csv")) == 3
+    rescued = list(fallback.glob("iv-sweep-*/r.csv"))
+    assert len(rescued) == 1 and str(rescued[0]) in out
+    assert len(W.read_csv(rescued[0])) == 3
+    assert (fallback / "r.csv").read_text() == "EARLIER RESCUE"
+
+
+@pytest.mark.parametrize("case", ["name too long", "a directory"])
+def test_sweep_refuses_an_unwritable_file_name_before_opening(tmp_path, monkeypatch, capsys,
+                                                              case):
+    """HOST-7: the check covers the result files themselves, not only their
+    directory: a name the file system refuses, or a result path that is a
+    directory, is reported before the instrument is opened."""
+    opened = []
+    monkeypatch.setattr(cli, "_open", lambda *a, **k: opened.append(1))
+    if case == "a directory":
+        out = tmp_path / "r"
+        (tmp_path / "r.json").mkdir()
+    else:
+        out = tmp_path / ("x" * 300)
+    rc = cli.sweep_main(["--wp", "0", "1", "--step", "0.5", "--out", str(out)])
+    assert rc == 1 and not opened
+    assert case in capsys.readouterr().err.lower()
+    assert sorted(p.name for p in tmp_path.iterdir()) == (["r.json"] if case == "a directory"
+                                                          else [])
+
+
+def test_iv_diag_opens_without_waiting_for_boot(monkeypatch, inst, capsys):
+    """HOST-9: iv-diag must still report on a board that stays in BOOT."""
+    seen = []
+
+    @contextlib.contextmanager
+    def fake_open(args, ready=True, **kwargs):
+        seen.append(ready)
+        yield inst
+    monkeypatch.setattr(cli, "_open", fake_open)
+    assert cli.diag_main(["--json"]) == 0
+    assert seen == [False]
+    assert '"idn"' in capsys.readouterr().out
 
 
 def test_open_waits_for_boot_except_for_iv_diag(monkeypatch):

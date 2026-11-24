@@ -533,3 +533,55 @@ def test_arm_right_after_an_adc_rate_change(sim, inst):
         inst.arm()
         assert inst.stat()["state"] == "ARMED"
         inst.disarm()
+
+
+def _read_until_hello(fd, timeout=5.0):
+    import select
+    data = b""
+    end = time.monotonic() + timeout
+    while b"EVT HELLO" not in data or not data.endswith(b"\n"):
+        assert time.monotonic() < end, data[-200:]
+        if select.select([fd], [], [], 0.2)[0]:
+            data += os.read(fd, 65536)
+    return data
+
+
+def _flood_and_close(path, n=2000):
+    """A program that writes commands once its session started, stops reading
+    and closes the port (the answers back up into the device first)."""
+    import tty
+    fd = os.open(path, os.O_RDWR | os.O_NOCTTY)
+    try:
+        tty.setraw(fd)
+        _read_until_hello(fd)                 # input before the session is discarded
+        for _ in range(n):
+            os.write(fd, b"STAT?\n")
+        time.sleep(1.5)
+    finally:
+        os.close(fd)
+    time.sleep(0.3)                           # the simulator sees the port closed
+
+
+def test_reopened_port_skips_the_previous_programs_unread_output(sim):
+    """protocol.md section 1, end to end: what a program left unread when it
+    closed the port (up to the 4 KB CDC TX FIFO) reaches the next one first,
+    cut off mid-line; then the session's empty line and EVT HELLO. The client
+    skips it: no protocol error, no record, the first command answered."""
+    import tty
+    _flood_and_close(sim.pty)
+    fd = os.open(sim.pty, os.O_RDWR | os.O_NOCTTY)
+    try:
+        tty.setraw(fd)
+        data = _read_until_hello(fd)
+    finally:
+        os.close(fd)
+    time.sleep(0.3)
+    tail = data[:data.index(b"EVT HELLO")]
+    assert 1000 < len(tail) <= 4096 + 64 + 1, len(tail)
+    assert tail.endswith(b"\n")                # HELLO starts a line
+    _flood_and_close(sim.pty)
+    with sim.instrument() as inst:
+        assert inst.session_lost is None
+        assert inst.ping() > 0
+        assert inst.stat()["state"] == "DISARMED"
+        assert not inst.protocol_errors and not inst.records

@@ -34,6 +34,8 @@ from dataclasses import dataclass, field
 from decimal import ROUND_HALF_EVEN, Decimal
 from typing import TYPE_CHECKING, Any, Callable, Iterator, Mapping, Sequence
 
+from .errors import DeviceError, ProtocolError
+from .errors import TimeoutError as S1Timeout
 from .protocol import convert_value, scaled_to_str, to_scaled
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -448,6 +450,8 @@ class CalibrationWorkflow:
     dac_fit: DacFit | None = None
     rs_fit: SeriesResistanceFit | None = None
     current: dict[str, Decimal] = field(default_factory=dict)
+    #: core keys the last :meth:`proposal` moved one step off the nominal value
+    nudged: list[str] = field(default_factory=list)
 
     def load_current(self) -> dict[str, Decimal]:
         self.current = dict(self.inst.cal_get().coeffs)
@@ -595,7 +599,13 @@ class CalibrationWorkflow:
         return self.rs_fit
 
     def proposal(self) -> dict[str, Decimal]:
-        """The new coefficients, rounded to the CAL.SET resolutions."""
+        """The new coefficients, rounded to the CAL.SET resolutions.
+
+        The firmware counts a coefficient equal to its nominal value at that
+        resolution as nominal (protocol.md ``CAL.SET``). A fit that rounds to
+        exactly that value is moved one step towards the unrounded fit (at
+        most one resolution step from it, far below the fit's uncertainty),
+        so that it counts as measured; :attr:`nudged` lists such keys."""
         new: dict[str, Any] = {}
         if self.dac_fit:
             new["g_dac_uv"] = self.dac_fit.g_dac_uv
@@ -606,7 +616,16 @@ class CalibrationWorkflow:
             new["g_i_na"] = self.i_fit.gain_na
         if self.rs_fit:
             new["r_s"] = self.rs_fit.r_s
-        return round_cal(**new)
+        out = round_cal(**new)
+        self.nudged = []
+        nominal = round_cal(**{k: NOMINAL[k] for k in out if k in CAL_CORE_KEYS})
+        for k, nom in nominal.items():
+            if out[k] == nom:
+                step = Decimal(1).scaleb(-CAL_DECIMALS[k])
+                fit = Decimal(repr(new[k])) if isinstance(new[k], float) else Decimal(new[k])
+                out[k] = nom + step if fit >= Decimal(repr(NOMINAL[k])) else nom - step
+                self.nudged.append(k)
+        return out
 
     def apply(self, coeffs: Mapping[str, Any] | None = None, note: str | None = None,
               ts: int | None = None) -> int | None:
@@ -624,6 +643,10 @@ class CalibrationWorkflow:
                 self.say(f"  - {p}")
             return None
         line = build_command("CAL.SET", *format_cal_args(**coeffs))
+        for k in self.nudged:
+            if k in coeffs:
+                self.say(f"Note: the {k} fit rounds to its nominal value; it is sent one "
+                         "step away so that the firmware counts it as measured.")
         self.say("Command to send:")
         self.say(f"  {line}")
         if not ask_yes(self.ask, "Send CAL.SET and save to flash? [y/N] "):
@@ -632,10 +655,16 @@ class CalibrationWorkflow:
         self.inst.cal_set(**coeffs)
         seq = self.inst.cal_save(ts=int(time.time()) if ts is None else ts, note=note)
         self.say(f"Saved calibration record seq={seq}.")
-        still = self.inst.cal_get().nominal_core
+        try:
+            still = self.inst.cal_get().nominal_core
+        except (DeviceError, ProtocolError, S1Timeout) as exc:
+            # the record is saved; only the report is missing
+            self.say(f"Could not read CAL? back ({exc}); check CAL? measured= yourself.")
+            return seq
         if still:
-            self.say(f"Still nominal: {', '.join(still)}. Records keep CAL_NOMINAL and the "
-                     "wide Kelvin tolerance until these are calibrated too.")
+            self.say(f"Still nominal: {', '.join(still)}. Until g_dac_uv, c_dac, g_v_uv, "
+                     "g_i_na and r_s are all calibrated, records keep CAL_NOMINAL and the "
+                     "wide Kelvin tolerance.")
         return seq
 
 

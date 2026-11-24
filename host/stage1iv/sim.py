@@ -122,7 +122,8 @@ class SimControl:
         self.send("configured", _b(on))
 
     def tx_limit(self, nbytes: int | None) -> None:
-        """Limit the host-side transmit space (emulates a stalled host); None = no limit."""
+        """Limit the device's transmit space (0 emulates a stalled host);
+        None = the default, the target's 4 KB CDC TX FIFO."""
         self.send("tx_limit", -1 if nbytes is None else int(nbytes))
 
     # ---- DUT and board

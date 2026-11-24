@@ -19,6 +19,7 @@ import argparse
 import contextlib
 import json
 import logging
+import os
 import sys
 import tempfile
 import tomllib
@@ -53,6 +54,22 @@ def _add_device_args(ap: argparse.ArgumentParser) -> None:
     g.add_argument("--sim", nargs="?", const="", metavar="EXE",
                    help="use the firmware simulator (optionally its path)")
     g.add_argument("-v", "--verbose", action="store_true")
+
+
+def _check_writable(targets: Iterable[Path]) -> None:
+    """Raise OSError unless each file can be written: an existing one must be
+    a writable file, a new one is created and removed again (this also
+    catches a missing directory and a name the file system refuses)."""
+    for target in targets:
+        if target.exists():
+            if not target.is_file():
+                raise IsADirectoryError(f"{target} is a directory, not a file")
+            if not os.access(target, os.W_OK):
+                raise PermissionError(f"cannot write {target}")
+        else:
+            with open(target, "x"):
+                pass
+            target.unlink()
 
 
 @contextlib.contextmanager
@@ -235,9 +252,7 @@ def sweep_main(argv: Sequence[str] | None = None) -> int:
             if existing:
                 raise FileExistsError(f"refusing to overwrite {', '.join(existing)} "
                                       "(--no-overwrite)")
-        # the results can be written there (a typo must not cost the sweep)
-        with tempfile.TemporaryFile(dir=sweep_paths(args.out)[0].parent or "."):
-            pass
+        _check_writable(sweep_paths(args.out))    # a typo must not cost the sweep
     except CLI_ERRORS as exc:
         print(f"iv-sweep: {exc}", file=sys.stderr)
         return 1
@@ -281,15 +296,29 @@ def sweep_main(argv: Sequence[str] | None = None) -> int:
 
     if res is not None:
         extra = {"error": "; ".join(errors), "partial": not res.ended} if errors else None
-        written = None
-        for base in (Path(args.out), Path(tempfile.gettempdir()) / Path(args.out).name):
+
+        def write(base: Path, overwrite: bool) -> tuple[Path, Path] | None:
             try:
-                written = write_sweep(base, res, idn=meta.get("idn"), cfg=meta.get("cfg"),
-                                      cal=meta.get("cal"), note=note, extra=extra,
-                                      overwrite=not args.no_overwrite)
-                break
+                return write_sweep(base, res, idn=meta.get("idn"), cfg=meta.get("cfg"),
+                                   cal=meta.get("cal"), note=note, extra=extra,
+                                   overwrite=overwrite)
             except OSError as exc:
                 errors.append(f"cannot write the results to {base}: {exc}")
+                return None
+        written = write(Path(args.out), not args.no_overwrite)
+        if written is None:
+            # Never lose a finished sweep: a new directory of its own in the
+            # temporary directory (nothing there can be overwritten), under
+            # the requested name or, if that name is the problem, "sweep".
+            try:
+                rescue = Path(tempfile.mkdtemp(prefix="iv-sweep-"))
+            except OSError as exc:
+                errors.append(f"cannot create a directory for the results: {exc}")
+            else:
+                for name in [n for n in (Path(args.out).name, "sweep") if n]:
+                    written = write(rescue / name, False)
+                    if written is not None:
+                        break
         if written is not None:
             prefix = "" if res.ended else "partial results: "
             print(f"{prefix}status={res.status} records={len(res.records)} -> "

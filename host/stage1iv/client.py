@@ -50,9 +50,11 @@ responses.
 Session loss - a serial error, the port vanishing, a new ``EVT HELLO``
 after the first command was sent, or ``EVT STATE ... reason=
 session_lost`` - surfaces as :class:`SessionLost` in every waiting call.
-Before the first command, ``HELLO``\\ s, responses and records can be an
-earlier session's unread output (protocol.md section 1): responses and
-records are dropped and a later ``HELLO`` replaces an earlier one.
+Before the first command, ``HELLO``\\ s, events, responses and records can be
+an earlier session's unread output (protocol.md section 1): responses,
+records and cut-off lines are dropped, a later ``HELLO`` replaces an earlier
+one, and while :meth:`Instrument.open` waits for the session's ``HELLO``
+events are held back and those before the last ``HELLO`` dropped.
 """
 
 from __future__ import annotations
@@ -409,6 +411,8 @@ class Instrument:
         self._responses = 0
         self._sent_any = False        # a command line was written (guarded by _slots_lock)
         self._last_rx = 0.0           # when the dispatcher last got a line
+        self._opening = False         # open() waits for HELLO: events are held
+        self._held: list[P.Event] = []  # events since the last HELLO (dispatcher only)
         self._ka_sent = 0.0           # when the last keep-alive PING was written
         self._hello_seen = threading.Event()
         self._lost: SessionLost | None = None
@@ -455,6 +459,9 @@ class Instrument:
             return self
         self._opened = True
         self._stop.clear()
+        # Until the session's HELLO is known, events may be an earlier
+        # session's unread output: hold them, and drop those before a HELLO.
+        self._opening = self.hello_timeout > 0
         self._dispatcher = threading.Thread(target=self._dispatch_loop,
                                             name="stage1iv-dispatch", daemon=True)
         self._dispatcher.start()
@@ -474,6 +481,7 @@ class Instrument:
                     if now >= quiet or now >= limit:
                         break
                     time.sleep(min(quiet, limit) - now)
+        self._opening = False         # the dispatcher now delivers the held events
         # Idle unless a library call or hold() needs it (see the module docstring).
         self._keepalive = threading.Thread(target=self._keepalive_loop,
                                            name="stage1iv-keepalive", daemon=True)
@@ -518,6 +526,10 @@ class Instrument:
 
     def _dispatch_loop(self) -> None:
         while not self._stop.is_set():
+            if self._held and not self._opening:
+                held, self._held = self._held, []
+                for ev in held:
+                    self._handle_event(ev)
             try:
                 line = self.transport.read_line(0.1)
             except SessionLost as exc:
@@ -569,10 +581,19 @@ class Instrument:
             try:
                 ev = P.parse_evt(line, time.monotonic())
             except ProtocolError as exc:
-                self._protocol_error(str(exc))
+                self._stale_or_error(line, str(exc))
                 return
+            if self._opening and not self._sent_any:
+                if ev.type != "HELLO":
+                    self._held.append(ev)
+                    return
+                self._held.clear()    # they came before this HELLO: an older session's
             self._handle_event(ev)
         elif kind is P.Kind.PT:
+            if not self._sent_any:
+                # a record of an earlier session's sweep (protocol.md section 1)
+                log.debug("stale record before the first command dropped: %r", line)
+                return
             try:
                 rec = parse_pt(line)
             except ProtocolError as exc:
@@ -582,7 +603,16 @@ class Instrument:
         elif kind is P.Kind.LOG:
             self.log_lines.append(line)
         elif line.strip():
-            self._protocol_error(f"unrecognised line {line!r}")
+            self._stale_or_error(line, f"unrecognised line {line!r}")
+
+    def _stale_or_error(self, line: str, text: str) -> None:
+        """A line the device would never send. Before the first command it is
+        a cut-off piece of an earlier session's unread output (protocol.md
+        section 1); after it, a protocol error."""
+        if not self._sent_any:
+            log.debug("stale fragment before the first command dropped: %r", line)
+        else:
+            self._protocol_error(text)
 
     def _background_response(self, slot: _Slot, line: str) -> None:
         """Check the response to a command nobody waits for (keep-alive PING,
@@ -645,10 +675,6 @@ class Instrument:
                 log.exception("event callback failed")
 
     def _handle_record(self, rec: PTRecord) -> None:
-        if not self._sent_any:
-            # a record of an earlier session's sweep (protocol.md section 1)
-            log.debug("stale record before the first command dropped")
-            return
         index = self._responses
         claimed = False
         with self._listeners_lock:
@@ -839,7 +865,9 @@ class Instrument:
         application must not hold the output). Inside ``hold()`` the
         keep-alive sends a ``PING`` at once and then every
         :attr:`keepalive_period` for as long as the block runs, whatever the
-        application does. Blocks may nest and may run in any thread; this
+        application does: a program that hangs inside the block keeps the
+        output armed until the block exits, so keep blocks to deliberate
+        waits. Blocks may nest and may run in any thread; this
         works also with ``keepalive_interval=None``. Raises
         :class:`SessionLost` / :class:`ProtocolError` (pairing lost: no
         keep-alive until :meth:`resync`) like a command."""
@@ -1154,18 +1182,20 @@ class Instrument:
         return values
 
     def wait_ready(self, timeout: float = 10.0) -> str:
-        """Wait while the instrument is in ``BOOT`` (its power-on self-test,
-        during which ``CFG``, ``ZERO``, ``SWP.*`` etc. answer ``ERR STATE``),
-        polling ``STAT?``. Returns the state it reached; raises the package
-        :class:`TimeoutError` if it is still ``BOOT`` after ``timeout`` s."""
+        """Wait while the instrument is in ``BOOT`` (its power-on self-test)
+        or ``DISARMING`` (a disarm ramp, e.g. left by the previous session,
+        at most about 1.1 s), during which ``CFG``, ``ZERO``, ``SWP.*`` etc.
+        answer ``ERR STATE``; polls ``STAT?``. Returns the state it reached
+        (``DISARMED``, or ``FAULT`` etc. as they are); raises the package
+        :class:`TimeoutError` if still in one of the two after ``timeout`` s."""
         with self._activity():
             give_up = time.monotonic() + timeout
             while True:
                 state = self.stat().get("state")
-                if state != "BOOT":
+                if state not in ("BOOT", "DISARMING"):
                     return str(state)
                 if time.monotonic() >= give_up:
-                    raise S1Timeout(f"instrument still in BOOT after {timeout:g} s")
+                    raise S1Timeout(f"instrument still in {state} after {timeout:g} s")
                 time.sleep(READY_POLL_S)
 
     def diag(self) -> dict[str, Any]:

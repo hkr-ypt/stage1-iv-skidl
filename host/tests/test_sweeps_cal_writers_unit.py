@@ -207,10 +207,37 @@ def test_cal_info_reports_which_core_coefficients_are_still_nominal():
 
 
 def test_cal_apply_says_when_cal_nominal_remains(device, inst):
-    """CAL-7: after a partial calibration the operator is told that records
-    keep CAL_NOMINAL (the FakeDevice reports measured=0x00)."""
+    """CAL-7: after a partial calibration the operator is told which core
+    coefficients are still nominal (the FakeDevice tracks measured= like the
+    firmware: a key set to a value other than its nominal one)."""
     said: list[str] = []
     wf = C.CalibrationWorkflow(inst, ask=lambda p: "y", say=said.append)
     wf.load_current()
     assert wf.apply({"r_s": "118.5"}) == 1
-    assert any(t.startswith("Still nominal: g_dac_uv, c_dac, g_v_uv, g_i_na, r_s") for t in said)
+    assert any(t.startswith("Still nominal: g_dac_uv, c_dac, g_v_uv, g_i_na.") for t in said)
+    said.clear()
+    assert wf.apply({"g_dac_uv": "306.52", "c_dac": "32790.3", "g_v_uv": "1.4993",
+                     "g_i_na": "12.4211"}) == 1
+    assert not any(t.startswith("Still nominal") for t in said)
+
+
+def test_cal_apply_reports_but_does_not_fail_when_cal_cannot_be_read_back(device, inst):
+    """The record is saved; a failing CAL? afterwards only loses the report."""
+    said: list[str] = []
+    wf = C.CalibrationWorkflow(inst, ask=lambda p: "y", say=said.append)
+    wf.load_current()
+    device.override["CAL?"] = ["ERR INTERNAL flash busy"]
+    assert wf.apply({"r_s": "118.5"}) == 1
+    assert any(t.startswith("Could not read CAL? back") for t in said)
+
+
+def test_cal_proposal_moves_a_fit_equal_to_nominal_one_step():
+    """A fit that rounds to exactly the nominal value would count as nominal
+    in the firmware; it is moved one step towards the unrounded fit."""
+    wf = C.CalibrationWorkflow(inst=None)
+    wf.rs_fit = type("Fit", (), {"r_s": 121.00003})()
+    assert wf.proposal() == {"r_s": Decimal("121.0001")} and wf.nudged == ["r_s"]
+    wf.rs_fit = type("Fit", (), {"r_s": 120.99996})()
+    assert wf.proposal() == {"r_s": Decimal("120.9999")}
+    wf.rs_fit = type("Fit", (), {"r_s": 118.71234})()
+    assert wf.proposal() == {"r_s": Decimal("118.7123")} and wf.nudged == []
