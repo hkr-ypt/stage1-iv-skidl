@@ -20,6 +20,7 @@ import contextlib
 import json
 import logging
 import sys
+import tempfile
 import tomllib
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
@@ -55,16 +56,21 @@ def _add_device_args(ap: argparse.ArgumentParser) -> None:
 
 
 @contextlib.contextmanager
-def _open(args: argparse.Namespace, **kwargs: Any) -> Iterator[Instrument]:
+def _open(args: argparse.Namespace, ready: bool = True, **kwargs: Any) -> Iterator[Instrument]:
+    """Open the instrument; with ``ready`` wait until it has left BOOT."""
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.WARNING,
                         format="%(levelname)s %(name)s: %(message)s")
     if args.sim is not None:
         from .sim import SimulatorProcess
         with SimulatorProcess(args.sim or None) as sim:
             with sim.instrument(**kwargs) as inst:
+                if ready:
+                    inst.wait_ready()       # the simulator starts in BOOT
                 yield inst
         return
     with Instrument.open_serial(args.port, serial=args.serial, pid=args.pid, **kwargs) as inst:
+        if ready:
+            inst.wait_ready()               # POST after power-up
         yield inst
 
 
@@ -89,7 +95,7 @@ def diag_main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--json", action="store_true", help="one JSON object instead of text")
     args = ap.parse_args(argv)
     try:
-        with _open(args) as inst:
+        with _open(args, ready=False) as inst:    # also a board stuck in BOOT
             out = {
                 "idn": inst.idn().fields,
                 "stat": {k: _text(v) for k, v in inst.stat().items()},
@@ -229,6 +235,9 @@ def sweep_main(argv: Sequence[str] | None = None) -> int:
             if existing:
                 raise FileExistsError(f"refusing to overwrite {', '.join(existing)} "
                                       "(--no-overwrite)")
+        # the results can be written there (a typo must not cost the sweep)
+        with tempfile.TemporaryFile(dir=sweep_paths(args.out)[0].parent or "."):
+            pass
     except CLI_ERRORS as exc:
         print(f"iv-sweep: {exc}", file=sys.stderr)
         return 1
@@ -272,17 +281,19 @@ def sweep_main(argv: Sequence[str] | None = None) -> int:
 
     if res is not None:
         extra = {"error": "; ".join(errors), "partial": not res.ended} if errors else None
-        try:
-            csv_path, json_path = write_sweep(args.out, res, idn=meta.get("idn"),
-                                              cfg=meta.get("cfg"), cal=meta.get("cal"),
-                                              note=note, extra=extra,
-                                              overwrite=not args.no_overwrite)
-        except OSError as exc:
-            errors.append(f"cannot write the results: {exc}")
-        else:
+        written = None
+        for base in (Path(args.out), Path(tempfile.gettempdir()) / Path(args.out).name):
+            try:
+                written = write_sweep(base, res, idn=meta.get("idn"), cfg=meta.get("cfg"),
+                                      cal=meta.get("cal"), note=note, extra=extra,
+                                      overwrite=not args.no_overwrite)
+                break
+            except OSError as exc:
+                errors.append(f"cannot write the results to {base}: {exc}")
+        if written is not None:
             prefix = "" if res.ended else "partial results: "
             print(f"{prefix}status={res.status} records={len(res.records)} -> "
-                  f"{csv_path}, {json_path}")
+                  f"{written[0]}, {written[1]}")
     for text in errors:
         print(f"iv-sweep: {text}", file=sys.stderr)
     if interrupted:
@@ -303,8 +314,8 @@ def cal_main(argv: Sequence[str] | None = None) -> int:
     _add_device_args(ap)
     ap.add_argument("--steps", default="zero,gains,dac,rs",
                     help="comma-separated subset of zero,gains,dac,rs (dac and rs need the "
-                         "ADC offsets: from zero or gains in the same run, or a valid "
-                         "session zero)")
+                         "ADC offsets, from the zero or gains step in the same run: every "
+                         "run is a new session, whose zero starts stale)")
     ap.add_argument("--r-ref", type=float, help="reference resistor in ohm (gains step)")
     ap.add_argument("--vmax", default="9", help="sweep amplitude for the dac/rs steps (V)")
     ap.add_argument("--n-avg", type=int, default=16)

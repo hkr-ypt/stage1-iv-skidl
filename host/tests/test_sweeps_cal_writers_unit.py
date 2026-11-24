@@ -183,11 +183,34 @@ def test_cal_dac_step_uses_the_session_zero(device, inst):
 
 def test_c_dac_window_mirrors_the_firmware():
     """The host check accepts what the firmware accepts (the DAC8552 worst
-    case, about 580 codes) and refuses a dropped or extra digit."""
+    case, about 615 codes) and refuses a dropped or extra digit."""
     nom = C.NOMINAL["c_dac"]
     assert C.C_DAC_WINDOW_CODES == 1000.0
-    assert not C.check_plausible({"c_dac": nom + 580.0})
+    assert not C.check_plausible({"c_dac": nom + 616.3})
+    assert not C.check_plausible({"c_dac": nom - 616.3})
     assert not C.check_plausible({"c_dac": nom - 999.0})
     assert C.check_plausible({"c_dac": nom + 1001.0})
     assert C.check_plausible({"c_dac": nom / 10.0})
     assert C.check_plausible({"c_dac": nom * 10.0})
+
+
+def test_cal_info_reports_which_core_coefficients_are_still_nominal():
+    """CAL-7: ``measured=`` is parsed; the five coefficients CAL_NOMINAL
+    depends on are listed while unmeasured."""
+    f = {"source": "stored", "seq": "3", "measured": "0x40", "r_s": "121.0000"}
+    info = C.CalInfo.from_fields(f)
+    assert info.measured == 0x40
+    assert info.nominal_core == ["g_dac_uv", "c_dac", "g_v_uv", "g_i_na", "r_s"]
+    assert C.CalInfo.from_fields({**f, "measured": "0x5F"}).nominal_core == []
+    assert C.CalInfo.from_fields({**f, "measured": "0x4F"}).nominal_core == ["r_s"]
+    assert C.CalInfo.from_fields({"source": "nominal"}).measured is None
+
+
+def test_cal_apply_says_when_cal_nominal_remains(device, inst):
+    """CAL-7: after a partial calibration the operator is told that records
+    keep CAL_NOMINAL (the FakeDevice reports measured=0x00)."""
+    said: list[str] = []
+    wf = C.CalibrationWorkflow(inst, ask=lambda p: "y", say=said.append)
+    wf.load_current()
+    assert wf.apply({"r_s": "118.5"}) == 1
+    assert any(t.startswith("Still nominal: g_dac_uv, c_dac, g_v_uv, g_i_na, r_s") for t in said)

@@ -386,3 +386,106 @@ def test_measurement_decodes_sd_sat(device, inst):
                                 "v_v=0.000003 i_a=0.0000000124 flags=0x0C00"]
     m = inst.meas(4)
     assert m.flag_names == ["MEAS", "SD_SAT"]
+
+
+# ---- final review fixes ------------------------------------------------------------------
+
+HELLO = ("EVT HELLO model=stage1-iv fw=0.1.0 proto=2 state=DISARMED fault=NONE "
+         "disarm_reason=session_lost reset=por crash=0")
+OLD_PT = ("PT 1,5,4,1,4000,4300,4600,34072,0.400000,1,400,2668,-,-,0.400000,"
+          "0.0004000000,0x0300")
+
+
+def _open_after(lines, **kwargs):
+    """A device that holds ``lines`` from an earlier session (protocol.md
+    section 1) and then answers commands; the instrument opened on it."""
+    from stage1iv.transport import LoopbackTransport
+    from conftest import FakeDevice
+    t = LoopbackTransport()
+    for ln in lines:
+        t.device_write_line(ln)
+    dev = FakeDevice(t)
+    i = Instrument(t, keepalive_interval=None, command_timeout=2.0, hello_timeout=1.0, **kwargs)
+    i.open()
+    return t, dev, i
+
+
+@pytest.mark.parametrize("tail", [
+    # the old session's HELLO cut off mid-line: the new session's newline ends it
+    ["OK PONG t_us=1", OLD_PT, "", HELLO[:60]],
+    # a whole earlier session that was never read, then the old tail
+    ["", HELLO.replace("session_lost", "none"), "OK", "OK PONG t_us=7", OLD_PT, ""],
+])
+def test_an_old_sessions_tail_before_hello_is_skipped(tail):
+    """HOST-3: output an earlier session left unread arrives before this
+    session's HELLO; none of it is a response, record or HELLO of this one."""
+    t, dev, i = _open_after(tail + [HELLO.replace("crash=0", "crash=0 this=1")])
+    try:
+        assert i.session_lost is None
+        assert i.last_hello is not None and "this=1" in i.last_hello.line
+        assert i.ping() > 0 and i.stat()["state"] == "DISARMED"
+        assert not i.protocol_errors and not i.records
+    finally:
+        i.close()
+        dev.stop()
+        t.close()
+
+
+def test_hello_after_the_first_command_is_still_a_restart(device, inst):
+    """HOST-3: replacing a HELLO only applies before anything was sent."""
+    assert inst.ping() > 0
+    device.w(HELLO)
+    with pytest.raises(SessionLost):
+        for _ in range(100):
+            inst.ping()
+            time.sleep(0.01)
+
+
+def test_unanswered_pings_do_not_delay_an_urgent_command():
+    """HOST-2: an urgent command's deadline is not pushed back by the chained
+    deadlines of keep-alive PINGs ahead of it."""
+    from stage1iv.transport import LoopbackTransport
+    t = LoopbackTransport()                  # a device that answers nothing
+    i = Instrument(t, keepalive_interval=0.02, command_timeout=0.5)
+    i.open()
+    try:
+        with i.hold():
+            time.sleep(0.5)                  # unanswered keep-alive PINGs pile up
+        assert sum(1 for s in i._slots if s.background) >= 10
+        t0 = time.monotonic()
+        with pytest.raises(S1Timeout):
+            i.sweep_abort()
+        assert time.monotonic() - t0 < 2.0   # its own 0.5 s, not 0.5 s per PING ahead
+    finally:
+        i.close()
+        t.close()
+
+
+def test_keepalive_continues_past_the_pending_cap_during_a_long_command(device):
+    """HOST-1: with a short keepalive_interval the 32 pending PINGs are
+    reached early in a long deferred command; bytes must still reach the
+    device at host_timeout_s / 3 so the healthy command is not disarmed,
+    and no faster, to keep the device's receive buffer bounded."""
+    from stage1iv.client import KEEPALIVE_MAX_PENDING
+    i = Instrument(device.t, keepalive_interval=0.01, command_timeout=2.0, deferred_timeout=6.0)
+    i.open()
+    try:
+        i.cfg(host_timeout_s=3)              # past the cap: one PING per second
+        device.meas_delay = 3.0
+        i.meas()
+        sent = device.t.sent_lines()
+        pings = sent[sent.index("MEAS?") + 1:].count("PING")
+        assert KEEPALIVE_MAX_PENDING + 1 <= pings <= KEEPALIVE_MAX_PENDING + 4
+        assert i.ping() > 0 and not i.protocol_errors
+    finally:
+        i.close()
+
+
+def test_wait_ready_waits_out_boot(device, inst):
+    """HOST-9: CFG/ZERO/SWP.* answer ERR STATE in BOOT; wait_ready() polls."""
+    device.state = "BOOT"
+    threading.Timer(0.3, lambda: setattr(device, "state", "DISARMED")).start()
+    assert inst.wait_ready(timeout=3.0) == "DISARMED"
+    device.state = "BOOT"
+    with pytest.raises(S1Timeout):
+        inst.wait_ready(timeout=0.2)

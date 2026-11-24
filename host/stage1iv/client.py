@@ -48,8 +48,11 @@ abort of an interrupted sweep) are still sent then, without checking their
 responses.
 
 Session loss - a serial error, the port vanishing, a new ``EVT HELLO``
-after the session was already in use, or ``EVT STATE ... reason=
+after the first command was sent, or ``EVT STATE ... reason=
 session_lost`` - surfaces as :class:`SessionLost` in every waiting call.
+Before the first command, ``HELLO``\ s, responses and records can be an
+earlier session's unread output (protocol.md section 1): responses and
+records are dropped and a later ``HELLO`` replaces an earlier one.
 """
 
 from __future__ import annotations
@@ -82,8 +85,18 @@ COMMAND_TIMEOUT_S = 3.0
 DEFERRED_TIMEOUT_S = 15.0       # deferred commands are bounded to 10 s by the firmware
 #: At most this many keep-alive PINGs wait for their PONG at a time (5 bytes
 #: each in the device's 1 KB receive buffer, which must keep room for an
-#: urgent DISARM).
+#: urgent DISARM) at the keep-alive period; beyond it they continue at the
+#: slowest rate that keeps the session, ``host_timeout_s / 3``.
 KEEPALIVE_MAX_PENDING = 32
+#: The firmware's default ``host_timeout_s``, assumed until it is known.
+HOST_TIMEOUT_DEFAULT_S = 30
+#: :meth:`Instrument.open` waits (after ``EVT HELLO``, up to ``hello_timeout``)
+#: until no line has arrived for this long: an old session's unread output
+#: and the new ``HELLO`` arrive back to back (protocol.md section 1).
+HELLO_QUIET_S = 0.1
+#: :meth:`Instrument.wait_ready` polls ``STAT?`` this often while the
+#: instrument is in BOOT (POST).
+READY_POLL_S = 0.1
 #: :meth:`Instrument.arm` retries ``ERR PRECOND afe`` for this long plus two
 #: conversion periods at the configured ADC rate.
 ARM_AFE_RETRY_S = 2.0
@@ -389,6 +402,9 @@ class Instrument:
         #: it raised (records collected so far), e.g. to save partial data.
         self.last_sweep: SweepResult | None = None
         self._responses = 0
+        self._sent_any = False        # a command line was written (guarded by _slots_lock)
+        self._last_rx = 0.0           # when the dispatcher last got a line
+        self._ka_sent = 0.0           # when the last keep-alive PING was written
         self._hello_seen = threading.Event()
         self._lost: SessionLost | None = None
         self._desync: str | None = None
@@ -441,6 +457,18 @@ class Instrument:
             if not self._hello_seen.wait(self.hello_timeout):
                 log.debug("no EVT HELLO within %.1f s (session may predate the port open)",
                           self.hello_timeout)
+            else:
+                # Output an earlier session left unread arrives first, then this
+                # session's HELLO, back to back; the tail may hold an older HELLO.
+                # Let the input pause so the last HELLO is in before the first
+                # command (protocol.md section 1).
+                limit = time.monotonic() + self.hello_timeout
+                while True:
+                    now = time.monotonic()
+                    quiet = self._last_rx + HELLO_QUIET_S
+                    if now >= quiet or now >= limit:
+                        break
+                    time.sleep(min(quiet, limit) - now)
         # Idle unless a library call or hold() needs it (see the module docstring).
         self._keepalive = threading.Thread(target=self._keepalive_loop,
                                            name="stage1iv-keepalive", daemon=True)
@@ -507,10 +535,16 @@ class Instrument:
         self.protocol_errors.append(text)
 
     def _handle_line(self, line: str) -> None:
+        self._last_rx = time.monotonic()
         kind = P.classify(line)
         if kind in (P.Kind.OK, P.Kind.ERR):
             background = False
             with self._slots_lock:
+                if not self._slots and not self._sent_any:
+                    # Nothing was ever sent: an earlier session's unread output
+                    # (protocol.md section 1), not a response of this one.
+                    log.debug("stale response before the first command dropped: %r", line)
+                    return
                 slot = self._slots.popleft() if self._slots else None
                 self._responses += 1
                 if slot is not None:
@@ -580,7 +614,11 @@ class Instrument:
         elif ev.type == "HELLO":
             self.last_hello = ev
             self.state = ev.get("state", self.state)
-            restarted = self._hello_seen.is_set() or self._responses > 0
+            # Before the first command, a later HELLO replaces an earlier one:
+            # an old session's unread tail can hold its HELLO (protocol.md
+            # section 1). After it, any HELLO means the session restarted.
+            with self._slots_lock:
+                restarted = self._responses > 0 or (self._sent_any and self._hello_seen.is_set())
             self._hello_seen.set()
             if restarted:
                 self._cfg_known.clear()     # the device may have reset
@@ -602,6 +640,10 @@ class Instrument:
                 log.exception("event callback failed")
 
     def _handle_record(self, rec: PTRecord) -> None:
+        if not self._sent_any:
+            # a record of an earlier session's sweep (protocol.md section 1)
+            log.debug("stale record before the first command dropped")
+            return
         index = self._responses
         claimed = False
         with self._listeners_lock:
@@ -748,12 +790,22 @@ class Instrument:
                 log.warning("keep-alive PING failed: %s", exc)
 
     def _send_keepalive_ping(self) -> bool:
+        now = time.monotonic()
         with self._slots_lock:
             pending = sum(1 for s in self._slots if s.background and s.command == "PING")
         if pending >= KEEPALIVE_MAX_PENDING:
-            log.debug("keep-alive: %d PINGs unanswered; not sending another", pending)
-            return False
+            # PINGs go unanswered while a deferred command runs (up to 10 s),
+            # yet each still restarts the device's host timeout. Past the cap,
+            # send only as often as that needs (host_timeout_s / 3), so a short
+            # keepalive_interval cannot let a healthy long command time out.
+            t = self._cfg_known.get("host_timeout_s")
+            if not isinstance(t, int) or isinstance(t, bool) or t <= 0:
+                t = HOST_TIMEOUT_DEFAULT_S
+            if now - self._ka_sent < t / 3.0:
+                log.debug("keep-alive: %d PINGs unanswered; not sending another yet", pending)
+                return False
         self._send("PING", self.command_timeout, background=True)
+        self._ka_sent = now
         return True
 
     def keepalive(self) -> bool:
@@ -824,7 +876,9 @@ class Instrument:
         """Reserve the response slot and write the line, atomically under the
         send lock (FIFO order = wire order). An urgent or background
         command's response cannot arrive before those of the commands ahead
-        of it, so its deadline is counted from theirs."""
+        of it, so its deadline is counted from theirs. Keep-alive PINGs ahead
+        do not count: each is answered as soon as the command before it, so
+        their (themselves chained) deadlines would only add up."""
         with self._send_lock:
             self._raise_if_unusable(allow_desync)
             now = time.monotonic()
@@ -834,12 +888,13 @@ class Instrument:
                 for s in self._slots:
                     if not s.background:
                         ahead += 1
-                    if (urgent or background) and s.deadline > start:
+                    if (urgent or background) and not s.background and s.deadline > start:
                         start = s.deadline
                 slot = _Slot(line, timeout, start + timeout, background)
                 slot.ahead = ahead
                 slot.t_sent = now
                 self._slots.append(slot)
+                self._sent_any = True
             try:
                 self.transport.write_line(line)
             except BaseException:
@@ -1092,6 +1147,21 @@ class Instrument:
         if isinstance(values.get("state"), str):
             self.state = values["state"]
         return values
+
+    def wait_ready(self, timeout: float = 10.0) -> str:
+        """Wait while the instrument is in ``BOOT`` (its power-on self-test,
+        during which ``CFG``, ``ZERO``, ``SWP.*`` etc. answer ``ERR STATE``),
+        polling ``STAT?``. Returns the state it reached; raises the package
+        :class:`TimeoutError` if it is still ``BOOT`` after ``timeout`` s."""
+        with self._activity():
+            give_up = time.monotonic() + timeout
+            while True:
+                state = self.stat().get("state")
+                if state != "BOOT":
+                    return str(state)
+                if time.monotonic() >= give_up:
+                    raise S1Timeout(f"instrument still in BOOT after {timeout:g} s")
+                time.sleep(READY_POLL_S)
 
     def diag(self) -> dict[str, Any]:
         """``DIAG?`` as converted, ordered fields."""

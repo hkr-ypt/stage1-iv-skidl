@@ -506,3 +506,18 @@ def test_iv_sweep_writes_partial_results_when_the_session_is_lost(sim, tmp_path,
     doc = json.loads((tmp_path / "reset_0.5V.json").read_text())
     assert doc["sweep"]["status"] == "unknown" and doc["host"]["partial"] is True
     assert doc["sweep_begin"] is not None and doc["cfg"] is not None
+
+
+def test_cli_tools_wait_for_boot(tmp_path, monkeypatch):
+    """HOST-9: the simulator starts in BOOT, as a board does at power-up; the
+    tools wait for POST instead of failing with ERR STATE (here: CFG). The
+    client's pause after HELLO alone outlasts the simulator's short POST, so
+    it is turned off here; a board's POST can be longer."""
+    from stage1iv import cli
+    from stage1iv import client as client_mod
+    monkeypatch.setattr(client_mod, "HELLO_QUIET_S", 0.0)
+    rc = cli.sweep_main(["--sim", str(SIM), "--wp", "0", "1", "--step", "0.5",
+                         "--cfg", "settle_us=1000", "--allow-bringup",
+                         "--out", str(tmp_path / "boot")])
+    assert rc == 0
+    assert len(W.read_csv(tmp_path / "boot.csv")) == 3

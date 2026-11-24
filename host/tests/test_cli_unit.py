@@ -150,3 +150,59 @@ def test_iv_cal_errors_are_messages(use_fake, capsys, monkeypatch):
     monkeypatch.setattr("sys.stdin", io.StringIO("\n"))      # "Press Enter when ready"
     assert cli.cal_main(["--steps", "zero"]) == 1
     assert "iv-cal: nothing to apply" in capsys.readouterr().err
+
+
+def test_sweep_refuses_a_missing_output_directory_before_opening(tmp_path, monkeypatch, capsys):
+    """HOST-7: a typo in --out must not cost a finished sweep: it is refused
+    before the instrument is opened."""
+    opened = []
+    monkeypatch.setattr(cli, "_open", lambda *a, **k: opened.append(1))
+    rc = cli.sweep_main(["--wp", "0", "1", "--step", "0.5",
+                         "--out", str(tmp_path / "no_such_dir" / "run1")])
+    assert rc == 1 and not opened
+    assert "No such file or directory" in capsys.readouterr().err
+
+
+def test_sweep_results_fall_back_to_the_temp_dir(tmp_path, monkeypatch, capsys, use_fake):
+    """HOST-7: if the results cannot be written where asked once the sweep is
+    done, they are written to the temporary directory instead of being lost."""
+    real = cli.write_sweep
+    calls = []
+
+    def flaky(base, *a, **k):
+        calls.append(base)
+        if len(calls) == 1:
+            raise OSError("disk full")
+        return real(base, *a, **k)
+    fallback = tmp_path / "fallback"
+    fallback.mkdir()
+    monkeypatch.setattr(cli, "write_sweep", flaky)
+    monkeypatch.setattr(cli.tempfile, "gettempdir", lambda: str(fallback))
+    rc = cli.sweep_main(["--wp", "0", "1", "--step", "0.5", "--out", str(tmp_path / "r")])
+    out, err = capsys.readouterr()
+    assert rc == 1 and "disk full" in err
+    assert (fallback / "r.csv").exists() and str(fallback / "r.csv") in out
+    assert len(W.read_csv(fallback / "r.csv")) == 3
+
+
+def test_open_waits_for_boot_except_for_iv_diag(monkeypatch):
+    """HOST-9: the tools wait while the instrument is in BOOT; iv-diag does
+    not, so it can still report on a board that stays there."""
+    waited = []
+
+    class Inst:
+        def wait_ready(self):
+            waited.append(1)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+    monkeypatch.setattr(cli.Instrument, "open_serial", lambda *a, **k: Inst())
+    args = cli.argparse.Namespace(sim=None, port="x", serial=None, pid=None, verbose=False)
+    with cli._open(args):
+        pass
+    with cli._open(args, ready=False):
+        pass
+    assert waited == [1]

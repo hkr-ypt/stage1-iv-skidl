@@ -66,6 +66,14 @@ with Instrument.open_serial(serial="0034002B3436511233353533") as inst:
   (timeout, Ctrl-C, an exception in `on_record`, a protocol error, a failing
   `DATA.FETCH`), then re-raises; `inst.last_sweep` keeps the records
   collected so far.
+* Opening the port can first deliver up to 4 KB that an earlier program left
+  unread when it closed the port (protocol.md §1). `open()` (with
+  `hello_timeout`, as `open_serial` sets it) waits for `EVT HELLO` and for
+  the input to pause; responses and records that arrive before the first
+  command are dropped, and a later `HELLO` replaces an earlier one. After
+  the first command, a new `HELLO` means the instrument restarted
+  (`SessionLost`). `inst.wait_ready()` waits while the instrument is in BOOT
+  (POST after power-up); the tools do this, except `iv-diag`.
 * `arm()` retries `ERR PRECOND afe` for about 2 s plus two ADC conversions:
   ARM needs a front-end check younger than 1 s, which the firmware runs only
   while DISARMED, so an ARM right after a DISARM is briefly refused.
@@ -80,13 +88,20 @@ with Instrument.open_serial(serial="0034002B3436511233353533") as inst:
   unwrapped times) and `<base>.json` (IDN, SWEEP_BEGIN/END, CFG, CAL, host
   metadata). The suffixes are appended (`--out diode_0.5V` writes
   `diode_0.5V.csv`); existing files are replaced unless `overwrite=False`
-  (`--no-overwrite`). `iv-sweep` also writes what it collected when the sweep,
+  (`--no-overwrite`). `iv-sweep` checks that the output directory is
+  writable before it starts, and if writing still fails afterwards it writes
+  the files to the temporary directory instead and says where. It also
+  writes what it collected when the sweep,
   the session or the final DISARM fails (sidecar `host.error`; `host.partial`
   and `sweep.status` `unknown` if the sweep did not end) and exits non-zero;
   errors are one-line messages, not tracebacks. `--keep-armed` only skips the final
   DISARM: it has no lasting effect, because the tool closes the port when it
   exits, DTR drops and the instrument disarms (session lost).
   Accuracy figures are provisional until the bring-up measurements.
+* `iv-cal` says which of `g_dac`, `c_dac`, `g_v`, `g_i`, `r_s` are still
+  nominal after it saves (`CalInfo.measured`, `CalInfo.nominal_core`): until
+  all five are calibrated, records keep `CAL_NOMINAL` and the wide Kelvin
+  tolerance.
 * `v_V`/`i_A` (PT records, `MEAS?`) are computed by the firmware from the
   unrounded means; `i_raw`/`v_raw` are those means rounded to whole codes.
   The firmware's default `i_compliance` is 100 mA.

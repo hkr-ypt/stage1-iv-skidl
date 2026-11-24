@@ -72,6 +72,8 @@ NOMINAL: dict[str, float] = {
 
 #: Keys of CAL? / CAL.SET, in protocol order, and their units.
 CAL_KEYS = ("g_dac_uv", "c_dac", "g_v_uv", "g_i_na", "r_s", "r_top", "i_plateau")
+#: The first five: until all are measured the firmware keeps CAL_NOMINAL.
+CAL_CORE_KEYS = CAL_KEYS[:5]
 CAL_UNITS = {"g_dac_uv": "uV/code", "c_dac": "code", "g_v_uv": "uV/code",
              "g_i_na": "nA/code", "r_s": "ohm", "r_top": "ohm", "i_plateau": "A"}
 #: Decimal places at which CAL.SET values are exact (finer is rejected).
@@ -123,12 +125,15 @@ def round_cal(**kwargs: Any) -> dict[str, Decimal]:
 
 @dataclass(frozen=True)
 class CalInfo:
-    """``CAL?``: source, record sequence and the coefficients (Decimal)."""
+    """``CAL?``: source, record sequence, which coefficients were measured
+    (``measured``, bit k = ``CAL_KEYS[k]``; None from firmware without the
+    field) and the coefficients (Decimal)."""
 
     source: str | None
     seq: int | None
     coeffs: dict[str, Decimal]
     fields: dict[str, str] = field(default_factory=dict)
+    measured: int | None = None
 
     @classmethod
     def from_fields(cls, fields: Mapping[str, str]) -> "CalInfo":
@@ -138,15 +143,29 @@ class CalInfo:
                 v = convert_value(k, fields[k])
                 coeffs[k] = Decimal(v) if isinstance(v, (int, Decimal)) else v
         seq = convert_value("seq", fields["seq"]) if "seq" in fields else None
+        measured = None
+        try:
+            measured = int(fields["measured"], 16) if "measured" in fields else None
+        except ValueError:
+            measured = None
         return cls(fields.get("source"), seq if isinstance(seq, int) else None, coeffs,
-                   dict(fields))
+                   dict(fields), measured)
+
+    @property
+    def nominal_core(self) -> list[str]:
+        """The coefficients the Kelvin tolerance depends on that are still
+        nominal: while any is, records carry ``CAL_NOMINAL`` and the wide
+        tolerance applies (protocol.md ``CAL?``). Empty without ``measured``."""
+        if self.measured is None:
+            return []
+        return [k for i, k in enumerate(CAL_CORE_KEYS) if not self.measured & (1 << i)]
 
 
 # ---- plausibility (calib.h) ------------------------------------------------------------
 
 #: Half-width of the firmware's c_dac window (calib.c C_DAC_WINDOW_CODES):
 #: the DAC8552 zero-code, gain and channel-B full-scale errors move the zero
-#: by up to about 580 codes on an in-spec board.
+#: by up to about 615 codes on an in-spec board (with INL and op-amp offsets).
 C_DAC_WINDOW_CODES = 1000.0
 
 
@@ -154,7 +173,7 @@ def check_plausible(coeffs: Mapping[str, Any]) -> list[str]:
     """Problems with the given coefficients (CAL? units); empty if plausible.
 
     Window (firmware calib.h): g_dac +-2 %, c_dac +-1000 codes (the DAC8552
-    worst case is about 580), g_v and g_i +-5 %, r_s 80..200 ohm, r_top
+    worst case is about 615), g_v and g_i +-5 %, r_s 80..200 ohm, r_top
     70..180 ohm, r_top < r_s, i_plateau 20..100 mA. Keys that are absent are
     not checked.
     """
@@ -413,8 +432,10 @@ class CalibrationWorkflow:
     The dac and rs steps reprocess raw codes and need the ADC offsets: from
     the zero step of this run, else from the gains fit, else the session zero
     the firmware reports in the sweep's ``SWEEP_BEGIN`` (``zero=valid``,
-    e.g. after :meth:`Instrument.zero` in this session). Without any of them
-    the step refuses to run (offset 0 would bias ``c_dac`` by the V offset).
+    e.g. after :meth:`Instrument.zero` in this session; library use only:
+    ``iv-cal`` opens a new session, whose zero starts stale). Without any of
+    them the step refuses to run (offset 0 would bias ``c_dac`` by the V
+    offset).
     """
 
     inst: "Instrument"
@@ -611,13 +632,17 @@ class CalibrationWorkflow:
         self.inst.cal_set(**coeffs)
         seq = self.inst.cal_save(ts=int(time.time()) if ts is None else ts, note=note)
         self.say(f"Saved calibration record seq={seq}.")
+        still = self.inst.cal_get().nominal_core
+        if still:
+            self.say(f"Still nominal: {', '.join(still)}. Records keep CAL_NOMINAL and the "
+                     "wide Kelvin tolerance until these are calibrated too.")
         return seq
 
 
 __all__ = [
-    "NOMINAL", "CAL_KEYS", "CAL_UNITS", "CAL_DECIMALS", "R_SD_OHM", "format_cal_value",
-    "format_cal_args", "round_cal", "CalInfo", "check_plausible", "is_plausible",
-    "LinearFit", "linear_fit", "GainOffsetFit", "fit_gain_offset", "DacFit",
+    "NOMINAL", "CAL_KEYS", "CAL_CORE_KEYS", "CAL_UNITS", "CAL_DECIMALS", "R_SD_OHM",
+    "format_cal_value", "format_cal_args", "round_cal", "CalInfo", "check_plausible",
+    "is_plausible", "LinearFit", "linear_fit", "GainOffsetFit", "fit_gain_offset", "DacFit",
     "vsweep_from_vk", "fit_dac", "SeriesResistanceFit", "fit_series_resistance",
     "CalibrationWorkflow", "session_zero", "DAC_LINEAR_MIN", "DAC_LINEAR_MAX",
 ]
