@@ -91,8 +91,9 @@ one timeout and the new one staying aligned. The simulator mirrors
 * `check_nominal.py`: every `nominal.h` value equals its part in `blocks/*.py`;
 * the repository path guard.
 
-Coverage (gcov, all host tests): about 87 % of lines and 76 % of branches in
-`firmware/src`.
+Coverage (gcov, all host tests): about 90 % of lines and 80 % of branches in
+`firmware/src` (`core/` 80 %, `drivers/` 81 % of branches: short of the
+≥ 90 % branch coverage that spec §10's milestone M1 aims for).
 
 ## 3. What these tests do **not** show
 
