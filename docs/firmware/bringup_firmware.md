@@ -27,9 +27,10 @@ DAC_ARM and FORCE+; `iv-diag` from `host/`.
 | Boot zero | trigger on NRST release (SW1) | the frame pair `00 80 00`, `34 FF FF` on SPI1 within ~2 ms of reset; no PC5 edge |
 | No frame with B ≠ FFFF | decode SPI1 over a whole session | every `00 hh ll` is followed by `34 FF FF` |
 | /SYNC rises after the last SCLK | zoom on frame ends | ≥ 0 ns after the 24th falling edge, ≥ 33 ns high between frames |
-| ADC init | trigger on /RESET_ADC | RESET pulse ≥ 2 µs; WREG STATUS..IO; SYNC; SELFCAL; /DRDY falls after the Table 21 calibration time (SELFCAL runs although no WAKEUP follows the SYNC; if it never falls, init times out: report it); RREG read-back; SCLK ≤ 1.92 MHz; mode 1 |
+| ADC init | trigger on /RESET_ADC | RESET pulse ≥ 2 µs; WREG STATUS..IO; SYNC, WAKEUP, SELFCAL in one /CS frame (≥ 3.1 µs after each of SYNC and WAKEUP); /DRDY high during the calibration and falling after the Table 21 calibration time (if it never falls, init times out: report it); RREG read-back; SCLK ≤ 1.92 MHz; mode 1 |
 | ADC timing | any conversion | t6 ≥ 6.5 µs (RDATA → data), t11 after SYNC/WAKEUP ≥ 3.1 µs, /CS hold ≥ 1 µs, RDATA only while /DRDY low; at 3750 SPS with USB traffic `DIAG? adc_read_overruns` stays at or near 0 (each one is a discarded read) |
 | Monitor | DISARMED | an I/V pair about every 100 ms |
+| USB device mode | SWD, after boot with the cable unplugged | OTG_FS GINTSTS (0x5000_0014) bit 0 CMOD = 0 and bit 1 MMIS = 0 (no device-register write was ignored); DCFG (0x5000_0800) bits 1:0 = 3 (full speed); DCTL (0x5000_0804) bit 1 SDIS = 1 (no D+ pull-up without VBUS); PA10 (OTG_FS_ID, unconnected) reads high |
 | Pass time | `DIAG?` after 10 min with USB traffic | `pass_max_us` ≤ 150 (design), `pass_overruns=0` |
 
 ## 3. Heartbeat and the gate (checklist §6)
@@ -48,6 +49,9 @@ ARM needs ±15 V for the AFE check; with ±15 V off, `ARM` returns
      `HB.FREQ 2000` restores.
    * `DISARM`, then `HB.EDGE` (DISARMED): one rising edge, PC5 held high;
      DAC_ARM peaks ≈ 0.5 V and decays; DAC_VREF stays 0. `HB.HOLD OFF`.
+     Another `HB.EDGE` or `HB.HOLD HIGH` within 100 ms (T_DISARM) of the
+     previous edge is refused (`ERR STATE`): repeated edges would pump the
+     gate closed while DISARMED.
 3. Disarm drills (A at +5 V: `SRC V=5`; repeat at −5 V). Record the time
    until |V_SWEEP| < 0.2 V:
 
@@ -94,7 +98,11 @@ With the release image, 1 kΩ load, output at +3 V (`SRC V=3`):
 ## 6. Calibration
 
 `iv-cal --r-ref 100 --note <id>` (0.01 % 100 Ω reference, DMM). Then measure
-the plateau (checklist §7) and `CAL.SET i_plateau=<A>`, `CAL.SAVE TS=<unix>`.
+the plateau (checklist §7; `i_compliance` at its 100 mA default, so the
+plateau, not the firmware, limits) and `CAL.SET i_plateau=<A>`,
+`CAL.SAVE TS=<unix>`. Saving `i_plateau` before the `iv-cal` calibration is
+fine: records stay `CAL_NOMINAL` (with the wide Kelvin tolerance) until
+`g_dac`, `c_dac`, `g_v`, `g_i` and `r_s` are set too.
 Verify with independent points (verification H-12).
 
 ## 7. First DUT

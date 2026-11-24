@@ -34,7 +34,8 @@ is reported if the reset was not a plain power-on.
 
 ## 2. ARM preconditions (checked in this order)
 
-`ERR FAULT <F>` in FAULT; `ERR STATE` outside DISARMED; then
+`ERR FAULT <F>` in FAULT; `ERR STATE` outside DISARMED, and
+`ERR STATE reset pending` between `RESET`'s `OK` and the reset; then
 `ERR PRECOND <name>`:
 
 | Name | Condition |
@@ -42,6 +43,7 @@ is reported if the reset was not a plain power-on.
 | `session` | VBUS present (PA0 > 3.8 V for 20 ms), configured and not suspended, DTR |
 | `post` | POST passed this boot (or after `FAULT.CLR`) |
 | `adc` | ADS1256 initialised and not in a reconfiguration/self-test job |
+| `busy` | no deferred job running (e.g. a `CAL.SAVE` that outlived its session: its erase must never meet a running heartbeat, SI-8) |
 | `hb` | (bring-up) no `HB.HOLD`, and ≥ 100 ms since it ended |
 | `afe` | a gate-open front-end check within the last 1 s passed: no clip code, not both channels below −0.8 FS (±15 V off) |
 | `config` | the configuration is inside its ranges |
@@ -50,32 +52,36 @@ is reported if the reset was not a plain power-on.
 
 ## 3. Sequences
 
-* **ARM:** load the zero code (both frames), `hb_enable()`, `ARMING`.
+* **ARM:** load the zero code (both frames), `hb_enable()`, `ARMING`. If the
+  zero write fails, the fault is latched (no edge is made) and `ARM` answers
+  `ERR FAULT <F>`.
 * **DISARM / session loss / host timeout:** abort a sweep
   (`aborted`, `session_lost`, `host_timeout`), ramp from the present level to
   0 V at max(`ramp_rate`, 10 V/s) on a 1 ms grid with the heartbeat running,
   load the zero code, `hb_disable()` (PC5 low), `DISARMED` after
   `T_DISARM`. If the ramp has not finished 1.1 s after entry:
   `FAULT(DISARM_TIMEOUT)`.
-* **FAULT entry:** `dac_zero_safe()` (PC5 low, SPI1 idle-wait or reset,
-  /SYNC high ≥ 1 µs, frames `00 80 00` + `34 FF FF`, bit-banged if SPI1 is
-  dead), `hb_disable()`, end the sweep with `status=fault`, fail a running
+* **FAULT entry:** `dac_zero_safe()` (PC5 low, /SYNC high ≥ 1 µs so a
+  partial frame is aborted, SPI1 idle-wait or reset, frames `00 80 00` +
+  `34 FF FF`, bit-banged if SPI1 is dead), `hb_disable()`, end the sweep with `status=fault`, fail a running
   job, latch the fault, `EVT FAULT <F> detail=<d>`, `EVT STATE FAULT`. ADC
   faults also re-initialise the ADC.
 * **Fault handlers and dead-man (target):** the same zero, a `.noinit` crash
-  record, `NVIC_SystemReset()`; the next boot reports `crash=1`.
+  record, `NVIC_SystemReset()`; the next boot reports `crash=1`. A software
+  reset (`RESET`, `CRASH`) also writes the zero pair before
+  `NVIC_SystemReset()`.
 
 ## 4. Faults (latched)
 
 | Fault (wire name) | Raised by | `FAULT.CLR` needs |
 |---|---|---|
-| `POST` | boot or `SELFTEST`: ADC init, −VREF / zero self-checks | a passing re-run (started by `FAULT.CLR`, retry) |
+| `POST` | boot or `SELFTEST`: ADC init, −VREF / zero self-checks | a passing re-run (started by `FAULT.CLR`, retry). Any fault that interrupts a POST or `SELFTEST` needs the same re-run |
 | `ADC_TIMEOUT` | no /DRDY in time, or > 8 missed read windows | ADC re-initialised |
 | `ADC_COMM` | register read-back mismatch (incl. scrub), stuck DOUT, SPI2 timeout | ADC re-initialised |
 | `DAC_SPI` | SPI1 transfer or scrub timed out | a successful zero-pair write |
 | `LOOP_OVERRUN` | heartbeat edge spacing > 1.0 ms while permitted | — |
 | `INVARIANT` | B shadow ≠ 0xFFFF, `DBG_TIM2_STOP`, heartbeat state ≠ instrument state, `hb_service` in an exception, setpoint not mappable | the invariant holds again |
-| `AFE` | a clip code while the heartbeat runs | — |
+| `AFE` | while the heartbeat runs: a clip code, or both channels below −0.8 FS on consecutive conversions (`detail=afe_signature`: a ±15 V rail lost, U12 open) | — |
 | `STALE` | no completed conversion for 2·t18 + 100 ms while armed | ADC ready |
 | `DISARM_TIMEOUT` | the disarm ramp missed 1.1 s | — |
 | `CLOCK` | HSE did not start at boot (USB unusable) | `RESET` |

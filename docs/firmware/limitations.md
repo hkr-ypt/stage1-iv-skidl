@@ -15,17 +15,18 @@ Specific items to confirm on the bench:
 * clock tree (HSE start, PLL lock, VOS ready, 48 MHz USB), and `F_CLOCK`
   when the crystal is absent;
 * TinyUSB 0.21.0 enumeration with VBUS sensing off and the soft-connect
-  gated by PA0; behaviour on suspend/resume;
+  gated by PA0; behaviour on suspend/resume; device mode reached before
+  `tusb_init()` (after init: OTG_FS GINTSTS.CMOD = 0 and MMIS = 0,
+  DCFG.DSPD = 3, DCTL.SDIS = 1; PA10 is pulled up); the D+ pull-up released
+  after a cable pull (VBUS detach below 3.6 V);
 * the naked fault entry (stack switch, frame decode) and the dead-man ISR
   on real exceptions;
 * the bit-banged DAC fallback timing (~1 MHz on PA5/PA7);
 * the MPU stack guard: `CRASH STACK` (bring-up) must give `crash=memmanage`
   and a zeroed output;
-* ADS1256 init and reconfiguration send SELFCAL right after SYNC, with no
-  WAKEUP between them. The simulator assumes SELFCAL runs from that state;
-  if the silicon ignores it, every init times out (safe, but it blocks
-  bring-up). Confirm on the analyser that /DRDY falls after the Table 21
-  calibration time;
+* ADS1256 init and reconfiguration send SYNC, WAKEUP, SELFCAL (each as
+  SBAS288K documents it). Confirm on the analyser that /DRDY rises at the
+  SELFCAL and falls after the Table 21 calibration time;
 * ADC1 VBUS scaling (VDDA assumed 3.3 V) and the temperature reading;
 * flash erase/program on sectors 1–2 and the D-cache reset;
 * the pass-time budget (≤ 150 µs design, overruns counted above 400 µs):
@@ -41,12 +42,30 @@ Specific items to confirm on the bench:
   noise and drift measurements (verification H-10, H-11, H-13).
 * PGA is fixed at 2 for both channels in production builds; a per-channel
   PGA is a future change justified only by bring-up noise data (spec §13).
-* The ~49 mA current-limit plateau is a **nominal** value (R7, not
-  characterised by TI). `i_plateau` must be replaced by the measured plateau;
-  until then `CLIM` classification uses 49 mA.
+* With nominal constants (`CAL_NOMINAL`) the Kelvin check cannot see an open
+  SENSE− lead, nor an open SENSE+ on a DUT below about 35 Ω under the
+  plateau: the wide tolerance's 15 Ω·|I| term equals the error those faults
+  cause (spec §7.7). Calibrate first.
+* The current-limit plateau (U5 OPA547T, R7 348 kΩ) is expected at
+  40…65 mA, sinking up to ~8 mA above sourcing, falling ~0.2 mA/K as U5 warms;
+  49 mA is the design centre, not a characterised value. `i_plateau` must be
+  replaced by the measured plateau (smaller polarity); until then `CLIM`
+  classification uses 49 mA, so a unit whose plateau sits below 39 mA
+  (0.8 × 49 mA, a sagged or low unit) reports its plateau as `KELVIN` rather
+  than `CLIM` until `i_plateau` is measured.
 * The software compliance acts after a conversion (settle + one conversion,
-  or one monitor conversion during a long settle); it is not a current
-  limit. The hardware plateau and the 128 mA passive bound are.
+  or one monitor conversion; during ramps the monitor converts the current
+  back to back); it is not a current limit. The hardware plateau and the
+  passive bounds are: V_SWEEP / (R30 + R10) ≤ 91.3 mA (92.6 mA worst case)
+  with a working source, and 128 mA into a DUT short even with U5 at a rail
+  (DESIGN_DOCUMENT §7). The default `i_compliance` (100 mA) is above the
+  first, so by default the plateau limits; set it lower to protect a DUT.
+* **Operating rule (hardware, `docs/final_audit.md` §3.7):** no inductive DUT
+  in current limit. In TI's OPA547 model a fast fall of the command out of
+  the negative limit with an inductive DUT can leave U5 oscillating; the
+  firmware's immediate-zero reactions (a compliance stop, a fault) make such
+  a fall, ramps do not. This is kept deliberately: zeroing at once is what
+  protects a DUT; the bring-up checklist tests that exit.
 
 ## 3. Behaviour choices that differ from the specification
 
@@ -68,6 +87,10 @@ The user-visible ones:
   their `OK`), provided they fit in the 1 KB receive buffer: behind more
   unparsed input, only the host timeout (30 s by default) disarms.
 * The session zero is marked stale at the start of every new host session.
+* Every session starts with an empty line before `EVT HELLO` (protocol.md §1).
+* `CAL_NOMINAL` stays set until `g_dac`, `c_dac`, `g_v`, `g_i` and `r_s` have
+  all been set with `CAL.SET`; a partial calibration keeps the wide Kelvin
+  tolerance.
 
 ## 4. Residual risks (unchanged from spec §3.3)
 

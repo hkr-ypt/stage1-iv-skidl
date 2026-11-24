@@ -457,17 +457,17 @@ and §8, `i_compliance` after each one.
   the supply itself would limit, and its limit would be read as U5's.
   Throughout this section check on the supplies that neither rail is in
   current limit and both stay at 15.0 V ±0.2 V.
-- [ ] **Raise the firmware's own current cut-off as well:
-  `CFG i_compliance=0.1`.** Its default is 50 mA, and the firmware writes
-  the zero code the moment a reading exceeds it. The expected plateau is
-  40…65 mA and the sinking one is typically above 50 mA, so with the
-  default most plateau tests below (and typically every sinking one) end
-  in a zeroed output and an
-  `EVT WARN COMPLIANCE`, which means the *firmware* stopped, not that U5
-  limited. 0.1 (100 mA) is the maximum. The setting is not stored: repeat
-  it after every reset, re-flash or power cycle in this section (lifting
-  R38, an R7 trim, `CRASH HARDFAULT`, SW1). §8 says step by step where it
-  is needed again.
+- [ ] **Make sure the firmware's own current cut-off is at its maximum:
+  `CFG i_compliance=0.1`** (100 mA; the default since the final firmware
+  audit, 50 mA before it; `CFG?` shows it). The firmware writes the zero
+  code the moment a reading exceeds it. The expected plateau is 40…65 mA
+  and the sinking one is typically above 50 mA, so with a 50 mA cut-off
+  most plateau tests below (and typically every sinking one) would end in
+  a zeroed output and an `EVT WARN COMPLIANCE`, which means the *firmware*
+  stopped, not that U5 limited. The setting is not stored: a reset,
+  re-flash or power cycle in this section (lifting R38, an R7 trim,
+  `CRASH HARDFAULT`, SW1) returns it to the default; set it again after
+  any step that lowered it. §8 says step by step where it is needed again.
 - [ ] **Sweep into 1 kΩ** from −10 V to +10 V and back: the Kelvin and current
   channels track, with signed readings and no step at 0 V.
 - [ ] **Sweep span.** Command the two ends and record what V_SWEEP (TP1)
@@ -693,9 +693,9 @@ Follow `firmware_handoff.md` §4–§5 and `docs/firmware/calibration.md`.
   and the plateau region is flagged as current limit, not as DUT behaviour.
   To see the plateau region the firmware's cut-off must be above the
   plateau (`CFG i_compliance=0.1`) and the diode rated for the plateau
-  current (100 mA or more, e.g. a 1N400x); with the default 50 mA the
-  sweep ends with `status=compliance` on a unit whose sourcing plateau is
-  higher. Afterwards set `i_compliance` to what the instrument's use
+  current (100 mA or more, e.g. a 1N400x); with a 50 mA cut-off (the
+  default before the final firmware audit) the sweep ends with
+  `status=compliance` on a unit whose sourcing plateau is higher. Afterwards set `i_compliance` to what the instrument's use
   calls for.
 
 ## 9. Records to keep

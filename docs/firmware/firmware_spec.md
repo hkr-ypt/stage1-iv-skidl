@@ -5,7 +5,10 @@ and `host/`). Written before implementation, then reconciled with the code;
 where the two differ the code and [`architecture.md`](architecture.md) are
 authoritative and the difference is listed in §15.
 **Baseline hardware:** `hkr-ypt/stage1-iv-skidl` at `8a84b55` (SKiDL source,
-netlist and routed board unchanged by the firmware work).
+netlist and routed board unchanged by the firmware work). The final design
+audit then changed parts, not copper (`c4e7592`; U5 OPA547T with R7 348 kΩ,
+D7 BZT52B24, C26/C27 18 pF, R38/C49 fitted; `docs/final_audit.md`); the
+firmware reports that revision (`hw=stage1-iv@c4e7592`, §15 item 25).
 **Scope:** the firmware for U9 (STM32F411RET6) on this board, and the host
 software needed to use and test it.
 
@@ -68,7 +71,7 @@ contract**: channel B must stay at 0xFFFF.
 | Main loop hung but an ISR or peripheral still toggling PC5 | PC5 has no timer or peripheral function | SI-2, SI-10: one thread-mode writer, gated by health checks |
 | Heartbeat present but the firmware is commanding the wrong thing | none | SI-5, SI-9 and the test suite. **Residual risk:** an in-range wrong setpoint from a live, logically faulty loop is not caught by hardware |
 | DUT left biased with no operator | none | SI-7: armed only during a host session |
-| Overcurrent into a fragile DUT | ~49 mA plateau (typical), 128 mA passive bound | software compliance, **post-hoc** (acts after a conversion), stated as such |
+| Overcurrent into a fragile DUT | the U5 plateau (OPA547T, expected 40…65 mA, design centre 49 mA), 128 mA passive bound | software compliance, **post-hoc** (acts after a conversion), stated as such |
 | One ±15 V rail missing | D8/D9 clamp, U12 opens | `AFE` check blocks `ARM`; `NO_OUTPUT` classification; never adapt calibration to it |
 | Flash erase stalls the CPU | (gate disarms) | SI-8: erase only while disarmed |
 
@@ -136,12 +139,13 @@ All pins are checked against `stage1_iv.net`: U9 pin numbers, LQFP-64.
 | PB13 / PB14 / PB15 (34/35/36) | SCK2 / MISO2 / MOSI2 | AF5 (SPI2), **≥ medium speed** (errata ES0287 2.11.4); PB14 weak pull-down (DOUT is Hi-Z while /CS is high) | | SPI2 master, mode 1, SCLK idle low (SBAS288K: "hold SCLK low"), BR = /32 → **1.5 MHz** from APB1 48 MHz (≤ 1.92 MHz = f_CLKIN/4) |
 | PA8 (41) | DRDY | GPIO input, no pull (R19 external), EXTI8 falling edge | | Never MCO1 |
 | PA9 (42) | RESET_ADC | GPIO output push-pull, low speed | **high** early in boot; pulsed low ≥ 2 µs to reset the ADS1256 | FT. **Never AF10 (OTG_FS_VBUS), never input**. Do not copy TinyUSB's `hw/bsp/stm32f4/family.c`, which makes PA9 an input |
-| PA0 (14) | VBUS_SENSE | **analog, ADC1_IN0**, 480-cycle sample time | | 2.5 V at 5 V VBUS is only 0.19 V above the tested V_IH (2.31 V at VDD 3.3 V) and VBUS = 4.4 V is not guaranteed high [DS10314 Table 53]. So VBUS is *measured*: attach > 1.9 V at the pin (VBUS > 3.8 V), detach < 1.5 V (VBUS < 3.0 V), 20 ms debounce. Source impedance 50 kΩ is at the R_AIN limit, hence the longest sample time |
+| PA0 (14) | VBUS_SENSE | **analog, ADC1_IN0**, 480-cycle sample time | | 2.5 V at 5 V VBUS is only 0.19 V above the tested V_IH (2.31 V at VDD 3.3 V) and VBUS = 4.4 V is not guaranteed high [DS10314 Table 53]. So VBUS is *measured*: attach > 1.9 V at the pin (VBUS > 3.8 V), detach < 1.8 V (VBUS < 3.6 V: the D+ pull-up can back-feed the node to about 3 V after a cable pull, firmware_handoff.md §6), 20 ms debounce. Source impedance 50 kΩ is at the R_AIN limit, hence the longest sample time |
 | PA11 / PA12 (44/45) | USB_DM / USB_DP | AF10 (OTG_FS), very high speed | | |
 | PC13 (2) | LED_STATUS | GPIO output (push-pull or open-drain), **low speed** | high = LED off | LED lit by driving **low**. Sinks ≈ 1.3 mA; ≤ 3 mA, ≤ 2 MHz, never a source [DS10314 Table 8 note 2] |
 | PA13 / PA14 (46/49) | SWDIO / SWCLK | untouched (reset AF0 and pulls) | | Bulk GPIO writes must mask these bits |
 | PH0 / PH1 (5/6) | OSC_IN/OUT | HSE crystal 8 MHz | | |
-| PA1–3, PA10 (OTG_ID), PA15, PB0–2, PB3–10, PC0–4, PC6–12, PC14/15, PD2 | not connected | **analog** | | JTAG pins PA15/PB3/PB4 can be released with SWD kept [RM0383 23.4.4; ES0287 2.2.5] |
+| PA1–3, PA15, PB0–2, PB3–10, PC0–4, PC6–12, PC14/15, PD2 | not connected | **analog** | | JTAG pins PA15/PB3/PB4 can be released with SWD kept [RM0383 23.4.4; ES0287 2.2.5] |
+| PA10 (OTG_FS_ID) | not connected | **AF10, open drain, internal pull-up** | | ID reads high, so the OTG core starts as a B-device (device mode), as in TinyUSB's tested STM32F4 board files; as an analog pin its input reads 0 [RM0383 §8.3.12] and the core could start as a host (§4.7) |
 
 No pin has an alternate function that could drive PC5, the DAC or the ADC
 autonomously.
@@ -329,8 +333,13 @@ OTG_FS core ID 0x1200 [`stm32f411xe.h`].
 - **VBUS sensing off:** GCCFG.NOVBUSSENS (bit 21) = 1, VBUSASEN (18) =
   VBUSBSEN (19) = 0, PWRDWN (16) = 1. This "leaves the pad free", so PA9 is
   a GPIO [RM0383].
-- **Device mode:** GUSBCFG.FDMOD (bit 30) forces device mode; wait ≥ 25 ms
-  after setting it.
+- **Device mode:** GUSBCFG.FDMOD (bit 30) forces device mode; the change
+  takes up to 25 ms. The port sets it before `tusb_init()` and waits
+  (bounded, 100 ms) until GINTSTS.CMOD (bit 0) reads 0: TinyUSB's
+  `dcd_init()` writes DCFG and DCTL before it sets FDMOD itself, and a core
+  still in host mode ignores device-register writes (GINTSTS.MMIS). PA10 is
+  pulled up, so the core normally starts in device mode and the wait ends at
+  once.
 - **Connect:** DCTL.SDIS (bit 1) is the soft disconnect.
 - **TinyUSB 0.21.0** (latest tag, 2026-06-30) does the GCCFG part itself when
   `CFG_TUD_VBUS_DETECT_HW = 0` (the default).
@@ -450,8 +459,10 @@ command was accepted.
    MCU in reset below 2.83 V instead. Factory parts ship with BOR off, so
    `ARM` reports `ERR PRECOND bor`.
 
-Calibration does not gate arming. With nominal constants every record carries
-the `CAL_NOMINAL` flag.
+Calibration does not gate arming. While any of `g_dac`, `c_dac`, `g_v`, `g_i`,
+`r_s` is nominal (not set with `CAL.SET`; a partial calibration, such as
+`i_plateau` alone at bring-up, is not a calibration), every record carries
+the `CAL_NOMINAL` flag and the nominal Kelvin tolerance applies (§7.7).
 
 ### 6.3 Arm and disarm sequences (normative)
 
@@ -502,8 +513,8 @@ compliance as the normal end of a forward sweep ("sweep until 10 mA").
 reaction is an immediate zero code with no ramp. The software compliance is
 **not a current limit.** It acts after a conversion, so the DUT carries the
 excess for up to one settle time plus one conversion. The only real-time
-limit is the hardware: the ~49 mA plateau (typical) and the 128 mA passive
-bound.
+limit is the hardware: the U5 plateau (expected 40…65 mA) and the 128 mA
+passive bound.
 
 ## 7. Firmware architecture
 
@@ -598,7 +609,8 @@ the output alive: it only ever forces PC5 low.
   across passes in ≤ 128-byte chunks from a resumable line builder.
 
 The only operations allowed to exceed the pass budget are:
-- boot steps before the loop (HSE start, the 25 ms OTG FDMOD wait);
+- boot steps before the loop (HSE start, the OTG device-mode wait, ≤ 25 ms
+  and normally none);
 - `CAL.SAVE`, which erases and programs a 16 KB sector (≤ 500 ms with the
   bus stalled). It is legal only in `DISARMED` (SI-8). The loop monitor
   skips the pass that performs it, and the IWDG timeout (≥ 1.02 s) covers
@@ -760,7 +772,7 @@ typedef struct { int32_t code; ads_mux_t mux; uint64_t t_wakeup_us, t_drdy_us, t
                  bool late, clipped; } ads_sample_t;
 void ads_init_begin(const ads_cfg_t *cfg);   // non-blocking: reset, configure, verify, SELFCAL
 bool ads_ready(void);                         // initialised, idle, no error
-bool ads_reconfigure(const ads_cfg_t *cfg);   // DISARMED only: WREG + SYNC + SELFCAL
+bool ads_reconfigure(const ads_cfg_t *cfg);   // DISARMED only: WREG + SYNC + WAKEUP + SELFCAL
 bool ads_start(ads_mux_t mux);                // WREG MUX, SYNC, ≥24τ, WAKEUP (preempts a running conversion)
 ads_poll_t ads_poll(ads_sample_t *out);       // BUSY / READY / ERROR
 void ads_service(void);                       // ≤ 1 SPI transaction per call; timeouts, init/cal, scrub
@@ -810,8 +822,11 @@ void ads_service(void);                       // ≤ 1 SPI transaction per call;
   - DRATE as configured;
   - IO = 0x00 (D0–D3 outputs, low).
 
-  Then SYNC, SELFCAL, wait for /DRDY, and read back all five registers. Data
-  are accepted only from conversions that `ads_start()` began.
+  Then SYNC, WAKEUP, SELFCAL, wait for /DRDY, and read back all five
+  registers. SYNC + WAKEUP is the synchronisation SBAS288K p.27 asks for
+  after a PGA or data-rate change (WAKEUP "completes SYNC", Table 24); the
+  data sheet does not say what SELFCAL does while SYNC holds the part
+  stopped. Data are accepted only from conversions that `ads_start()` began.
 - **Integrity checks while running:**
   - A **register scrub** between points, and at least once per second in
     every state: RREG 0x00–0x04 against the shadow, with STATUS masked to
@@ -881,8 +896,10 @@ input: setpoint V (µV, int32), settle_us, n_avg (1…256), data rate DR
            sample = convert(ch)                    // §7.4
            if ch == I and |I(sample)| > i_compliance → compliance action, stop here
            accumulate: sum, offset-shifted sum of squares (int64), clip flags, timestamps
-5. means (rounded to int32), standard deviations (raw codes; "-" if n_avg < 2),
-   t_i, t_v = centroids of the I and V conversion midpoints
+5. means (the record keeps them rounded to int32 plus a 1/256-code
+   fraction; SI values come from the unrounded means), standard deviations
+   (raw codes; "-" if n_avg < 2), t_i, t_v = centroids of the I and V
+   conversion windows
 6. per-point checks (§7.7) → flags
 7. push the result record (§7.8)
 ```
@@ -907,9 +924,11 @@ input: setpoint V (µV, int32), settle_us, n_avg (1…256), data rate DR
   DAC step that crossed the limit, or one monitor conversion during a long
   settle. It is post-hoc (§3.3).
 - **Timestamps.** µs from the sweep start, from TIM2 extended to 64 bits.
-  The jitter of `t_set` against the schedule is bounded by one pass
-  (≤ 150 µs). A realised settle more than 200 µs over the request is
-  flagged `LATE`.
+  A point's first conversion starts in the pass after the settle ends and
+  is issued to the ADC one pass later (the ADC is serviced before the
+  engine), so the realised settle exceeds the request by up to two passes
+  (≤ 300 µs at the 150 µs budget). More than that (`2·PASS_BUDGET_US` +
+  50 µs = 350 µs) is flagged `LATE`.
 
 **Defaults and ranges.** All are host-settable and stored in the result
 metadata.
@@ -922,7 +941,7 @@ metadata.
 | `first_settle_us` | 50 000 (after the pre-ramp) | 100 µs – 60 s |
 | `ramp_rate` | 10 V/s | 0.01–10 V/s |
 | `v_limit` | 10.000 V | 0.001–10.000 V; in `ARMED`, never below \|held level\| |
-| `i_compliance` | 50 mA (effectively off, under the hardware plateau) | 1 µA – 100 mA |
+| `i_compliance` | 100 mA (effectively off: above the 92.6 mA passive bound, so the hardware plateau, 40…65 mA, limits) | 1 µA – 100 mA |
 | `on_compliance` | `stop` | `stop`, `fault` |
 | `line_hz` | 50 | 50, 60 |
 | `host_timeout_s` | **30** | 0 (off) – 3600 |
@@ -1028,18 +1047,24 @@ The SENSE+ attenuator draws `V_hi/R_sd` from the DUT's high side through
 | **Clip** | either code ∈ {0x7FFFFF, 0x800000} | `OVR_V` / `OVR_I`; the value is not used by the other checks |
 | **Compliance** | \|I\| > `i_compliance`, on each I conversion including monitor conversions | immediate zero code; `on_compliance` action (§6.4) |
 | **Kelvin consistency** | `e = V_set − V_K − I·R_s − (V_K/R_sd)·R_top`. Flag if `|e| > tol`, where `tol` = 10 mV + 0.2 %·\|V_set\| + 5 Ω·\|I\| when calibrated, and 50 mV + 1 %·\|V_set\| + 15 Ω·\|I\| while `CAL_NOMINAL` | `KELVIN`; `EVT WARN KELVIN` after 3 consecutive points |
-| **Current-limit plateau** | \|I\| ≥ 0.8·`i_plateau` **and** `e·sign(V_set) > tol` (U5 in limit leaves V_K short of the load line) | `CLIM`: the point is a plateau, never DUT data. `i_plateau` is measured at bring-up (§7.10). A DUT legitimately drawing 45–49 mA *on* the load line is not flagged |
-| **Force path open** | \|V_set\| ≥ 1 V, \|I\| < max(2 µA, 4·σ_I(zero)), and \|V_K\| < 0.1·\|V_set\|. Before a valid `ZERO` the current threshold is 30 µA | `NO_OUTPUT`: "output disconnected: U12 open (±15 V missing or low), PTC open, or FORCE leads open". Never adapts calibration |
+| **Current-limit plateau** | \|I\| ≥ 0.8·`i_plateau` **and** `e·sign(V_set) > tol` (U5 in limit leaves V_K short of the load line) **and** `V_K·sign(V_set) > −0.1 V` (a lifted SENSE+ lead drives V_K to the other side, ≈ −15 Ω·I: that is `KELVIN`) | `CLIM`: the point is a plateau, never DUT data. `i_plateau` is measured at bring-up (§7.10). A DUT legitimately drawing 45–49 mA *on* the load line is not flagged |
+| **Force path open** | \|V_set\| ≥ 1 V, \|I\| < max(2 µA, 4·σ_I(zero)), and \|V_K\| < 0.1·\|V_set\|. Before a valid `ZERO` the current threshold is 100 µA (the INA128P worst-case offset to 85 °C, 79 µA) | `NO_OUTPUT`: "output disconnected: U12 open (±15 V missing or low), PTC open, or FORCE leads open". Never adapts calibration |
 | **AFE**, gate open (before `ARM`) | a clip code on either channel, or **both** channels below −0.8 × full scale (±15 V off: both INA128 outputs near AGND) | blocks `ARM` (`ERR PRECOND afe`) |
-| **AFE**, armed | a clip code | `F_AFE` |
+| **AFE**, armed | a clip code, or both channels below −0.8 × full scale on two consecutive conversions (a ±15 V rail lost while armed: U12 has opened FORCE+, so the readings are the front end's; impossible with a live output, since \|V_SWEEP\| ≤ 10.04 V and R_s ≥ 115 Ω forbid \|V_K\| ≥ 10 V with \|I\| ≥ 83 mA) | `F_AFE` (`detail=afe_signature`) |
 | **Staleness** (armed) | no completed conversion for `T_STALE = 2·t18(DR) + 100 ms` | `F_STALE` |
 
 **What the Kelvin check can and cannot see:**
 - **Open SENSE+** is unmistakable: V_K reads near 0, so `e ≈ V_set`.
 - **Open SENSE−** pulls U7 −IN to AGND. V_K then reads high by `I·R_bot`,
   about 15 Ω × I. That is detectable only once 10 Ω·\|I\| exceeds
-  10 mV + 0.2 %·\|V_set\|, i.e. above ≈ 2–15 mA depending on V. The error it
-  causes is the same 15 Ω·I, so it is small where it is undetectable.
+  10 mV + 0.2 %·\|V_set\|, i.e. above ≈ 2–15 mA depending on V, and only
+  with calibrated constants. While `CAL_NOMINAL` holds, the nominal
+  tolerance's 15 Ω·\|I\| term (it must cover the 115…128 Ω force path and
+  the gain errors) equals the error itself, so an open SENSE− is never
+  flagged then (0.68 V unflagged at 45 mA), nor an open SENSE+ on a DUT
+  below about 35 Ω under the plateau: calibrate `r_s` (with the gains) to
+  get that detection. With calibrated constants the error it causes is the
+  same 15 Ω·I, so it is small where it is undetectable.
 - **Swapped leads** invert V_K's sign, so `e ≈ 2·V_set`.
 - An open DUT with the Kelvin leads on its terminals reads `V_K ≈ V_set`,
   `I ≈ 0`, and passes, as it should.
@@ -1057,8 +1082,11 @@ A future DUT-voltage servo changes that (§13).
   - `seq`, `sweep_id`, `idx`, `seg`;
   - `t_set_us`, `t_i_us`, `t_v_us`: u32 µs relative to the sweep start;
   - `dac_code`;
-  - `i_raw`, `v_raw`: mean raw codes, int32, rounded;
-  - standard deviations: u16 raw codes, saturating, 0xFFFF = n/a;
+  - `i_raw`, `v_raw`: mean raw codes, int32, rounded; `i_frac`, `v_frac`:
+    mean − rounded mean in 1/256 code (int8), so SI values keep the
+    resolution of averaging;
+  - standard deviations: u16 in 0.1 code, saturating at 6553.4 codes (flag
+    `SD_SAT`), 0xFFFF = n/a;
   - `n`, `flags`.
 
   SI values are computed only when a line is formatted.
@@ -1144,7 +1172,7 @@ constants.
 | Setpoint | `V_set = g_dac·(code − c_dac)` | g_dac = 8.0321·2.5/65536 = 306.40 µV/code; c_dac = 32767.5 |
 | DUT voltage | `V_K = g_v·(code − o_v)` | g_v = 2.5/(2²³−1)/0.199203 × (1 + 100 Ω/59.6 kΩ) = 1.496077 µV × 1.00168 = 1.49859 µV/code |
 | DUT current | `I = g_i·(code − o_i)` | g_i = 298.0233 nV/24.0056 × 1.00168 = 12.4356 nA/code |
-| Series resistance | `R_s`, `R_top` | 122 Ω, 107 Ω |
+| Series resistance | `R_s`, `R_top` | 121 Ω, 106 Ω (R30 100 + 2 × PTC 5 + U12 1 + R10 10; PTC 5 + R30 100 + U12 1; hardware 115…128 Ω) |
 | Plateau | `i_plateau` | 49 mA (until measured) |
 
 - The ×1.00168 factor is the typical buffer-off input-impedance gain error:
@@ -1160,7 +1188,7 @@ constants.
 
 | Constant | Procedure | When |
 |---|---|---|
-| `o_v`, `o_i` | **`ZERO`**: all four jacks open (DUT removed), output at 0 V, armed or disarmed. 64 averaged pairs at the active data rate. With SENSE± open, R32/R33 pull U7's inputs to AGND, so V reads exactly its offset; with no current path, I reads its offset. Rejected if \|o_i\| > 30 µA or \|o_v\| > 3 mV (fixture not open?) | each session, and after any data-rate change or SELFCAL (which mark it stale). Drift is up to 0.88 µA/°C, so a 1 µA zero holds within about 1 °C for a worst-case part; `ZERO_STALE` after 1 h |
+| `o_v`, `o_i` | **`ZERO`**: all four jacks open (DUT removed), output at 0 V, armed or disarmed. 64 averaged pairs at the active data rate. With SENSE± open, R32/R33 pull U7's inputs to AGND, so V reads exactly its offset; with no current path, I reads its offset. Rejected if \|o_i\| > 100 µA or \|o_v\| > 10 mV (fixture not open?): above the INA128P worst-case offsets to 85 °C referred to the DUT (SBOS051G: (50 + 500/G) µV plus (0.5 + 20/G) µV/°C; 79 µA on I, 8.9 mV on V) | each session, and after any data-rate change or SELFCAL (which mark it stale). Drift is up to 0.88 µA/°C, so a 1 µA zero holds within about 1 °C for a worst-case part; `ZERO_STALE` after 1 h |
 | `g_v`, `g_i` | host script (`iv-cal`): a 0.01 % reference resistor, **4-wire**, Kelvin leads on its terminals; a calibrated DMM for its voltage; several points of each polarity; least squares. Fitting g_i 4-wire also absorbs the SENSE− leg's diversion (V(S−)/R_sd ≈ 0.03 % of I) | bring-up, then periodically |
 | `g_dac`, `c_dac` | DUT open, Kelvin leads on the FORCE terminals, I = 0: `V_SWEEP = V_K·(1 + R_top/R_sd)`, which corrects the attenuator current's 0.21 % drop across R_top (R_top nominal; its ±5 Ω uncertainty is ±0.01 %). Codes 485…64741 only, the DAC8552's specified linear range | after g_v |
 | `R_s` | least squares on `y = a + R_s·I` with `y = V_set − V_K·(1 + R_top/R_sd)`, over ≥ 3 load currents of each polarity with \|I\| ≥ 5 mA. The intercept `a` absorbs the residual DAC/U5 offset | after the above |
@@ -1171,8 +1199,9 @@ calibration record and the session zero, so the host can reprocess any data.
 
 **Storage.**
 - A 128-byte record: magic, version, board UID (96-bit), sequence, a
-  host-supplied UTC timestamp, the coefficients above, a 32-character note,
-  CRC-32.
+  host-supplied UTC timestamp, which coefficients were measured (a bit per
+  `CAL.SET` key, with a marker bit; a record without it loads as fully
+  measured), the coefficients above, a 32-character note, CRC-32.
 - Written to flash **sectors 1 and 2** (16 KB each) alternately. A new record
   goes to the sector *not* holding the newest valid record, so an interrupted
   erase or program leaves the previous one intact. At boot the valid record
@@ -1180,7 +1209,9 @@ calibration record and the session zero, so the host can reprocess any data.
 - `CAL.SAVE` only in `DISARMED`, ≥ `T_DISARM` after the last edge, with the
   dead-man masked: a sector erase stalls flash fetches for ≤ 500 ms.
 - A record whose UID does not match this MCU is ignored, and nominal
-  constants are used with a warning.
+  constants are used with a warning (`CAL_UID`). A damaged record (bad magic,
+  version or CRC, implausible) is ignored too, with the warning
+  `CAL_DAMAGED`: an older record may then be in use.
 - The session zero lives in RAM and is not persisted.
 
 ## 8. Host interface
@@ -1225,7 +1256,7 @@ the host process exiting, drops it.
 Hardware VBUS sensing is disabled (§4.7). PA9 is never given its OTG
 alternate function: it is RESET_ADC.
 
-### 8.3 Line protocol (protocol version 1)
+### 8.3 Line protocol (protocol version 2)
 
 - ASCII, one line per message, `\n`-terminated (`\r\n` accepted). Commands
   are ≤ 256 characters.
@@ -1252,7 +1283,7 @@ alternate function: it is RESET_ADC.
 
 | Command | States | Response / effect |
 |---|---|---|
-| `*IDN?` | any | `OK IDN model=stage1-iv fw=<semver>+<git> proto=1 hw=<rev> build=<release\|debug\|bringup> serial=<uid>` |
+| `*IDN?` | any | `OK IDN model=stage1-iv fw=<semver>+<git> proto=2 hw=<rev> build=<release\|debug\|bringup> serial=<uid>` |
 | `STAT?` | any | `OK STAT state=… fault=… warn=… vset=… vk=… i=… cal=<valid\|nominal> zero_age_s=… reset=<cause> crash=<0\|1> session=… t_us=… mcu_temp=…` |
 | `DIAG?` / `DIAG.CLR` | any | crash record, counters (loop max µs, ADC timeouts, DAC scrubs, late points), clear |
 | `PING` | any | `OK PONG` (also resets the host timeout) |
@@ -1309,7 +1340,8 @@ Flags:
 | 2 | `CLIM` | 8 | `CAL_NOMINAL` |
 | 3 | `KELVIN` | 9 | `ZERO_STALE` (no `ZERO` this session, > 1 h old, or a data-rate change or SELFCAL since) |
 | 4 | `NO_OUTPUT` | 10 | `MEAS` (record answers a `MEAS?`, not a sweep point) |
-| 5 | `COMPLIANCE` | 11–15 | reserved, sent as 0 |
+| 5 | `COMPLIANCE` | 11 | `SD_SAT` (a standard deviation at its 6553.4-code ceiling) |
+| | | 12–15 | reserved, sent as 0 |
 
 The host library writes CSV plus a JSON sidecar. The sidecar holds:
 - `SWEEP_BEGIN` (configuration, calibration record, firmware version, serial);
@@ -1440,7 +1472,7 @@ values. M0–M2 need no assembled board. M3–M4 deliver the test firmware that
 | **M3** | Target platform and safe boot | `port_stm32`: startup (PSP thread stack, reserved MSP), early DAC zero with `dac_zero_safe()`, clocks, TIM2, GPIO table with LCKR, IWDG, reset cause, fault handlers + crash record, CSS → reset, dead-man (TIM5); USB CDC with VBUS measured on PA0 and the DTR session; LED patterns | **L3:** (a) analyser: the first SPI1 activity after NRST release is `00 80 00` then `34 FF FF`, ≤ 2 ms after reset; /SYNC never low during reset or init; PC5 low until armed. (b) SPI1 mode 1 at 6 MHz; /SYNC rises after the 24th falling edge; ≥ 100 ns high between frames. (c) enumerates on Linux, macOS and Windows; unplugging the cable soft-disconnects (D+ released within 50 ms), replug reconnects; PA9 static high throughout USB activity; VBUS attach/detach thresholds verified with a variable 5 V supply. (d) `CRASH hang` with the heartbeat permitted → zero pair on SPI1 within 2 ms (dead-man), reset, `crash=1 cause=DEADMAN`; `CRASH hardfault` → zero pair, correct PC; a deliberate stack overflow still produces a crash record; `CRASH hang_irqoff` → IWDG reset within its window. (e) 96 MHz verified by USB SOF timing and TIM2 against a reference. (f) `ARM` refused with BOR off |
 | **M4** | Heartbeat, DAC, arm/disarm on hardware (bring-up firmware) | heartbeat on target, `ARM`/`DISARM`/`SRC`, bring-up commands (`HB.*`, `DAC.RAW`, `CRASH`) | **checklist §6**, every item, with the recorded values: DAC_ARM at the 2 kHz heartbeat ≥ 1.9 V (worst-case simulation 2.15 V); at 500 Hz (`HB.FREQ`) ≥ 1.6 V; time from the first edge to DAC_ARM > 1.49 V ≤ 10 ms (simulation ≤ 4 ms); single edge peak < 0.87 V; each disarm case to \|V_SWEEP\| < 0.2 V within ≤ 70 ms (PC5 low or floating: stop, SW1, halt, crash, +5 V removed) and ≤ 85 ms (PC5 held high) — the corrected limits of §4.4; **/SYNC stays high through SW1 reset**; re-arm after reset returns to the commanded value only after a new `ARM`. Plus: FORCE+ waveform at arm and disarm with A = zero code into 1 kΩ (record peak and duration; see §11 H8); V_SWEEP at codes for −10, −5, 0, +5, +10 V within ±1 % + 0.15 V of nominal (uncalibrated) |
 | **M5** | ADC on hardware | ADS1256 init/POST/scrub/stuck-code check; the v1 data-rate set (≤ 3750 SPS); `MEAS?`; `ZERO`; the self-checks; bring-up `ADC.PGA`, `ADC.RESETPULSE` | **checklist §8, first item:** analyser shows SCLK 1.5 MHz mode 1, t6 ≥ 6.51 µs, t10 ≥ 1.04 µs, t11 per command, and no RDATA inside t17 over 10⁵ conversions at 3750 SPS; ADCON reads back 0x01, IO 0x00; SELFCAL done. AIN1−AINCOM at PGA 1 within 0.5 % of −2²²; AIN1−AIN3 within ±200 codes. `ADC.RESETPULSE` → detected by the scrub within 1 s. **Noise table** recorded: zero-input σ for V and I at 10, 50/60, 100, 1000, 3750 SPS, at PGA 2 and PGA 64, gate disarmed and armed (heartbeat on). This decides per-channel PGA (§13). `ZERO` offsets within the plausibility limits; the armed-minus-disarmed offset recorded |
-| **M6** | Measurement engine and checks on hardware | point procedure (I-first ordering), monitor, compliance, CLIM, Kelvin, force-path, AFE, staleness | After `ZERO`, nominal gains: 1 kΩ and 100 Ω (0.01 %) loads read V and I within 1 % of the DMM at ±1, ±5, ±10 V, current-limited points excepted. Lifting SENSE+ flags `KELVIN` within 3 points at any current ≥ 10 µA. Lifting SENSE− flags it at \|I\| ≥ 10 mA (100 Ω load, ≥ 1.2 V), the documented detection limit. Removing −15 V at +5 V gives `NO_OUTPUT`, `KELVIN`, `OVR` or `F_AFE`, and **never unflagged data**. `AFE` blocks `ARM` with ±15 V off and does **not** block it with a 1.5 V cell across the jacks. Compliance at 1 mA into 1 kΩ: output at 0 V within settle + t18 + 1 ms of the crossing step, measured at FORCE+. The plateau is flagged `CLIM` at both polarities (checklist §7); a 220 Ω load at 45 mA (on the load line) is not flagged. Step responses at TP1, FORCE+, TP4 and TP7 confirm `SETTLE_MIN` |
+| **M6** | Measurement engine and checks on hardware | point procedure (I-first ordering), monitor, compliance, CLIM, Kelvin, force-path, AFE, staleness | After `ZERO`, nominal gains: 1 kΩ and 100 Ω (0.01 %) loads read V and I within 1 % of the DMM at ±1, ±5, ±10 V, current-limited points excepted. Lifting SENSE+ flags `KELVIN` within 3 points at any current ≥ 10 µA. Lifting SENSE− flags it at \|I\| ≥ 10 mA (100 Ω load, ≥ 1.2 V), the documented detection limit. Removing −15 V at +5 V gives `NO_OUTPUT`, `KELVIN`, `OVR` or `F_AFE`, and **never unflagged data**. `AFE` blocks `ARM` with ±15 V off and does **not** block it with a 1.5 V cell across the jacks. Compliance at 1 mA into 1 kΩ: output at 0 V within settle + t18 + 1 ms of the crossing step, measured at FORCE+. The plateau is flagged `CLIM` at both polarities (checklist §7); a 100 Ω load at about 45 mA (V_SWEEP ≈ 10 V, on the load line, in a polarity whose plateau is above 45 mA) is not flagged. Step responses at TP1, FORCE+, TP4 and TP7 confirm `SETTLE_MIN` |
 | **M7** | Sweeps and data path on hardware | waypoint and list sweeps, cycles, ramps, end actions, streaming, `DATA.FETCH`, abort paths | ±10 V bidirectional sweep, 10 mV steps, of a **low-TCR (foil) 10 kΩ** resistor (≤ 10 mW; a 1 kΩ part self-heats enough to fake 0.9 µA of hysteresis). Linear-fit residuals within the ADS1256 INL budget (0.005 % FS); no step at 0 V; up and down branches at the same setpoints: ≤ 1 % of points beyond 3σ_diff, none beyond 5σ_diff (σ_diff = √2·σ), and a mean difference within 3σ_diff/√N. A diode loop shows the plateau flagged. 20 repeated sweeps: per-point σ consistent with the M5 noise table; t_set jitter ≤ 150 µs. Cable unplug mid-sweep → FORCE+ at 0 V within 1.1 s + `T_DISARM`, `status=session_lost` on reconnect, data before the unplug retrievable with `DATA.FETCH`. Host program killed (DTR drop), and host hung with the port open (30 s timeout) → `DISARMING` |
 | **M8** | Calibration and persistence | `ZERO`, `CAL.*`, flash A/B, `iv-cal`; `R_s`, `R_top` and `i_plateau` fits | After `iv-cal`: the 100 Ω reference at ±1 V and ±3 V, and 1 kΩ at ±10 V, read within the release accuracy targets (§14, decision 1). Calibration survives power cycling. A corrupted newest record falls back to the older one. `CAL.SAVE` start-to-finish time is below the IWDG minimum timeout (1.02 s) with ≥ 2× margin. After calibration the Kelvin check uses the calibrated tolerance with no false `KELVIN` across a full ±10 V sweep of 100 Ω, 1 kΩ and a diode |
 | **M9** | Hardening and v1.0 release | fault drills on hardware: debugger halt mid-sweep, `CRASH hang`, `CRASH hang_irqoff`, `CRASH hardfault`, −15 V removal, +5 V removal, USB unplug, host kill; 8 h soak of repeated sweeps; documentation; version tag | Every drill: FORCE+ at 0 V within its documented bound (µs for a fault handler, ≤ 2 ms for a hang, 52–77 ms + decay for `hang_irqoff` and a halt). A halt followed by a resume ends in `F_LOOP_OVERRUN` and never re-arms. Correct state, event and record after recovery. Soak: 0 faults, 0 lost records, maximum pass time < 150 µs and maximum edge spacing < 500 µs (from `DIAG?`) |
@@ -1476,7 +1508,7 @@ hardware before v1. Each item says what evidence or decision would close it.
 | **H10** | DAC8552 linearity is specified only for codes 485–64741 (≈ −9.89 … +9.80 V). Channel B at 0xFFFF is outside it | accepted | calibrate the DAC transfer inside that range; setpoints beyond it are less accurate but still measured | none |
 | **H11** | ADS1256 ID value is undocumented in SBAS288K (community drivers assume 3) | resolved in firmware | register read-back is the comms test; the ID is logged | none |
 | **H12** | PA4 sees R34's 5 V pull-up | resolved: PA4 is FT [DS10314] | never analog mode, never an internal pull | none |
-| **H13** | OPA548 current-limit plateau is typical only (49.4 mA) | accepted (hardware record) | `CLIM` threshold from the bench measurement | checklist §7 plateau at both polarities |
+| **H13** | U5 current-limit plateau is not characterised: OPA547T with R7 348 kΩ, expected 40…65 mA at ±15 V, sinking up to ~8 mA above sourcing, falling ~0.2 mA/K as U5 warms (design centre 49 mA; `docs/final_audit.md` §3.1). Operating rule: no inductive DUT in current limit (a fast exit from the negative limit, as the immediate-zero reactions make, can leave U5 oscillating; final_audit §3.7) | accepted (hardware record) | `CLIM` threshold from the bench measurement; the default `i_compliance` is above the plateau (100 mA) | checklist §7 plateau at both polarities |
 | **H14** | **No numerical performance requirements exist** (DESIGN_DOCUMENT §1: "no numerical accuracy, resolution, noise, speed or temperature specification") | **missing requirement** | v1 targets proposed in §14 | owner decision (§14, item 1) |
 | **H15** | BOOT0 tied low and no SWO: updates need an SWD probe | accepted | SWD flashing; future USB update via a jump to the ROM DFU bootloader (§13) | AN2606 check for the F411 DFU's use of PA9/HSE before implementing that |
 | **H16** | `bringup_checklist.md` §6 needs firmware the plan must provide: frequency override, single edge, held-high pin, the B-negative test | resolved by the `bringup` build | §8.4 bring-up commands | owner decision on the unsafe B test (§14, item 3) |
@@ -1557,7 +1589,7 @@ not foreclose it.
 | **Per-channel PGA / current autorange** | ADCON + SYNC between conversions; per-(PGA, DR) gain calibration; OFC/FSC caching (readable/writable per SBAS288K) | **only if** the M5 noise table shows the ADC, not the INA128, limits the current floor |
 | **7500 / 15 k / 30 k SPS** | RDATA inside the DRDY ISR, with the ISR owning SPI2 while a conversion is pending (monitor preemption would then go through the ISR too) | needed only for fast pulsed work |
 | **USB firmware update** | `DFU` command (DISARMED only) → jump to the ROM bootloader | the heartbeat stops during the jump, so the gate opens. Needs AN2606 verification for the F411 (PA9, HSE detection) |
-| **Hardware observability** (H3, H4) and a firmware-controlled disconnect (U12 drive, OPA548 E/S) | board revision | would turn "inferred armed" into "measured armed" and give a true output-off |
+| **Hardware observability** (H3, H4) and a firmware-controlled disconnect (U12 drive, OPA547 E/S) | board revision | would turn "inferred armed" into "measured armed" and give a true output-off |
 | **SCPI / VISA front end** | a translation layer in the host package | the device protocol stays as is |
 | **Temperature compensation** | MCU temperature already reported; an external sensor near R10/U6 would be better | |
 
@@ -1718,6 +1750,77 @@ here. Each item says what the code does and why; the code and
     buses at /1 and the PLL and HSE off, so the recorded clock state is the
     real one. A VBUS conversion without EOC within 5 ms reads as VBUS absent.
     The configuration descriptor is self-powered, 2 mA.
+
+**Final firmware audit (2026-11)**
+
+Each item corrects behaviour that an independent review reproduced (in the
+simulator, on the driver test ports, or from the data sheets) or that the
+audited hardware requires; a regression test accompanies each (verification.md).
+
+25. *Hardware revision.* `hw=stage1-iv@c4e7592`: the last commit that changed
+    the design (OPA547T and R7 348 kΩ, D7 BZT52B24, C26/C27 18 pF, R38/C49
+    fitted). Protocol version 2 (items 33, 37, 38, 40).
+26. *Default compliance 100 mA* (was 50 mA, which lies inside the OPA547T's
+    expected 40…65 mA plateau and so zeroed the output before U5 limited on
+    most units). 100 mA is above the 92.6 mA worst-case passive bound: by
+    default the plateau limits and is flagged `CLIM`.
+27. *A CAL.SAVE can no longer erase flash while armed* (SI-8). `ARM` is refused
+    (`ERR PRECOND busy`) while any deferred job runs, and the save re-checks
+    SI-8 at the erase itself (a job can outlive its session).
+28. *`ARM` after `RESET`'s `OK`* is refused (`ERR STATE reset pending`), and
+    `port_system_reset()` writes the zero pair first. `ARM` answers
+    `ERR FAULT <F>` when its zero write fails, instead of `OK`.
+29. *A fault that interrupts POST or SELFTEST* makes `FAULT.CLR` re-run POST
+    (`ERR PRECOND adc` until it passes), instead of leaving `ARM` refused
+    with `post` after a successful `FAULT.CLR`.
+30. *Bring-up `HB.EDGE` / `HB.HOLD HIGH`* are refused within `T_DISARM` of the
+    previous edge, so the host cannot pump the reference gate closed while
+    DISARMED.
+31. *Orphan conversions.* Ending an acquisition (`SWP.ABORT`, sweep end,
+    `MEAS?`/`ZERO` cancel, faults) disowns its conversion in flight, and a
+    sample is accepted only if its conversion started at or after the
+    acquisition's DAC load, so it can never land in the next sweep's first
+    point.
+32. *`dac_zero_safe()`* raises /SYNC (≥ 1 µs) before it resets SPI1, and the
+    fault entry raises it before re-tuning SPI1: a partial frame is aborted
+    by the DAC8552's /SYNC rule instead of possibly being completed by a
+    reset SCK edge.
+33. *Measurement fidelity.* `v_V` / `i_A` come from the unrounded means (the
+    record adds a 1/256-code fraction); `LATE` allows the two passes a first
+    conversion takes (§7.5); a standard deviation at its 6553.4-code
+    ceiling sets the new flag `SD_SAT` (bit 11).
+34. *Classification.* `CLIM` needs V_K on V_set's side (`> −0.1 V`): a lifted
+    SENSE+ lead on a low-impedance DUT is `KELVIN`, not a plateau. The
+    pre-zero `NO_OUTPUT` current floor is 100 µA (the worst-case INA128P
+    offset to 85 °C), and `ZERO` accepts offsets up to 100 µA / 10 mV.
+35. *A ±15 V rail lost while armed* (both channels below −0.8 × full scale on
+    consecutive conversions) latches `F_AFE` (`afe_signature`) instead of
+    producing compliance trips or `CLIM`/`KELVIN` records from the front
+    end's own output.
+36. *Compliance during ramps.* While a ramp moves the output (`SRC`, pre-ramp,
+    end and disarm ramps) the monitor runs I conversions back to back, so a
+    compliance trip acts within about one conversion instead of up to 100 ms
+    (1 V at 10 V/s).
+37. *Calibration.* The `c_dac` window is ±1000 codes (it was ±400, narrower
+    than the DAC8552 worst case of about 580). The record stores which
+    coefficients were measured (`CAL?` `measured=`); `CAL_NOMINAL` and the
+    nominal Kelvin tolerance stay until `g_dac`, `c_dac`, `g_v`, `g_i` and
+    `r_s` are all measured. A damaged record raises warning bit 10
+    `CAL_DAMAGED`.
+38. *Session start* clears the USB transmit FIFO (`port_host_discard_tx()`) and
+    begins with an empty line, so a reopened port never receives the old
+    session's tail and `EVT HELLO` always starts a line.
+39. *VBUS detach below 3.6 V* (was 3.0 V, the top of the D+ back-feed
+    estimate, which could hold the pull-up on by itself).
+40. *ADS1256.* Init and reconfiguration send SYNC, WAKEUP, SELFCAL (§7.4); a
+    late-read timeout runs from the re-arm, so a main-loop stall of one to
+    two periods gives one late sample instead of `F_ADC_TIMEOUT`; a late
+    sample's time is the centre of the conversion it read (it was half a
+    period early); a timed-out SPI2 transfer can no longer skew every later
+    byte (stale RXNE/OVR drained at the next transfer).
+41. *USB.* Device mode is forced and confirmed before `tusb_init()`, and PA10
+    is pulled up (§4.7). The `.bin` image is filled with 0xFF, so it erases
+    the calibration sectors as build.md says.
 25. *`DISARM` and `SWP.ABORT` act on arrival.* While command parsing is held
     back (a deferred command, or no room for responses and ordered events
     because the host is not reading), a `DISARM` or `SWP.ABORT` line without

@@ -11,7 +11,9 @@ objects as the target image) on a simulation of the board:
   aborted frames, power-down bits, B ≠ 0xFFFF loads are counted);
 * `sim/model_ads1256.c` models the ADS1256 command set, registers,
   conversions, /DRDY, self-calibration and resets, and records every SBAS288K
-  timing violation (t6, t10, t11, SCLK, reads while not ready, ...);
+  timing violation (t6, t10, t11, SCLK, reads while not ready, ...) and every
+  command other than WAKEUP or RESET sent while SYNC holds the part
+  (`adc_viol_after_sync`: undocumented in the data sheet);
 * `sim/model_board.c` models the charge pump and reference gate (driven by
   the firmware's real PC5 edges), V_SWEEP, the output stage with its
   current-limit plateau, R_top/R_bot, the Kelvin attenuators, the INA128
@@ -46,6 +48,16 @@ CTL <control socket path>
   `dtr` (default 1) AND a client has the slave open".
 * An emulated MCU reset (watchdog, dead-man, `RESET`, `mcu_reset`) behaves
   like a USB re-enumeration: hosts should close and reopen the port.
+* An emulated reset re-runs `app_init()` but cannot clear the firmware's
+  static variables as the target's startup code clears `.bss`. Every module's
+  init resets its own state; the ADS1256 driver's state is reset by the POST
+  that `app_init()` starts, so a conversion the previous run left pending can
+  send one transaction to the freshly powered ADC model before that (the
+  model counts it as a command while busy). That traffic does not exist on
+  the target.
+* The device-side TX ring stands for TinyUSB's CDC TX FIFO: what the host has
+  not read stays there across a DTR drop, as on the target, and
+  `port_host_discard_tx()` clears it at a session boundary.
 
 From Python: `stage1iv.sim.SimulatorProcess` starts the simulator, opens an
 `Instrument` on the pty and gives a control client (`sim.ctl`).
