@@ -502,7 +502,9 @@ static void test_cal_save_reload_and_torn_write(void)
     TEST_ASSERT_EQUAL_STRING("OK", h_cmd(set));
     char after[400];
     snprintf(after, sizeof after, "%s", h_cmd("CAL?"));
-    TEST_ASSERT_EQUAL(0, strncmp(after, "OK CAL source=ram seq=2 measured=0x7F g_dac_uv=", 47));
+    /* ... the mask included: the nominal values CAL? printed are not
+     * measurements, so the round trip keeps 0x14 (and CAL_NOMINAL) */
+    TEST_ASSERT_EQUAL_MESSAGE(0, strncmp(after, "OK CAL source=ram seq=2 measured=0x14 g_dac_uv=", 47), after);
     TEST_ASSERT_EQUAL_STRING(before, strstr(after, " g_dac_uv="));
     TEST_ASSERT_EQUAL_STRING("OK", h_cmd("CAL.DEFAULT"));
     TEST_ASSERT_EQUAL(0, strncmp(h_cmd("CAL?"), "OK CAL source=nominal seq=2 measured=0x00 ", 42));
@@ -1364,10 +1366,12 @@ static void test_late_sample_time_is_its_conversion_centroid(void)
 }
 
 /* A host that stops reading and then closes the port leaves up to 4 KB of
- * output in TinyUSB's CDC TX FIFO, which only a bus reset clears (the
- * simulator's device-side TX ring stands for it here). The next session must
- * not receive that tail, and EVT HELLO must start a line of its own. */
-static void test_reopened_port_gets_no_stale_output(void)
+ * output in TinyUSB's CDC TX FIFO (the simulator's device-side TX ring stands
+ * for it). The firmware cannot withdraw it: TinyUSB's DWC2 driver may be
+ * sending from that FIFO (protocol.md §1). When the port is opened again
+ * that tail arrives first, cut off mid-line; the new session's empty line
+ * ends it, so EVT HELLO starts a line of its own and the host can find it. */
+static void test_reopened_port_hello_starts_a_line_after_the_old_tail(void)
 {
     TEST_ASSERT_EQUAL(0, strncmp(h_cmd("SWP.WP 0 2 STEP=0.001"), "OK SWP", 6));
     arm();
@@ -1390,8 +1394,19 @@ static void test_reopened_port_gets_no_stale_output(void)
     }
     buf[n] = 0;
     psim_set_tx_space_limit(PSIM_TX_NO_LIMIT);
-    TEST_ASSERT_EQUAL_STRING_LEN_MESSAGE("\nEVT HELLO ", (const char *)buf, 11, (const char *)buf);
-    TEST_ASSERT_NOT_NULL(strstr((const char *)buf, " disarm_reason=session_lost"));
+    const char *text = (const char *)buf;
+    const char *hello = strstr(text, "EVT HELLO ");
+    TEST_ASSERT_NOT_NULL_MESSAGE(hello, text);
+    TEST_ASSERT_NULL_MESSAGE(strstr(hello + 1, "EVT HELLO "), "more than one HELLO");
+    size_t tail = (size_t)(hello - text);
+    /* the old session's tail came first: at most the FIFO plus the newline */
+    TEST_ASSERT_TRUE_MESSAGE(tail > 3000u, "the old tail was not delivered");
+    TEST_ASSERT_TRUE(tail <= 4096u + 1u);
+    TEST_ASSERT_EQUAL_CHAR('\n', hello[-1]);
+    TEST_ASSERT_TRUE_MESSAGE(hello[-2] != '\n', "the tail ended on a line boundary: case not exercised");
+    TEST_ASSERT_NOT_NULL(strstr(hello, " disarm_reason=session_lost"));
+    /* nothing of the old session after HELLO */
+    TEST_ASSERT_NULL(strstr(hello, "\nPT "));
 }
 
 /* After a cable pull the D+ pull-up can back-feed the VBUS node through U10
@@ -1445,18 +1460,63 @@ static void test_partial_calibration_stays_nominal(void)
     app_init();
     TEST_ASSERT_TRUE(h_run_until_state(ST_DISARMED, 2000000));
     TEST_ASSERT_EQUAL(0, strncmp(h_cmd("CAL?"), "OK CAL source=stored seq=1 measured=0x40 ", 41));
-    /* the coefficients the tolerance depends on, one CAL.SET at a time */
+    /* the coefficients the tolerance depends on, one CAL.SET at a time
+     * (measured values: each a last digit away from the nominal one) */
     psim_board()->sweep_offset_v = 0.002;
-    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("CAL.SET g_dac_uv=306.401387 c_dac=32767.5"));
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("CAL.SET g_dac_uv=306.401388 c_dac=32767.5001"));
     TEST_ASSERT_TRUE(warns_cal_nominal());
-    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("CAL.SET g_v_uv=1.498587 g_i_na=12.435568 r_s=121"));
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("CAL.SET g_v_uv=1.498588 g_i_na=12.435569 r_s=121.0001"));
     TEST_ASSERT_EQUAL(0, strncmp(h_cmd("CAL?"), "OK CAL source=ram seq=1 measured=0x5F ", 38));
     TEST_ASSERT_FALSE(warns_cal_nominal());
     const char *r = h_cmd("MEAS? N=4");
     TEST_ASSERT_TRUE_MESSAGE(starts(r, "OK MEAS n=4"), r);
     TEST_ASSERT_EQUAL_UINT32(0, (unsigned)h_kv_ll(r, "flags") & PF_CAL_NOMINAL);
+    /* setting a coefficient to its nominal value (as CAL? prints it) makes it
+     * nominal again: a CAL? round trip cannot pass nominal gains off as
+     * measured ones */
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("CAL.SET r_s=121"));
+    TEST_ASSERT_EQUAL(0, strncmp(h_cmd("CAL?"), "OK CAL source=ram seq=1 measured=0x4F ", 38));
+    TEST_ASSERT_TRUE(warns_cal_nominal());
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("CAL.SET r_s=121.0001"));
+    TEST_ASSERT_FALSE(warns_cal_nominal());
     TEST_ASSERT_EQUAL_STRING("OK", h_cmd("CAL.DEFAULT"));
     TEST_ASSERT_TRUE(warns_cal_nominal());
+}
+
+/* CAL_NOMINAL needs every one of g_dac, c_dac, g_v, g_i and r_s measured (the
+ * Kelvin tolerance depends on each; r_s and g_i carry the I*R_s term): with
+ * any one of them nominal, and everything else measured, records and STAT?
+ * keep the marking. */
+static void test_each_core_coefficient_keeps_cal_nominal(void)
+{
+    static const char *const measured[7] = {
+        "g_dac_uv=306.52", "c_dac=32790.3", "g_v_uv=1.4993", "g_i_na=12.4211",
+        "r_s=118.7", "r_top=104.2", "i_plateau=0.047",
+    };
+    for (unsigned skip = 0; skip < 5u; skip++) {     /* the five CAL_M_CORE keys */
+        TEST_ASSERT_EQUAL_STRING("OK", h_cmd("CAL.DEFAULT"));
+        char set[200] = "CAL.SET";
+        for (unsigned k = 0; k < 7u; k++) {
+            if (k != skip) {
+                size_t l = strlen(set);
+                snprintf(set + l, sizeof set - l, " %s", measured[k]);
+            }
+        }
+        TEST_ASSERT_EQUAL_STRING_MESSAGE("OK", h_cmd(set), set);
+        TEST_ASSERT_EQUAL_HEX32(CAL_M_ALL & ~(1u << skip),
+                                (unsigned)h_kv_ll(h_cmd("CAL?"), "measured"));
+        TEST_ASSERT_TRUE_MESSAGE(warns_cal_nominal(), set);
+        const char *r = h_cmd("MEAS? N=1");
+        TEST_ASSERT_TRUE_MESSAGE(starts(r, "OK MEAS n=1"), r);
+        TEST_ASSERT_TRUE_MESSAGE(((unsigned)h_kv_ll(r, "flags") & PF_CAL_NOMINAL) != 0u, set);
+    }
+    /* the five alone are enough (r_top and i_plateau may stay nominal) */
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("CAL.DEFAULT"));
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("CAL.SET g_dac_uv=306.52 c_dac=32790.3 g_v_uv=1.4993"
+                                         " g_i_na=12.4211 r_s=118.7"));
+    TEST_ASSERT_EQUAL_HEX32(CAL_M_CORE, (unsigned)h_kv_ll(h_cmd("CAL?"), "measured"));
+    TEST_ASSERT_FALSE(warns_cal_nominal());
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("CAL.DEFAULT"));
 }
 
 /* A newest record that has gone bad (here: one flipped bit) is not used; the
@@ -1543,9 +1603,10 @@ int main(void)
     RUN_TEST(test_sweep_records_keep_sub_code_resolution);
     RUN_TEST(test_adc_traffic_obeys_the_data_sheet);
     RUN_TEST(test_late_sample_time_is_its_conversion_centroid);
-    RUN_TEST(test_reopened_port_gets_no_stale_output);
+    RUN_TEST(test_reopened_port_hello_starts_a_line_after_the_old_tail);
     RUN_TEST(test_vbus_backfeed_releases_the_pullup);
     RUN_TEST(test_partial_calibration_stays_nominal);
+    RUN_TEST(test_each_core_coefficient_keeps_cal_nominal);
     RUN_TEST(test_damaged_newest_record_is_reported);
     RUN_TEST(test_zero_armed_requires_zero_output);
     RUN_TEST(test_cal_save_reload_and_torn_write);

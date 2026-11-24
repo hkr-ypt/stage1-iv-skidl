@@ -696,6 +696,46 @@ static void test_calsave_pending_across_session_never_erases_armed(void)
     arm();                                /* afterwards ARM works again */
 }
 
+/* The record a CAL.SAVE writes is the one RAM held when the command was
+ * accepted. The job waits for an idle ADC and can outlive its session; the
+ * next session may change RAM meanwhile (here CAL.DEFAULT). That must neither
+ * end up in the record under the old command's timestamp nor be reported as
+ * "stored". */
+static void test_calsave_pending_across_session_saves_its_own_record(void)
+{
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("CAL.SET r_s=118"));
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("CFG adc_rate=2.5"));
+    h_run_us(3000000);
+    psim_obs_t o;
+    psim_observe(&o);
+    uint32_t e0 = o.cal_erases;
+    h_send("CAL.SAVE TS=1");
+    h_run_us(200);
+    TEST_ASSERT_TRUE_MESSAGE(engine_job_active(), "CAL.SAVE should wait for the conversion in flight");
+    psim_set_dtr(false);                  /* the host closes the port ... */
+    h_run_us(1000);
+    psim_set_dtr(true);                   /* ... and a new session opens it */
+    h_run_us(1000);
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("CAL.DEFAULT"));
+    uint64_t t0 = psim_time_us();
+    do {
+        h_run_us(1000);
+        psim_observe(&o);
+    } while (o.cal_erases == e0 && psim_time_us() - t0 < 3000000u);
+    TEST_ASSERT_TRUE_MESSAGE(o.cal_erases != e0, "the save never ran");
+    h_run_us(100000);
+    TEST_ASSERT_FALSE(engine_job_active());
+    char c[400];
+    snprintf(c, sizeof c, "%s", h_cmd("CAL?"));
+    TEST_ASSERT_EQUAL_MESSAGE(0, strncmp(c, "OK CAL source=nominal ", 22), c);
+    psim_mcu_reset();
+    app_init();
+    TEST_ASSERT_TRUE(h_run_until_state(ST_DISARMED, 2000000));
+    snprintf(c, sizeof c, "%s", h_cmd("CAL?"));
+    TEST_ASSERT_EQUAL_MESSAGE(0, strncmp(c, "OK CAL source=stored seq=1 measured=0x10 ", 41), c);
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(c, " r_s=118.0000"), c);
+}
+
 /* RESET is a DISARMED/FAULT command; an ARM sent before the reset executes
  * is refused, so the reset never hits an armed output. */
 static void test_arm_refused_while_reset_pending(void)
@@ -922,6 +962,7 @@ int main(void)
     RUN_TEST(test_dac_scrub_only_after_the_scrub_period);
     RUN_TEST(test_compliance_at_zero_is_reported_once);
     RUN_TEST(test_calsave_pending_across_session_never_erases_armed);
+    RUN_TEST(test_calsave_pending_across_session_saves_its_own_record);
     RUN_TEST(test_arm_refused_while_reset_pending);
     RUN_TEST(test_reset_writes_the_zero_pair_first);
     RUN_TEST(test_arm_answers_fault_when_zero_write_fails);

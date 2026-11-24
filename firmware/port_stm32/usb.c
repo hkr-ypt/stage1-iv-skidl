@@ -48,10 +48,19 @@ bool stm32_usb_init(void)
     }
     NVIC_SetPriority(OTG_FS_IRQn, PRIO_USB);
     tusb_rhport_init_t init = { .role = TUSB_ROLE_DEVICE, .speed = TUSB_SPEED_FULL };
-    s_usb_ok = tusb_init(0, &init)
-            && stm32_wait_reg(&USB_OTG_FS->GINTSTS, USB_OTG_GINTSTS_CMOD, 0u, USB_MODE_TIMEOUT_US);
+    if (!tusb_init(0, &init)) {
+        s_usb_ok = false;
+        return false;
+    }
+    s_usb_ok = stm32_wait_reg(&USB_OTG_FS->GINTSTS, USB_OTG_GINTSTS_CMOD, 0u, USB_MODE_TIMEOUT_US);
     if (s_usb_ok) {
         tud_disconnect();
+    } else {
+        /* Initialised but not in device mode: USB stays off (tud_task() and
+         * the soft connect never run), so the stack's interrupt is masked as
+         * well. tusb_deinit() is not used: its core reset busy-waits without
+         * a bound on the core that just misbehaved. */
+        NVIC_DisableIRQ(OTG_FS_IRQn);
     }
     return s_usb_ok;
 }
@@ -98,17 +107,6 @@ void port_host_flush(void)
 {
     if (s_usb_ok) {
         (void)tud_cdc_write_flush();
-    }
-}
-
-/* The CDC stream copies from its FIFO into a 64-byte endpoint buffer in
- * thread context (tu_edpt_stream_write_xfer), so the FIFO is never touched by
- * the OTG interrupt and can be cleared here; a packet already in the endpoint
- * still goes out. */
-void port_host_discard_tx(void)
-{
-    if (s_usb_ok) {
-        (void)tud_cdc_write_clear();
     }
 }
 

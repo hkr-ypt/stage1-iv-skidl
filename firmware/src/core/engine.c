@@ -175,6 +175,8 @@ static struct {
     uint32_t     arg_ts;
     bool         arg_has_note;
     char         arg_note[CAL_NOTE_LEN];
+    cal_coeffs_t arg_cal;       /* CAL.SAVE: the record as the command found it */
+    uint32_t     arg_measured;
     job_result_t res;
     bool         have;        /* single job conversion arrived */
     ads_sample_t smp;
@@ -251,10 +253,10 @@ const char *engine_cal_source_name(void)
     }
 }
 
-void engine_cal_set(const cal_coeffs_t *c, uint32_t measured)
+void engine_cal_set(const cal_coeffs_t *c, uint32_t given, uint32_t measured)
 {
     s_cal = *c;
-    s_cal_measured |= measured & CAL_M_ALL;
+    s_cal_measured = ((s_cal_measured & ~given) | (measured & given)) & CAL_M_ALL;
     s_cal_src = CALSRC_RAM;
 }
 
@@ -281,14 +283,18 @@ void engine_cal_reload(void)
                                                                          : CALSRC_NOMINAL;
 }
 
-err_t engine_cal_save(uint32_t timestamp, const char *note, uint32_t *seq)
+err_t engine_cal_save(const cal_coeffs_t *c, uint32_t measured, uint32_t timestamp,
+                      const char *note, uint32_t *seq)
 {
     app_note_long_op();
-    err_t e = calib_save(&s_cal, s_cal_measured, timestamp, note, seq);
+    err_t e = calib_save(c, measured, timestamp, note, seq);
     cal_coeffs_t check;
     uint32_t seq_now = 0;
     bool stored = calib_load(&check, &s_scan, &seq_now, NULL);
-    if (e == E_OK && stored && seq_now == *seq) {
+    /* RAM is "stored" only if it still holds what was saved: a CAL.SAVE can
+     * outlive its session, and the next one may have changed RAM meanwhile. */
+    if (e == E_OK && stored && seq_now == *seq
+        && memcmp(&s_cal, c, sizeof s_cal) == 0 && s_cal_measured == measured) {
         s_cal_src = CALSRC_STORED;
         s_cal_seq = seq_now;
     }
@@ -1431,6 +1437,11 @@ err_t engine_cal_save_start(uint32_t timestamp, const char *note)
         strncpy(s_job.arg_note, note, CAL_NOTE_LEN - 1u);
         s_job.arg_note[CAL_NOTE_LEN - 1u] = '\0';
     }
+    /* Save what RAM holds now, not when the job runs: the job waits for an
+     * idle ADC and can outlive its session, whose successor may CAL.SET,
+     * CAL.DEFAULT or CAL.RELOAD meanwhile. */
+    s_job.arg_cal = s_cal;
+    s_job.arg_measured = s_cal_measured;
     return E_OK;
 }
 
@@ -1451,7 +1462,8 @@ static void job_calsave(void)
         return;
     }
     uint32_t seq = 0;
-    err_t e = engine_cal_save(s_job.arg_ts, s_job.arg_has_note ? s_job.arg_note : NULL, &seq);
+    err_t e = engine_cal_save(&s_job.arg_cal, s_job.arg_measured, s_job.arg_ts,
+                              s_job.arg_has_note ? s_job.arg_note : NULL, &seq);
     s_job.res.seq = seq;
     job_finish(e, e == E_RANGE ? "implausible coefficients" : "erase/program/verify failed");
 }

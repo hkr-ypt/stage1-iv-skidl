@@ -54,12 +54,14 @@ typedef struct {
     uint32_t     crc;           /* CRC-32 (IEEE) of all preceding bytes    */
 } cal_record_t;
 
-/* Which coefficients were measured (set with CAL.SET) rather than nominal:
- * bit k is the k-th CAL.SET key. A record stores them with CAL_MEASURED_MARK;
- * a record written before the mask existed (field 0) loads as fully measured,
- * its old meaning. While any CAL_M_CORE coefficient is nominal, records carry
- * CAL_NOMINAL and the classifier keeps the nominal Kelvin tolerance: a
- * partial calibration (bring-up: i_plateau alone) is not a calibration. */
+/* Which coefficients were measured (set with CAL.SET to a value other than
+ * the nominal one) rather than nominal: bit k is the k-th CAL.SET key and the
+ * k-th field of cal_coeffs_t. A record stores them with CAL_MEASURED_MARK; in
+ * a record written before the mask existed (field 0) a coefficient counts as
+ * measured unless it is bit-equal to the nominal value. While any CAL_M_CORE
+ * coefficient is nominal, records carry CAL_NOMINAL and the classifier keeps
+ * the nominal Kelvin tolerance: a partial calibration (bring-up: i_plateau
+ * alone) is not a calibration. */
 #define CAL_M_G_DAC        (1u << 0)
 #define CAL_M_C_DAC        (1u << 1)
 #define CAL_M_G_V          (1u << 2)

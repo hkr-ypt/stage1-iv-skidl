@@ -353,7 +353,6 @@ static void reset_io(void)
 {
     ring_clear(&s_rx);
     ring_clear(&s_tx);
-    port_host_discard_tx();
     s_p.line_len = 0;
     s_p.line_long = false;
     s_p.line_bad = false;
@@ -378,10 +377,13 @@ void proto_session_start(void)
     reset_io();
     results_skip_unsent();
     s_p.session = true;
-    /* An empty line first: a packet of the old session already loaded into
-     * the IN endpoint (up to 64 bytes, possibly ending mid-line) cannot be
-     * withdrawn; the newline ends it, so EVT HELLO always starts a line.
-     * Hosts ignore empty lines (protocol.md §2). */
+    /* An empty line first. Output of the old session that the port already
+     * took cannot be withdrawn: a host that stopped reading and closed the
+     * port gets it when it opens the port again (on the target, up to the
+     * 4 KB CDC TX FIFO, which TinyUSB's DWC2 driver may be sending from).
+     * It can end mid-line; the newline ends it, so EVT HELLO always starts
+     * a line. Hosts ignore empty lines (protocol.md §2) and everything
+     * before the session's EVT HELLO (§1). */
     (void)tx_line("", 0u);
 }
 

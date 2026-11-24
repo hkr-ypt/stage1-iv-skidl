@@ -274,8 +274,30 @@ static void test_c_dac_window_holds_the_dac8552_worst_case(void)
     }
 }
 
-/* Which coefficients were measured survives a save and a load; a record
- * written before the mask existed (field 0) loads as fully measured. */
+/* A record of the format before the mask existed (field 0), stored in
+ * sector 0 of an otherwise erased flash; returns the mask calib_load gives. */
+static uint32_t load_legacy(const cal_coeffs_t *c, uint32_t seq)
+{
+    cal_record_t r;
+    uint32_t got_seq, m = 0xFFu;
+    cal_coeffs_t back;
+    calib_scan_t scan;
+    calib_build_record(&r, c, CAL_M_ALL, seq, k_uid, 0, NULL);
+    r.measured = 0u;
+    r.crc = crc32_ieee(&r, offsetof(cal_record_t, crc));
+    TEST_ASSERT_EQUAL(CALREC_VALID, calib_check(&r, k_uid));
+    fake_flash_reset();
+    memcpy(fake_flash_mem(0), &r, sizeof r);
+    TEST_ASSERT_TRUE(calib_load(&back, &scan, &got_seq, &m));
+    TEST_ASSERT_EQUAL_UINT32(seq, got_seq);
+    TEST_ASSERT_EQUAL_MEMORY(c, &back, sizeof back);
+    return m;
+}
+
+/* Which coefficients were measured survives a save and a load. In a record
+ * written before the mask existed (field 0) a coefficient counts as measured
+ * unless it is bit-equal to the nominal one: the bring-up record (i_plateau
+ * alone) must not load as a full calibration. */
 static void test_measured_mask_round_trip_and_legacy_records(void)
 {
     uint32_t seq, m = 0xFFu;
@@ -289,17 +311,21 @@ static void test_measured_mask_round_trip_and_legacy_records(void)
     TEST_ASSERT_EQUAL(E_OK, calib_save(&c, CAL_M_CORE | CAL_M_I_PLATEAU | 0xF00u, 2, NULL, &seq));
     TEST_ASSERT_TRUE(calib_load(&back, &scan, &seq, &m));
     TEST_ASSERT_EQUAL_HEX32(CAL_M_CORE | CAL_M_I_PLATEAU, m);   /* only CAL_M_ALL bits */
-    /* a record of the earlier format: measured (then reserved0) = 0 */
-    cal_record_t r;
-    calib_build_record(&r, &c, CAL_M_I_PLATEAU, 3, k_uid, 0, NULL);
-    r.measured = 0u;
-    r.crc = crc32_ieee(&r, offsetof(cal_record_t, crc));
-    TEST_ASSERT_EQUAL(CALREC_VALID, calib_check(&r, k_uid));
-    fake_flash_reset();
-    memcpy(fake_flash_mem(0), &r, sizeof r);
-    TEST_ASSERT_TRUE(calib_load(&back, &scan, &seq, &m));
-    TEST_ASSERT_EQUAL_UINT32(3u, seq);
-    TEST_ASSERT_EQUAL_HEX32(CAL_M_ALL, m);
+    /* records of the earlier format: measured (then reserved0) = 0 */
+    cal_coeffs_t l;
+    calib_nominal(&l);
+    l.i_plateau = 0.045;                                   /* bring-up record */
+    TEST_ASSERT_EQUAL_HEX32(CAL_M_I_PLATEAU, load_legacy(&l, 3));
+    TEST_ASSERT_EQUAL_HEX32(CAL_M_R_S, load_legacy(&c, 4)); /* r_s alone */
+    l.g_dac *= 1.0004;                                     /* a full calibration */
+    l.c_dac += 12.3;
+    l.g_v *= 0.9993;
+    l.g_i *= 1.0011;
+    l.r_s = 118.7;
+    l.r_top = 104.2;
+    TEST_ASSERT_EQUAL_HEX32(CAL_M_ALL, load_legacy(&l, 5));
+    calib_nominal(&l);                                     /* nominal, as saved */
+    TEST_ASSERT_EQUAL_HEX32(0u, load_legacy(&l, 6));
 }
 
 int main(void)

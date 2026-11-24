@@ -88,8 +88,11 @@ static bool within_rel(double x, double nominal, double rel)
 /* The zero code moves with the DAC8552 errors (SLAS430, -40..105 C): zero-code
  * error 12 mV, gain error 0.2 % FSR at mid-scale 2.5 mV and half of channel
  * B's 0.5 % FSR full-scale error 6.25 mV, i.e. 20.75 mV or 544 codes of
- * 38.15 uV, about 580 with the R1/R2 ratio and the difference amplifier. A
- * dropped or extra digit still lands far outside. */
+ * 38.15 uV; with INL, the R1/R2 ratio, the difference amplifier's resistors
+ * and the OPA2277 offsets the corner case is about 615 codes. A dropped or
+ * extra digit still lands far outside (a thousands-digit slip can land
+ * inside; iv-cal computes c_dac, and a calibrated board with a wrong c_dac
+ * flags KELVIN on every point). */
 #define C_DAC_WINDOW_CODES 1000.0
 
 bool calib_plausible(const cal_coeffs_t *c)
@@ -230,6 +233,37 @@ static void scan_port(const uint32_t uid[3], calib_scan_t *scan)
     }
 }
 
+/* A record written before the mask existed (no CAL_MEASURED_MARK): a
+ * coefficient CAL.SET never touched is still the exact nominal double, so it
+ * is not counted as measured. The bring-up record (i_plateau alone) thereby
+ * stays CAL_NOMINAL; a real calibration's fitted values are never bit-equal
+ * to the nominal ones. */
+static const double *coeff(const cal_coeffs_t *c, unsigned k)
+{
+    switch (k) {
+    case 0:  return &c->g_dac;
+    case 1:  return &c->c_dac;
+    case 2:  return &c->g_v;
+    case 3:  return &c->g_i;
+    case 4:  return &c->r_s;
+    case 5:  return &c->r_top;
+    default: return &c->i_plateau;
+    }
+}
+
+static uint32_t legacy_measured(const cal_coeffs_t *c)
+{
+    cal_coeffs_t nom;
+    calib_nominal(&nom);
+    uint32_t m = 0u;
+    for (unsigned k = 0; k < 7u; k++) {
+        if (memcmp(coeff(c, k), coeff(&nom, k), sizeof(double)) != 0) {
+            m |= 1u << k;   /* CAL_M_* follow the field order */
+        }
+    }
+    return m;
+}
+
 bool calib_load(cal_coeffs_t *out, calib_scan_t *scan_out, uint32_t *seq_out,
                 uint32_t *measured_out)
 {
@@ -246,7 +280,8 @@ bool calib_load(cal_coeffs_t *out, calib_scan_t *scan_out, uint32_t *seq_out,
         if (check_bytes(port_cal_sector((unsigned)scan.newest), uid, &rec) == CALREC_VALID) {
             *out = rec.c;
             stored = true;
-            measured = (rec.measured & CAL_MEASURED_MARK) ? (rec.measured & CAL_M_ALL) : CAL_M_ALL;
+            measured = (rec.measured & CAL_MEASURED_MARK) ? (rec.measured & CAL_M_ALL)
+                                                          : legacy_measured(&rec.c);
         }
     }
     if (!stored) {

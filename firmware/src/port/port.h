@@ -71,10 +71,6 @@ size_t   port_host_read(uint8_t *buf, size_t max);        /* non-blocking       
 size_t   port_host_write(const uint8_t *buf, size_t n);   /* non-blocking, partial */
 size_t   port_host_write_space(void);
 void     port_host_flush(void);
-/* Drop output queued in the port that the bus has not taken yet (TinyUSB's
- * CDC TX FIFO; a host that closes the port leaves it there): at a session
- * boundary it belongs to the old session. Input is not touched. */
-void     port_host_discard_tx(void);
 void     port_usb_service(void);         /* tud_task(), bounded                      */
 uint32_t port_vbus_mv(void);             /* latest VBUS estimate (PA0 x 2), mV       */
 bool     port_host_configured(void);     /* enumerated and not suspended             */
