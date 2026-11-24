@@ -538,9 +538,14 @@ board_model_t *psim_board(void)
     return &S.board;
 }
 
+static bool host_configured(void);
+
 size_t psim_host_take_tx(uint8_t *buf, size_t max)
 {
     ensure();
+    if (!host_configured()) {
+        return 0u;   /* no link (cable out, unconfigured): the host reads nothing */
+    }
     return ring_pop(&s_tx, buf, max);
 }
 
@@ -551,20 +556,16 @@ void psim_host_give_rx(const uint8_t *buf, size_t n)
     S.ext.rx_dropped += (uint64_t)(n - k);
 }
 
-static void link_update(void);
-
 void psim_set_vbus_mv(uint32_t mv)
 {
     ensure();
     S.vbus_mv = mv;
-    link_update();
 }
 
 void psim_set_configured(bool c)
 {
     ensure();
     S.configured_flag = c;
-    link_update();
 }
 
 void psim_set_dtr(bool d)
@@ -995,10 +996,15 @@ static bool host_configured(void)
     return S.configured_flag && S.connected && S.vbus_mv >= VBUS_DETACH_MV;
 }
 
-/* The link coming up again (configured 0 -> 1, VBUS back, a soft reconnect)
- * is a re-enumeration on the target: SET_CONFIGURATION runs TinyUSB's
+/* The link coming up again as the firmware sees it (port_host_configured()
+ * after a pass saw it down, or the firmware's soft reconnect) is a
+ * re-enumeration on the target: SET_CONFIGURATION runs TinyUSB's
  * cdcd_open(), which clears the CDC TX FIFO (CFG_TUD_CDC_TX_PERSISTENT 0),
- * so the old tail is gone. A DTR drop alone keeps it (protocol.md 1). */
+ * so the old tail is gone. Edges are taken only where the firmware looks: a
+ * VBUS or configuration glitch no pass sees leaves the session and its
+ * output alone, as the target would. A DTR drop alone keeps the tail
+ * (protocol.md 1); a suspend/resume, which keeps it on the target too, is
+ * not modelled. */
 static void link_update(void)
 {
     bool up = host_configured();

@@ -1476,6 +1476,40 @@ static void test_reconfiguration_clears_the_old_tail(void)
     TEST_ASSERT_EQUAL_STRING_LEN_MESSAGE("\nEVT HELLO ", text, 11, text);
 }
 
+/* A VBUS dip that no pass samples (the firmware reads VBUS once per pass,
+ * ADC1 every 10 ms) is no re-enumeration: the session and its unread
+ * output stay, as on the target. */
+static void test_unseen_vbus_dip_keeps_the_sessions_output(void)
+{
+    h_send("*IDN?");
+    for (int k = 0; k < 200; k++) {          /* answered, not read */
+        app_pass();
+    }
+    size_t pending = psim_host_tx_pending();
+    TEST_ASSERT_TRUE(pending > 0u);
+    psim_set_vbus_mv(0);
+    psim_set_vbus_mv(5000);                  /* no pass in between */
+    TEST_ASSERT_EQUAL_UINT32(pending, psim_host_tx_pending());
+    const char *text = reopen_and_read();    /* DTR is still up: just reads */
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(text, "OK IDN "), text);
+}
+
+/* With the cable out the host cannot read the device; what is left is
+ * cleared when the link comes back (test above). */
+static void test_host_reads_nothing_while_the_link_is_down(void)
+{
+    h_send("*IDN?");
+    for (int k = 0; k < 200; k++) {
+        app_pass();
+    }
+    TEST_ASSERT_TRUE(psim_host_tx_pending() > 0u);
+    psim_set_vbus_mv(0);
+    uint8_t buf[64];
+    TEST_ASSERT_EQUAL_UINT32(0, psim_host_take_tx(buf, sizeof buf));
+    psim_set_vbus_mv(5000);
+    TEST_ASSERT_TRUE(psim_host_take_tx(buf, sizeof buf) > 0u);
+}
+
 /* The printed value with its last digit moved by delta (all CAL? values are
  * positive fixed-point numbers). */
 static void step_printed(const char *v, int delta, char *out, size_t cap)
@@ -1721,6 +1755,8 @@ int main(void)
     RUN_TEST(test_reopened_port_hello_starts_a_line_after_the_old_tail);
     RUN_TEST(test_cable_replug_clears_the_old_tail);
     RUN_TEST(test_reconfiguration_clears_the_old_tail);
+    RUN_TEST(test_unseen_vbus_dip_keeps_the_sessions_output);
+    RUN_TEST(test_host_reads_nothing_while_the_link_is_down);
     RUN_TEST(test_measured_rule_matches_the_cal_set_resolution);
     RUN_TEST(test_vbus_backfeed_releases_the_pullup);
     RUN_TEST(test_partial_calibration_stays_nominal);

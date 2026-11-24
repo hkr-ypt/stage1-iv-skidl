@@ -60,10 +60,14 @@ CTL <control socket path>
   closes the pty, and reaches the next session ahead of its empty line and
   `EVT HELLO`, cut off mid-line, as on the target (protocol.md §1); what the
   departed client's pty queues held is dropped, like a host's tty buffers.
-  A re-enumeration clears it, as SET_CONFIGURATION does in TinyUSB: any
-  return of the link (`configured` 0 → 1, VBUS back, the firmware's soft
-  reconnect). The one 64-byte packet the target's OTG FIFO can also hold is
-  not modelled.
+  A re-enumeration clears it, as SET_CONFIGURATION does in TinyUSB: a
+  return of the link that the firmware sees (`configured` 0 → 1 across a
+  loop pass, or its soft reconnect after it saw VBUS go); a VBUS or
+  `configured` glitch no pass sees leaves the session and its output alone.
+  While the link is down the host reads nothing. `configured` models a
+  re-enumeration only: a suspend/resume, which on the target ends the
+  session but keeps the FIFO, is not modelled. The one 64-byte packet the
+  target's OTG FIFO can also hold is not modelled either.
 
 From Python: `stage1iv.sim.SimulatorProcess` starts the simulator, opens an
 `Instrument` on the pty and gives a control client (`sim.ctl`).
@@ -75,7 +79,7 @@ UNIX stream socket; one command per line; reply `OK [key=value ...]` or
 
 | Command | Effect |
 |---|---|
-| `vbus <mV>` | VBUS at PA0 ×2 (attach > 3800, detach < 3000) |
+| `vbus <mV>` | VBUS at PA0 ×2 (attach > 3800 for 20 ms, detach < 3600) |
 | `dtr 0\|1`, `configured 0\|1` | host-side session flags |
 | `dut open\|short\|resistor <Ω>\|diode <Is> <n> <Rs>\|cell <V> <Ω>\|capacitor <F>` | device under test (capacitor = open at DC) |
 | `rails <pos 0\|1> <neg 0\|1>` | ±15 V present (a missing rail opens U12 and gives the AFE signature) |
