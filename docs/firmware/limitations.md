@@ -100,10 +100,10 @@ The user-visible ones:
 * Every session starts with an empty line before `EVT HELLO` (protocol.md §1).
   Output a host left unread when it closed the port (up to 4 KB plus one
   64-byte packet) is not discarded: it arrives ahead of the next session's
-  `EVT HELLO`, and hosts skip it. If the session's `HELLO` reaches the host
-  library more than 0.1 s after an old `HELLO` in that tail (a host too busy
-  to read), its first command sees a restart (`SessionLost`): open the port
-  again.
+  `EVT HELLO`, and hosts skip it. If the host library's input pauses for
+  0.1 s between an old `HELLO` in that tail and the session's own (a host
+  too busy to read), it sends its first command too early and then sees the
+  new `HELLO` as a restart (`SessionLost`): open the port again.
 * `CAL_NOMINAL` stays set until `g_dac`, `c_dac`, `g_v`, `g_i` and `r_s` have
   all been set with `CAL.SET` to measured values (a value equal to the
   nominal one, as `CAL?` prints it, counts as nominal); a partial

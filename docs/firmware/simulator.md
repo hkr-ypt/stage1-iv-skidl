@@ -60,8 +60,9 @@ CTL <control socket path>
   closes the pty, and reaches the next session ahead of its empty line and
   `EVT HELLO`, cut off mid-line, as on the target (protocol.md §1); what the
   departed client's pty queues held is dropped, like a host's tty buffers.
-  A re-enumeration (`configured` 0 → 1) clears it, as SET_CONFIGURATION does
-  in TinyUSB. The one 64-byte packet the target's OTG FIFO can also hold is
+  A re-enumeration clears it, as SET_CONFIGURATION does in TinyUSB: any
+  return of the link (`configured` 0 → 1, VBUS back, the firmware's soft
+  reconnect). The one 64-byte packet the target's OTG FIFO can also hold is
   not modelled.
 
 From Python: `stage1iv.sim.SimulatorProcess` starts the simulator, opens an

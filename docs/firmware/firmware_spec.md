@@ -1864,7 +1864,9 @@ audited hardware requires; a regression test accompanies each (verification.md).
     transfer).
 42. *USB.* Device mode is forced and confirmed before `tusb_init()`, and PA10
     is pulled up (§4.7); a core that is not in device mode after
-    `tusb_init()` leaves USB off with its interrupt masked. The `.bin` image
+    `tusb_init()` leaves USB off: interrupt masked, FS PHY powered down
+    (GCCFG.PWRDWN = 0) and soft-disconnected (DCTL.SDIS = 1, effective only
+    should the core reach device mode). The `.bin` image
     is filled with 0xFF, so it erases the calibration sectors as build.md
     says.
 **Hardware documentation updated with this work:** `bringup_checklist.md`

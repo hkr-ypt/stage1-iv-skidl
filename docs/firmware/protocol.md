@@ -48,8 +48,10 @@ command, field or error code is a protocol change and increments
   after a `HELLO` and takes the last `HELLO` as the session's; only then does
   it send its first command. A `HELLO` that arrives after a command was sent
   means a new session: the device restarted or the session was lost, and
-  commands in flight may be lost. The host library does exactly this (a
-  0.1 s pause; events before the last `HELLO` are dropped as well).
+  commands in flight may be lost. The host library does exactly this when
+  it waits for `HELLO` at open (`Instrument.open_serial`, or `hello_timeout`
+  > 0): it waits until no line has arrived for 0.1 s after a `HELLO`, and
+  drops the events before the last `HELLO` as well.
 
 ## 2. Framing
 
@@ -245,7 +247,7 @@ ends with `status=compliance trip_idx=<idx> trip_i_a=<A>`; with
 
 | Command | States | Effect / response |
 |---|---|---|
-| `CAL?` | any | `OK CAL source=<stored\|nominal\|ram> seq=<n> measured=0x<hh> g_dac_uv=<x> c_dac=<x> g_v_uv=<x> g_i_na=<x> r_s=<x> r_top=<x> i_plateau=<x>` `seq`: the newest stored record (0: none). `source`: `stored` = RAM holds that record; `ram` = RAM differs from it (changed by `CAL.SET`, or an older record reloaded while a `CAL.SAVE` from an earlier session was still pending); `nominal` = the nominal constants. `measured`: which coefficients were set with `CAL.SET` to a value other than the nominal one, bit k = the k-th key in this order (0x7F: all); saved with the record. While any of bits 0–4 is clear, records carry `CAL_NOMINAL` and the nominal Kelvin tolerance applies |
+| `CAL?` | any | `OK CAL source=<stored\|nominal\|ram> seq=<n> measured=0x<hh> g_dac_uv=<x> c_dac=<x> g_v_uv=<x> g_i_na=<x> r_s=<x> r_top=<x> i_plateau=<x>` `seq`: the newest stored record (0: none). `source`: `stored` = RAM holds that record; `ram` = RAM was changed by `CAL.SET` since the last load or save (its values may still equal the record), or holds an older record reloaded while a `CAL.SAVE` from an earlier session was still pending; `nominal` = the nominal constants. `measured`: which coefficients were set with `CAL.SET` to a value other than the nominal one, bit k = the k-th key in this order (0x7F: all); saved with the record. While any of bits 0–4 is clear, records carry `CAL_NOMINAL` and the nominal Kelvin tolerance applies |
 | `CAL.SET key=value ...` | DISARMED | Sets RAM coefficients (keys as in `CAL?`, units and resolutions below) and marks them measured, except a key set to its nominal value at that resolution (as `CAL?` prints it), which counts as nominal: a `CAL?` round trip keeps the mask (a measured value that happens to equal the nominal one at that resolution is entered one step away; `iv-cal` does this). Rejected with `ERR RANGE implausible coefficients` if the merged set is outside the plausibility window, `ERR ARG <key> inexact` beyond the resolution. `OK` |
 | `CAL.SAVE TS=<unix seconds> [NOTE=<word>]` | DISARMED, ≥ 100 ms after the last heartbeat edge | Deferred. Waits for the ADC to be idle, writes the coefficients RAM held when the command was accepted (also if the job outlives its session) to the alternate flash sector and verifies: `OK seq=<n>`, `ERR FLASH erase/program/verify failed`, `ERR RANGE implausible coefficients`. `NOTE` ≤ 31 characters |
 | `CAL.DEFAULT` | DISARMED | RAM coefficients ← nominal, none marked measured (not saved): `OK` |

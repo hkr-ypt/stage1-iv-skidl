@@ -60,16 +60,18 @@ initial 0.1 % tolerance; their drift over temperature comes on top, which is
 why the window keeps its margin. A slip in the thousands digit (about
 0.31 V of output error) can land inside the window. `iv-cal` computes
 `c_dac` itself, so only a value typed by hand is at risk. On a calibrated
-board such an error flags `KELVIN` on points below about 0.8·`i_plateau`;
-nearer the plateau it can show as `CLIM` instead, and above about 55 mA
-not at all.
+board such an error flags `KELVIN` on points below about 0.8·`i_plateau`.
+Nearer the plateau it depends on the polarity: where the offset shortens the
+output the points show `CLIM` (a false current-limit flag), on the other
+polarity they stay `KELVIN`; above about 55 mA nothing is flagged.
 
 ## 3. Storage
 
 A 128-byte record (magic `CCA1`, version 1, size, sequence, MCU UID,
 host timestamp, the measured-coefficient bits (`0x80000000` | bit k for the
 k-th `CAL.SET` key; a record written before this field existed holds 0 there,
-and its coefficients count as measured unless bit-equal to the nominal ones), the seven coefficients as IEEE doubles, a
+and its coefficients count as measured by the `CAL.SET` rule: unless equal to
+the nominal value at `CAL.SET` resolution), the seven coefficients as IEEE doubles, a
 32-byte note, CRC-32/IEEE) in flash sector 1 or 2 (16 KB each). A save erases the sector
 that does **not** hold the newest valid record, programs, reads back and
 verifies; an interrupted erase or program therefore never destroys the
