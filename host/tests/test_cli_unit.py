@@ -70,9 +70,11 @@ def test_device_not_found_is_a_message_not_a_traceback(no_ports, tmp_path, capsy
     (["--wp", "0", "1", "-0.5", "--step", "0.3"], "suggest step=0.25"),     # GridError
     (["--wp", "0", "x1", "--step", "0.5"], "not a decimal number"),
     (["--wp", "0", "11", "--step", "1"], "10 V"),
-    (["--list", "/nonexistent/points.txt"], "No such file"),
+    (["--list", "{missing}"], "No such file"),          # {missing}: a file under tmp_path
 ])
 def test_definition_errors_are_messages(no_ports, tmp_path, capsys, argv, text):
+    missing = str(tmp_path / "missing" / "points.txt")
+    argv = [missing if a == "{missing}" else a for a in argv]
     rc = cli.sweep_main(argv + ["--out", str(tmp_path / "x")])
     assert rc == 1
     err = capsys.readouterr().err
