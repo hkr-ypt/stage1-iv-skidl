@@ -122,7 +122,8 @@ class SimControl:
         self.send("configured", _b(on))
 
     def tx_limit(self, nbytes: int | None) -> None:
-        """Limit the host-side transmit space (emulates a stalled host); None = no limit."""
+        """Limit the device's transmit space (0 emulates a stalled host);
+        None = the default, the target's 4 KB CDC TX FIFO."""
         self.send("tx_limit", -1 if nbytes is None else int(nbytes))
 
     # ---- DUT and board
@@ -158,7 +159,8 @@ class SimControl:
         self.send("force_open", _b(on))
 
     def ilim(self, amps: float) -> None:
-        """OPA548 current-limit plateau in A."""
+        """U5 current-limit plateau in A (symmetric in the model; the OPA547T's
+        real one is expected at 40...65 mA, sinking higher)."""
         self.send("ilim", repr(float(amps)))
 
     def noise(self, codes: float) -> None:

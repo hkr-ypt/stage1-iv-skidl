@@ -42,7 +42,11 @@
  *    self-calibration.
  *  - ORDER = 1 sends conversion data LSB first within each byte (p.30).
  *  - After a calibration completes, DRDY falls with settled data and the part
- *    keeps converting at 1/DR (also after SYNC + SELFCAL).
+ *    keeps converting at 1/DR.
+ *  - SYNC stops the part until WAKEUP "completes SYNC" (p.27, Table 24). The
+ *    data sheet does not say what any other command does in that state, so
+ *    one other than WAKEUP or RESET is counted (after_sync) and then executed
+ *    as usual (a calibration ends the hold).
  *
  * Not modelled: RDATAC (counted as unknown_cmd so a test catches its use),
  * the SCLK reset pattern and the 32-DRDY-period SCLK timeout, BUFEN/SDCS
@@ -156,6 +160,8 @@ struct adsm {
     /* faults */
     adsm_stuck_t stuck;
     bool    drdy_dead;
+    bool    sync_hold;      /* SYNC received, no WAKEUP yet          */
+    bool    ignore_selfcal; /* fault: SELFCAL does nothing           */
     double  noise_sigma;
     uint64_t rng;
     bool    gauss_have;
@@ -292,6 +298,7 @@ static void start_cal(adsm_t *m, double t_begin, double dur)
     m->busy_end = t_begin + dur;
     m->running = false;
     m->standby = false;
+    m->sync_hold = false;
 }
 
 static void cal_complete(adsm_t *m, double t)
@@ -358,6 +365,7 @@ static void do_reset(adsm_t *m, bool keep_clk)
     m->io_w = 0xE0;
     m->running = false;
     m->standby = false;
+    m->sync_hold = false;
     m->busy = false;
     m->data_valid = false;
     m->data_read = false;
@@ -456,7 +464,11 @@ static uint8_t command_byte(adsm_t *m, uint8_t b, double ts, double te)
         m->t11_need = 0.0;
         return 0xFF;
     }
+    if (m->sync_hold && b != 0x00 && b != 0xFF && b != 0xFE) {
+        m->v.after_sync++;    /* SYNC not completed by WAKEUP (p.27) */
+    }
     if (b == 0x00 || b == 0xFF) {                         /* WAKEUP */
+        m->sync_hold = false;
         if (!m->running) {
             double first = rate_row(m->drate)->t18_us + (m->standby ? ONESHOT_EXTRA_US : 0.0);
             m->running = true;
@@ -482,9 +494,11 @@ static uint8_t command_byte(adsm_t *m, uint8_t b, double ts, double te)
         m->ps = P_WREG_N;
     } else if (b == 0xF0) {                               /* SELFCAL */
         advance_to(m, te);
-        reset_calregs(m);
-        start_cal(m, te, cal_time_us(m));
-        m->selfcals++;
+        if (!m->ignore_selfcal) {
+            reset_calregs(m);
+            start_cal(m, te, cal_time_us(m));
+            m->selfcals++;
+        }
         end_command(m, te, T11_SHORT_US);
     } else if (b >= 0xF1 && b <= 0xF4) {                  /* other calibrations */
         advance_to(m, te);
@@ -493,6 +507,7 @@ static uint8_t command_byte(adsm_t *m, uint8_t b, double ts, double te)
     } else if (b == 0xFC) {                               /* SYNC */
         advance_to(m, te);
         m->running = false;
+        m->sync_hold = true;
         end_command(m, te, T11_LONG_US);
     } else if (b == 0xFD) {                               /* STANDBY */
         advance_to(m, te);
@@ -750,6 +765,11 @@ void adsm_set_noise(adsm_t *m, double sigma_codes, uint32_t seed)
 void adsm_set_stuck(adsm_t *m, adsm_stuck_t s)
 {
     m->stuck = s;
+}
+
+void adsm_set_ignore_selfcal(adsm_t *m, bool ignore)
+{
+    m->ignore_selfcal = ignore;
 }
 
 void adsm_set_drdy_dead(adsm_t *m, bool dead)

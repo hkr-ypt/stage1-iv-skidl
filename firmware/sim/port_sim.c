@@ -114,6 +114,7 @@ typedef struct {
     bool     configured_flag;
     bool     dtr_flag;
     bool     connected;
+    bool     link_up;       /* host_configured() at the last link_update() */
     size_t   tx_limit;
     /* system */
     int      bor;
@@ -537,9 +538,14 @@ board_model_t *psim_board(void)
     return &S.board;
 }
 
+static bool host_configured(void);
+
 size_t psim_host_take_tx(uint8_t *buf, size_t max)
 {
     ensure();
+    if (!host_configured()) {
+        return 0u;   /* no link (cable out, unconfigured): the host reads nothing */
+    }
     return ring_pop(&s_tx, buf, max);
 }
 
@@ -990,6 +996,24 @@ static bool host_configured(void)
     return S.configured_flag && S.connected && S.vbus_mv >= VBUS_DETACH_MV;
 }
 
+/* The link coming up again as the firmware sees it (port_host_configured()
+ * after a pass saw it down, or the firmware's soft reconnect) is a
+ * re-enumeration on the target: SET_CONFIGURATION runs TinyUSB's
+ * cdcd_open(), which clears the CDC TX FIFO (CFG_TUD_CDC_TX_PERSISTENT 0),
+ * so the old tail is gone. Edges are taken only where the firmware looks: a
+ * VBUS or configuration glitch no pass sees leaves the session and its
+ * output alone, as the target would. A DTR drop alone keeps the tail
+ * (protocol.md 1); a suspend/resume, which keeps it on the target too, is
+ * not modelled. */
+static void link_update(void)
+{
+    bool up = host_configured();
+    if (up && !S.link_up) {
+        ring_clear(&s_tx);
+    }
+    S.link_up = up;
+}
+
 static size_t tx_space(void)
 {
     size_t free_bytes = PSIM_HOST_RING_BYTES - s_tx.count;
@@ -1054,6 +1078,7 @@ uint32_t port_vbus_mv(void)
 bool port_host_configured(void)
 {
     ensure();
+    link_update();
     return host_configured();
 }
 
@@ -1070,6 +1095,7 @@ void port_host_connect(bool connect)
         return;
     }
     S.connected = connect;
+    link_update();
 }
 
 /* ---- port.h: calibration flash --------------------------------------------------------------------- */
@@ -1206,6 +1232,7 @@ bool port_stack_ok(void)
 void port_system_reset(void)
 {
     ensure();
+    dac_zero_safe();          /* as the target's system.c does */
     S.resets_requested++;
     request_reset(RST_SFT);
 }

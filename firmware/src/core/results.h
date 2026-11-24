@@ -30,15 +30,21 @@ typedef struct {
     uint32_t t_v_us;       /* centroid of the V conversion midpoints (rel.)    */
     int32_t  i_raw;        /* mean raw ADC code, rounded                        */
     int32_t  v_raw;
-    uint16_t i_sd;         /* sample std dev in codes, saturating; 0xFFFF = n/a */
+    uint16_t i_sd;         /* sample std dev in 0.1 codes, saturating at 0xFFFE
+                            * (6553.4 codes; PF_SD_SAT is then set); 0xFFFF = n/a */
     uint16_t v_sd;
     uint16_t sweep_id;
     uint16_t seg;
     uint16_t dac_code;
     uint16_t flags;        /* PF_* */
     uint16_t n;            /* conversions per channel                           */
-    uint16_t reserved;
+    int8_t   i_frac;       /* mean - i_raw in 1/256 code, so that v_V and i_A   */
+    int8_t   v_frac;       /* keep the resolution averaging gives (pt_mean_*)   */
 } pt_rec_t;
+
+/* The unrounded mean of a record's channel, in codes (raw + frac/256). */
+static inline double pt_mean_i(const pt_rec_t *r) { return (double)r->i_raw + (double)r->i_frac / 256.0; }
+static inline double pt_mean_v(const pt_rec_t *r) { return (double)r->v_raw + (double)r->v_frac / 256.0; }
 
 void     results_init(void);
 /* Append; assigns rec->seq. Returns false only if the slot to be overwritten

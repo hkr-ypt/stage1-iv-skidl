@@ -13,10 +13,16 @@
  *    touches OTG registers (ES0287 2.12.1 FIFO corruption).
  *  - Without HSE there is no 48 MHz clock: USB stays off and every host
  *    call is a no-op (F_CLOCK, instrument.c).
+ *  - Device mode is forced (GUSBCFG.FDMOD) and confirmed (GINTSTS.CMOD = 0)
+ *    before tusb_init(); PA10 (OTG_FS_ID, unconnected) is pulled up so the
+ *    core starts as a B-device anyway (gpio_spi.c). A core that does not
+ *    reach device mode within 100 ms leaves USB off, as without HSE.
  */
 #include "port_stm32.h"
 
 #include "tusb.h"
+
+#define USB_MODE_TIMEOUT_US 100000u   /* 4 x the 25 ms FDMOD settling time */
 
 static bool s_usb_ok;
 
@@ -28,11 +34,40 @@ bool stm32_usb_init(void)
     }
     RCC->AHB2ENR |= RCC_AHB2ENR_OTGFSEN;
     (void)RCC->AHB2ENR;
+    /* Device mode before TinyUSB's first device-register write: dcd_init()
+     * writes DCFG (full speed) and DCTL (soft disconnect) before it sets
+     * GUSBCFG.FDMOD itself, and a core still in host mode ignores them
+     * (GINTSTS.MMIS). Force it here and wait until GINTSTS.CMOD shows device
+     * mode (the change takes up to 25 ms, spec §4.7; the force bit persists
+     * across the core soft reset in tusb_init). With PA10 pulled up the core
+     * already starts as a B-device and the wait ends at once. */
+    USB_OTG_FS->GUSBCFG = (USB_OTG_FS->GUSBCFG & ~USB_OTG_GUSBCFG_FHMOD) | USB_OTG_GUSBCFG_FDMOD;
+    if (!stm32_wait_reg(&USB_OTG_FS->GINTSTS, USB_OTG_GINTSTS_CMOD, 0u, USB_MODE_TIMEOUT_US)) {
+        s_usb_ok = false;
+        return false;
+    }
     NVIC_SetPriority(OTG_FS_IRQn, PRIO_USB);
     tusb_rhport_init_t init = { .role = TUSB_ROLE_DEVICE, .speed = TUSB_SPEED_FULL };
-    s_usb_ok = tusb_init(0, &init);
+    if (!tusb_init(0, &init)) {
+        s_usb_ok = false;
+        return false;
+    }
+    s_usb_ok = stm32_wait_reg(&USB_OTG_FS->GINTSTS, USB_OTG_GINTSTS_CMOD, 0u, USB_MODE_TIMEOUT_US);
     if (s_usb_ok) {
         tud_disconnect();
+    } else {
+        /* Initialised but not in device mode: USB stays off. dcd_init() has
+         * already powered the transceiver and soft-connected (DCTL.SDIS
+         * cleared), and nothing would disconnect again. Mask the stack's
+         * interrupt and power the FS PHY down (GCCFG.PWRDWN = 0): with the
+         * transceiver off no pull-up is possible in either mode. The
+         * soft-disconnect is a safeguard should the core reach device mode
+         * after all (a core in host mode ignores DCTL). Bounded register
+         * writes only: tusb_deinit()'s core reset busy-waits without a
+         * bound on the core that just misbehaved. */
+        NVIC_DisableIRQ(OTG_FS_IRQn);
+        (void)tud_disconnect();
+        USB_OTG_FS->GCCFG &= ~USB_OTG_GCCFG_PWRDWN;
     }
     return s_usb_ok;
 }

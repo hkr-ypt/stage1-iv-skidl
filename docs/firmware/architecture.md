@@ -73,7 +73,7 @@ excludes that pass from the overrun count; the IWDG timeout covers it).
 | SI-5 codes only from `scaling_v_to_code()` | `engine.c out_load()` is the only `dac_update()` caller besides arm/zero | review; `test_scaling`, sweep validation tests |
 | SI-6 never re-arm after reset | boot ends in `BOOT`→`DISARMED`/`FAULT`; nothing but `inst_arm()` leaves DISARMED | `test_sys_safety` (MCU reset, dead-man, watchdog, `RESET`) |
 | SI-7 armed only in a session | `session.c` → `inst_disarm(DR_SESSION_LOST / DR_HOST_TIMEOUT)` | `test_sys_safety`, `test_sim_integration.py` (DTR, VBUS, unconfigure, timeout) |
-| SI-8 flash only disarmed | `CAL.SAVE` gated to DISARMED and 100 ms after the last edge; runs as a job once the ADC is idle | `test_sys_safety`, `test_sys_protocol` |
+| SI-8 flash only disarmed | `CAL.SAVE` gated to DISARMED and 100 ms after the last edge; runs as a job once the ADC is idle and re-checks SI-8 at the erase (a job can outlive its session); `ARM` is refused while any job runs | `test_sys_safety`, `test_sys_protocol` |
 | SI-9 health → FAULT | `inst_service()` (invariants, ADC errors, staleness), `hb_service()` gap, `engine` (DAC SPI, clip while armed, compliance=fault) | fault-injection tests in `test_sys_safety` and the simulator suite |
 | SI-10 ISR set | fixed vector table (`startup.c`), EXTI ISR touches neither SPI2 nor PC5 | review, `check_image.py` |
 | SI-11 IWDG | `port_pass_end(healthy)`; kicked in FAULT too | `test_sys_safety` (hang → IWDG reset; FAULT not lost) |

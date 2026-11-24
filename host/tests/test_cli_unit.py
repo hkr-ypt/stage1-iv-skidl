@@ -1,0 +1,336 @@
+"""The iv-sweep / iv-diag / iv-cal command-line tools against the FakeDevice."""
+
+from __future__ import annotations
+
+import contextlib
+import io
+import json
+
+import pytest
+
+from stage1iv import cli, discovery
+from stage1iv import writers as W
+from stage1iv.client import Instrument
+from stage1iv.errors import TimeoutError as S1Timeout
+from stage1iv.sweeps import ListPoint, list_add_commands
+
+
+@pytest.fixture
+def use_fake(monkeypatch, inst):
+    """Route the tools' instrument to the FakeDevice-backed ``inst``."""
+    @contextlib.contextmanager
+    def fake_open(args, **kwargs):
+        yield inst
+    monkeypatch.setattr(cli, "_open", fake_open)
+    return inst
+
+
+@pytest.fixture
+def no_ports(monkeypatch):
+    monkeypatch.setattr(discovery, "_default_lister", lambda: [])
+
+
+def test_list_file_omitted_settle_means_configured_settle(tmp_path):
+    """HL-7: no settle_us column -> None (plain V), not 0 (which is refused)."""
+    f = tmp_path / "pts.txt"
+    f.write_text("0.5\n-0.5   # comment\n1, \n0.25, 2000\n")
+    pts = cli._list_points(str(f))
+    assert pts[0] == ListPoint(pts[0].v, None) and pts[3].settle_us == 2000
+    assert list_add_commands(pts) == ["SWP.LIST.ADD 0.5 -0.5 1 0.25:2000"]
+
+
+def test_config_list_omitted_settle_means_configured_settle():
+    pts = cli._config_list_points([0.5, "-0.5", [1], [0.25, 2000], [2, None]])
+    assert list_add_commands(pts) == ["SWP.LIST.ADD 0.5 -0.5 1 0.25:2000 2"]
+    with pytest.raises(ValueError):
+        cli._config_list_points([[0.25, 2000.5]])     # inexact settle time
+
+
+def test_config_list_sweep_runs(tmp_path, use_fake, device):
+    conf = tmp_path / "s.json"
+    conf.write_text(json.dumps({"list": [0.5, [1, None], [0.25, 2000]]}))
+    rc = cli.sweep_main(["--config", str(conf), "--out", str(tmp_path / "l")])
+    assert "SWP.LIST.ADD 0.5 1 0.25:2000" in device.received
+    assert rc == 0
+    assert len(W.read_csv(tmp_path / "l.csv")) == 3
+
+
+def test_device_not_found_is_a_message_not_a_traceback(no_ports, tmp_path, capsys):
+    """HL-12: DeviceNotFound (a LookupError) -> one line, exit 1."""
+    rc = cli.sweep_main(["--wp", "0", "1", "--step", "0.5", "--out", str(tmp_path / "x")])
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert "iv-sweep: no instrument found" in err and "Traceback" not in err
+    assert cli.diag_main([]) == 1
+    assert cli.cal_main(["--steps", "zero"]) == 1
+    assert not (tmp_path / "x.csv").exists()
+
+
+@pytest.mark.parametrize("argv, text", [
+    (["--wp", "0", "1", "-0.5", "--step", "0.3"], "suggest step=0.25"),     # GridError
+    (["--wp", "0", "x1", "--step", "0.5"], "not a decimal number"),
+    (["--wp", "0", "11", "--step", "1"], "10 V"),
+    (["--list", "{missing}"], "No such file"),          # {missing}: a file under tmp_path
+])
+def test_definition_errors_are_messages(no_ports, tmp_path, capsys, argv, text):
+    missing = str(tmp_path / "missing" / "points.txt")
+    argv = [missing if a == "{missing}" else a for a in argv]
+    rc = cli.sweep_main(argv + ["--out", str(tmp_path / "x")])
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert text in err and "Traceback" not in err
+
+
+def test_bad_cfg_value_is_a_message(use_fake, tmp_path, capsys):
+    rc = cli.sweep_main(["--wp", "0", "1", "--step", "0.5", "--cfg", "n_avg=2.5",
+                         "--out", str(tmp_path / "x")])
+    assert rc == 1
+    assert "n_avg" in capsys.readouterr().err
+
+
+def test_sweep_files_keep_a_dotted_out_name(use_fake, tmp_path, capsys):
+    rc = cli.sweep_main(["--wp", "0", "1", "--step", "0.5", "--out", str(tmp_path / "d_0.5V")])
+    assert rc == 0
+    assert (tmp_path / "d_0.5V.csv").exists() and (tmp_path / "d_0.5V.json").exists()
+    assert not (tmp_path / "d_0.csv").exists()
+
+
+def test_no_overwrite_refuses_before_measuring(use_fake, device, tmp_path, capsys):
+    (tmp_path / "r.csv").write_text("old\n")
+    rc = cli.sweep_main(["--wp", "0", "1", "--step", "0.5", "--out", str(tmp_path / "r"),
+                         "--no-overwrite"])
+    assert rc == 1 and "refusing to overwrite" in capsys.readouterr().err
+    assert (tmp_path / "r.csv").read_text() == "old\n"
+    assert "ARM" not in device.received
+    assert cli.sweep_main(["--wp", "0", "1", "--step", "0.5", "--out", str(tmp_path / "r")]) == 0
+    assert (tmp_path / "r.csv").read_text() != "old\n"     # default: replaced as before
+
+
+def test_partial_results_written_when_the_sweep_fails(use_fake, device, tmp_path, monkeypatch,
+                                                      capsys):
+    """HL-12: a timeout mid-sweep must not lose the records collected so far."""
+    real = Instrument.run_sweep
+
+    def failing_run_sweep(self, on_record=None, **kwargs):
+        def cb(rec):
+            if rec.idx == 4:
+                raise S1Timeout("simulated: sweep stalled")
+        return real(self, on_record=cb, **kwargs)
+
+    monkeypatch.setattr(Instrument, "run_sweep", failing_run_sweep)
+    rc = cli.sweep_main(["--wp", "0", "1", "--step", "0.1", "--out", str(tmp_path / "p")])
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert "simulated: sweep stalled" in err
+    rows = W.read_csv(tmp_path / "p.csv")
+    assert [int(r["idx"]) for r in rows] == [0, 1, 2, 3, 4]
+    doc = json.loads((tmp_path / "p.json").read_text())
+    assert doc["sweep"]["status"] == "unknown" and doc["host"]["partial"] is True
+    assert "stalled" in doc["host"]["error"]
+    sent = device.t.sent_lines()
+    assert "SWP.ABORT" in sent and sent.index("SWP.ABORT") < sent.index("DISARM")
+
+
+def test_results_written_when_the_final_disarm_fails(use_fake, device, tmp_path, monkeypatch,
+                                                     capsys):
+    def bad_disarm(self, *a, **k):
+        raise S1Timeout("simulated: no DISARMED")
+
+    monkeypatch.setattr(Instrument, "disarm", bad_disarm)
+    rc = cli.sweep_main(["--wp", "0", "1", "--step", "0.5", "--out", str(tmp_path / "d")])
+    assert rc == 1
+    assert "DISARM failed: simulated: no DISARMED" in capsys.readouterr().err
+    doc = json.loads((tmp_path / "d.json").read_text())
+    assert doc["sweep"]["status"] == "complete" and doc["host"]["partial"] is False
+    assert len(W.read_csv(tmp_path / "d.csv")) == 3
+
+
+def test_iv_cal_errors_are_messages(use_fake, capsys, monkeypatch):
+    """iv-cal --steps zero has nothing to apply: a message, not a traceback."""
+    monkeypatch.setattr("sys.stdin", io.StringIO("\n"))      # "Press Enter when ready"
+    assert cli.cal_main(["--steps", "zero"]) == 1
+    assert "iv-cal: nothing to apply" in capsys.readouterr().err
+
+
+def test_sweep_refuses_a_missing_output_directory_before_opening(tmp_path, monkeypatch, capsys):
+    """HOST-7: a typo in --out must not cost a finished sweep: it is refused
+    before the instrument is opened."""
+    opened = []
+    monkeypatch.setattr(cli, "_open", lambda *a, **k: opened.append(1))
+    rc = cli.sweep_main(["--wp", "0", "1", "--step", "0.5",
+                         "--out", str(tmp_path / "no_such_dir" / "run1")])
+    assert rc == 1 and not opened
+    assert "No such file or directory" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("no_overwrite", [False, True])
+def test_sweep_results_are_rescued_into_a_new_temp_dir(tmp_path, monkeypatch, capsys, use_fake,
+                                                        no_overwrite):
+    """HOST-7: if the results cannot be written where asked once the sweep is
+    done, they go to a new directory of their own in the temporary directory:
+    never lost (also with --no-overwrite), never over an earlier rescue."""
+    real = cli.write_sweep
+    calls = []
+
+    def flaky(base, *a, **k):
+        calls.append(base)
+        if len(calls) == 1:
+            raise OSError("disk full")
+        return real(base, *a, **k)
+    fallback = tmp_path / "fallback"
+    fallback.mkdir()
+    (fallback / "r.csv").write_text("EARLIER RESCUE")       # a name clash in the temp dir
+    monkeypatch.setattr(cli, "write_sweep", flaky)
+    monkeypatch.setattr(cli.tempfile, "tempdir", str(fallback))
+    argv = ["--wp", "0", "1", "--step", "0.5", "--out", str(tmp_path / "r")]
+    rc = cli.sweep_main(argv + (["--no-overwrite"] if no_overwrite else []))
+    out, err = capsys.readouterr()
+    assert rc == 1 and "disk full" in err
+    rescued = list(fallback.glob("iv-sweep-*/r.csv"))
+    assert len(rescued) == 1 and str(rescued[0]) in out
+    assert len(W.read_csv(rescued[0])) == 3
+    assert (fallback / "r.csv").read_text() == "EARLIER RESCUE"
+
+
+@pytest.mark.parametrize("case", ["name too long", "a directory"])
+def test_sweep_refuses_an_unwritable_file_name_before_opening(tmp_path, monkeypatch, capsys,
+                                                              case):
+    """HOST-7: the check covers the result files themselves, not only their
+    directory: a name the file system refuses, or a result path that is a
+    directory, is reported before the instrument is opened."""
+    opened = []
+    monkeypatch.setattr(cli, "_open", lambda *a, **k: opened.append(1))
+    if case == "a directory":
+        out = tmp_path / "r"
+        (tmp_path / "r.json").mkdir()
+    else:
+        out = tmp_path / ("x" * 300)
+    rc = cli.sweep_main(["--wp", "0", "1", "--step", "0.5", "--out", str(out)])
+    assert rc == 1 and not opened
+    assert case in capsys.readouterr().err.lower()
+    assert sorted(p.name for p in tmp_path.iterdir()) == (["r.json"] if case == "a directory"
+                                                          else [])
+
+
+def test_iv_diag_opens_without_waiting_for_boot(monkeypatch, inst, capsys):
+    """HOST-9: iv-diag must still report on a board that stays in BOOT."""
+    seen = []
+
+    @contextlib.contextmanager
+    def fake_open(args, ready=True, **kwargs):
+        seen.append(ready)
+        yield inst
+    monkeypatch.setattr(cli, "_open", fake_open)
+    assert cli.diag_main(["--json"]) == 0
+    assert seen == [False]
+    assert '"idn"' in capsys.readouterr().out
+
+
+def test_open_waits_for_boot_except_for_iv_diag(monkeypatch):
+    """HOST-9: the tools wait while the instrument is in BOOT; iv-diag does
+    not, so it can still report on a board that stays there."""
+    waited = []
+
+    class Inst:
+        def wait_ready(self):
+            waited.append(1)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+    monkeypatch.setattr(cli.Instrument, "open_serial", lambda *a, **k: Inst())
+    args = cli.argparse.Namespace(sim=None, port="x", serial=None, pid=None, verbose=False)
+    with cli._open(args):
+        pass
+    with cli._open(args, ready=False):
+        pass
+    assert waited == [1]
+
+
+def test_a_probe_file_that_cannot_be_removed_does_not_block_the_sweep(tmp_path, monkeypatch,
+                                                                      capsys, use_fake):
+    """The pre-check's own empty test file may be held by another program
+    (a virus scanner on Windows) and stay: the sweep still runs, and its
+    results replace exactly that file, also with --no-overwrite."""
+    from pathlib import Path
+    real_unlink = Path.unlink
+
+    def held(self, *a, **k):
+        if self.suffix == ".csv":
+            raise PermissionError(32, "being used by another process")
+        return real_unlink(self, *a, **k)
+    monkeypatch.setattr(Path, "unlink", held)
+    rc = cli.sweep_main(["--wp", "0", "1", "--step", "0.5", "--no-overwrite",
+                         "--out", str(tmp_path / "r")])
+    out, err = capsys.readouterr()
+    assert rc == 0, err
+    assert "could not remove the empty test file" in err
+    assert len(W.read_csv(tmp_path / "r.csv")) == 3
+
+
+@pytest.mark.parametrize("case", ["another file appears", "the test file gains content"])
+def test_no_overwrite_replaces_only_this_runs_empty_test_file(tmp_path, monkeypatch, capsys,
+                                                              use_fake, device, case):
+    """--no-overwrite lets the results replace the pre-check's own leftover
+    empty test file, and nothing else: a file that appears meanwhile, or the
+    test file once it has content, is kept and the results are rescued."""
+    from pathlib import Path
+    real_unlink = Path.unlink
+
+    def held(self, *a, **k):
+        if self.suffix == ".csv" and self.parent == tmp_path:
+            raise PermissionError(32, "being used by another process")
+        return real_unlink(self, *a, **k)
+    monkeypatch.setattr(Path, "unlink", held)
+    real_handle = device.handle
+
+    def handle(line):
+        if line.startswith("SWP.RUN"):           # during the sweep
+            if case == "another file appears":
+                (tmp_path / "r.json").write_text("OTHER PROGRAM")
+            else:
+                (tmp_path / "r.csv").write_text("OTHER PROGRAM")
+        real_handle(line)
+    device.handle = handle
+    fallback = tmp_path / "fallback"
+    fallback.mkdir()
+    monkeypatch.setattr(cli.tempfile, "tempdir", str(fallback))
+    rc = cli.sweep_main(["--wp", "0", "1", "--step", "0.5", "--no-overwrite",
+                         "--out", str(tmp_path / "r")])
+    out, err = capsys.readouterr()
+    assert rc == 1
+    kept = tmp_path / ("r.json" if case == "another file appears" else "r.csv")
+    assert kept.read_text() == "OTHER PROGRAM"
+    assert len(list(fallback.glob("iv-sweep-*/r.csv"))) == 1
+
+
+def test_a_leftover_test_file_is_removed_or_reported_when_no_results_replace_it(
+        tmp_path, monkeypatch, capsys):
+    """When no results replace the pre-check's empty test file (here the
+    instrument is never reached), it is removed at the end, or reported if
+    it still cannot be removed, so it does not block the next run."""
+    from pathlib import Path
+    from stage1iv.errors import SessionLost
+    real_unlink = Path.unlink
+    state = {"fail": 5}                          # all five attempts of the check
+
+    def held(self, *a, **k):
+        if self.suffix == ".csv" and state["fail"] > 0:
+            state["fail"] -= 1
+            raise PermissionError(32, "being used by another process")
+        return real_unlink(self, *a, **k)
+    monkeypatch.setattr(Path, "unlink", held)
+
+    def lost(*a, **k):
+        raise SessionLost("port vanished")
+    monkeypatch.setattr(cli, "_open", lost)
+    argv = ["--wp", "0", "1", "--step", "0.5", "--no-overwrite", "--out", str(tmp_path / "r")]
+    assert cli.sweep_main(argv) == 1
+    assert not (tmp_path / "r.csv").exists()     # removed at the end
+    capsys.readouterr()
+    state["fail"] = 1000                         # now it stays held
+    assert cli.sweep_main(argv) == 1
+    assert (tmp_path / "r.csv").exists()
+    assert "the empty test file" in capsys.readouterr().err

@@ -32,8 +32,9 @@ import math
 import time
 from dataclasses import dataclass, field
 from decimal import ROUND_HALF_EVEN, Decimal
-from typing import TYPE_CHECKING, Any, Callable, Iterator, Mapping, Sequence
+from typing import TYPE_CHECKING, Any, Callable, Iterable, Iterator, Mapping, Sequence
 
+from .errors import Stage1IVError
 from .protocol import convert_value, scaled_to_str, to_scaled
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -72,6 +73,8 @@ NOMINAL: dict[str, float] = {
 
 #: Keys of CAL? / CAL.SET, in protocol order, and their units.
 CAL_KEYS = ("g_dac_uv", "c_dac", "g_v_uv", "g_i_na", "r_s", "r_top", "i_plateau")
+#: The first five: until all are measured the firmware keeps CAL_NOMINAL.
+CAL_CORE_KEYS = CAL_KEYS[:5]
 CAL_UNITS = {"g_dac_uv": "uV/code", "c_dac": "code", "g_v_uv": "uV/code",
              "g_i_na": "nA/code", "r_s": "ohm", "r_top": "ohm", "i_plateau": "A"}
 #: Decimal places at which CAL.SET values are exact (finer is rejected).
@@ -123,12 +126,15 @@ def round_cal(**kwargs: Any) -> dict[str, Decimal]:
 
 @dataclass(frozen=True)
 class CalInfo:
-    """``CAL?``: source, record sequence and the coefficients (Decimal)."""
+    """``CAL?``: source, record sequence, which coefficients were measured
+    (``measured``, bit k = ``CAL_KEYS[k]``; None from firmware without the
+    field) and the coefficients (Decimal)."""
 
     source: str | None
     seq: int | None
     coeffs: dict[str, Decimal]
     fields: dict[str, str] = field(default_factory=dict)
+    measured: int | None = None
 
     @classmethod
     def from_fields(cls, fields: Mapping[str, str]) -> "CalInfo":
@@ -138,18 +144,39 @@ class CalInfo:
                 v = convert_value(k, fields[k])
                 coeffs[k] = Decimal(v) if isinstance(v, (int, Decimal)) else v
         seq = convert_value("seq", fields["seq"]) if "seq" in fields else None
+        measured = None
+        try:
+            measured = int(fields["measured"], 16) if "measured" in fields else None
+        except ValueError:
+            measured = None
         return cls(fields.get("source"), seq if isinstance(seq, int) else None, coeffs,
-                   dict(fields))
+                   dict(fields), measured)
+
+    @property
+    def nominal_core(self) -> list[str]:
+        """The coefficients the Kelvin tolerance depends on that are still
+        nominal: while any is, records carry ``CAL_NOMINAL`` and the wide
+        tolerance applies (protocol.md ``CAL?``). Empty without ``measured``."""
+        if self.measured is None:
+            return []
+        return [k for i, k in enumerate(CAL_CORE_KEYS) if not self.measured & (1 << i)]
 
 
 # ---- plausibility (calib.h) ------------------------------------------------------------
 
+#: Half-width of the firmware's c_dac window (calib.c C_DAC_WINDOW_CODES):
+#: the DAC8552 zero-code, gain and channel-B full-scale errors move the zero
+#: by up to about 615 codes on an in-spec board (with INL and op-amp offsets).
+C_DAC_WINDOW_CODES = 1000.0
+
+
 def check_plausible(coeffs: Mapping[str, Any]) -> list[str]:
     """Problems with the given coefficients (CAL? units); empty if plausible.
 
-    Window (firmware calib.h): g_dac +-2 %, c_dac +-400 codes, g_v and g_i
-    +-5 %, r_s 80..200 ohm, r_top 70..180 ohm, r_top < r_s, i_plateau
-    20..100 mA. Keys that are absent are not checked.
+    Window (firmware calib.h): g_dac +-2 %, c_dac +-1000 codes (the DAC8552
+    worst case is about 615), g_v and g_i +-5 %, r_s 80..200 ohm, r_top
+    70..180 ohm, r_top < r_s, i_plateau 20..100 mA. Keys that are absent are
+    not checked.
     """
     c = {k: float(v) for k, v in coeffs.items() if k in CAL_KEYS}
     problems = []
@@ -165,8 +192,9 @@ def check_plausible(coeffs: Mapping[str, Any]) -> list[str]:
             problems.append(f"{key}={c[key]:g} is outside {lo:g}..{hi:g}")
 
     rel("g_dac_uv", 0.02)
-    if "c_dac" in c and not abs(c["c_dac"] - NOMINAL["c_dac"]) <= 400:
-        problems.append(f"c_dac={c['c_dac']:g} is outside {NOMINAL['c_dac']:g} +-400 codes")
+    if "c_dac" in c and not abs(c["c_dac"] - NOMINAL["c_dac"]) <= C_DAC_WINDOW_CODES:
+        problems.append(f"c_dac={c['c_dac']:g} is outside {NOMINAL['c_dac']:g} "
+                        f"+-{C_DAC_WINDOW_CODES:g} codes")
     rel("g_v_uv", 0.05)
     rel("g_i_na", 0.05)
     window("r_s", 80.0, 200.0)
@@ -378,6 +406,19 @@ def ask_yes(ask: Ask, prompt: str) -> bool:
     return ask(prompt).strip().lower() in ("y", "yes")
 
 
+def session_zero(begin_fields: Mapping[str, str] | None) -> tuple[float, float] | None:
+    """``(o_v, o_i)`` in codes of the session zero the firmware applied to a
+    sweep, from its ``EVT SWEEP_BEGIN`` fields, if ``zero=valid``; else None
+    (``stale``: older than the firmware's limit, from an earlier session or
+    another ADC rate; ``none``: never measured)."""
+    if not begin_fields or begin_fields.get("zero") != "valid":
+        return None
+    try:
+        return float(Decimal(begin_fields["o_v"])), float(Decimal(begin_fields["o_i"]))
+    except (KeyError, ArithmeticError, ValueError):
+        return None
+
+
 @dataclass
 class CalibrationWorkflow:
     """Guided calibration (``iv-cal``): ZERO, ADC gains with a reference
@@ -385,7 +426,17 @@ class CalibrationWorkflow:
     CAL.SET (after confirmation) and CAL.SAVE.
 
     ``ask``/``say`` default to :func:`input`/:func:`print`; tests inject
-    their own.
+    their own. Prompts answered while the output is armed (the DMM readings
+    of the gains step) run inside :meth:`Instrument.hold`, so a slow
+    operator is not disarmed by the host timeout.
+
+    The dac and rs steps reprocess raw codes and need the ADC offsets: from
+    the zero step of this run, else from the gains fit, else the session zero
+    the firmware reports in the sweep's ``SWEEP_BEGIN`` (``zero=valid``,
+    e.g. after :meth:`Instrument.zero` in this session; library use only:
+    ``iv-cal`` opens a new session, whose zero starts stale). Without any of
+    them the step refuses to run (offset 0 would bias ``c_dac`` by the V
+    offset).
     """
 
     inst: "Instrument"
@@ -398,6 +449,9 @@ class CalibrationWorkflow:
     dac_fit: DacFit | None = None
     rs_fit: SeriesResistanceFit | None = None
     current: dict[str, Decimal] = field(default_factory=dict)
+    #: core keys the last :meth:`proposal` moved one step off the nominal
+    #: value, with the value it proposed
+    nudged: dict[str, Decimal] = field(default_factory=dict)
 
     def load_current(self) -> dict[str, Decimal]:
         self.current = dict(self.inst.cal_get().coeffs)
@@ -406,11 +460,36 @@ class CalibrationWorkflow:
     def _r_top(self) -> float:
         return float(self.current.get("r_top", NOMINAL["r_top"]))
 
-    def _offsets(self) -> tuple[float, float]:
+    def _have_offsets(self) -> bool:
+        return self.zero_result is not None or (self.v_fit is not None and self.i_fit is not None)
+
+    def _require_offsets(self) -> None:
+        """Before measuring: refuse early if no ADC offsets will be available."""
+        if self._have_offsets():
+            return
+        zero = self.inst.stat().get("zero")
+        if zero != "valid":
+            raise ValueError(
+                f"no ADC offsets: run the zero step first (e.g. --steps zero,dac) or the gains "
+                f"step in the same run; the instrument's session zero is {zero!r}, not 'valid'")
+
+    def _offsets(self, begin_fields: Mapping[str, str] | None = None) -> tuple[float, float]:
+        """``(o_v, o_i)`` in codes: the zero step, else the gains fits, else the
+        session zero of ``begin_fields`` (a sweep's SWEEP_BEGIN); ValueError if
+        none is available (never a silent 0)."""
         if self.zero_result is not None:
             return float(self.zero_result.o_v), float(self.zero_result.o_i)
-        o_v = self.v_fit.offset if self.v_fit else 0.0
-        o_i = self.i_fit.offset if self.i_fit else 0.0
+        o_v = self.v_fit.offset if self.v_fit else None
+        o_i = self.i_fit.offset if self.i_fit else None
+        if o_v is None or o_i is None:
+            sz = session_zero(begin_fields)
+            if sz is None:
+                zero = (begin_fields or {}).get("zero", "not reported")
+                raise ValueError(
+                    f"no ADC offsets: run the zero step first; the sweep's session zero is "
+                    f"{zero!r}, not 'valid'")
+            o_v = sz[0] if o_v is None else o_v
+            o_i = sz[1] if o_i is None else o_i
         return o_v, o_i
 
     def _g_v(self) -> float:
@@ -448,7 +527,9 @@ class CalibrationWorkflow:
             for v in usable:
                 self.inst.src(v)
                 m = self.inst.meas(self.n_avg)
-                dmm = ask_float(self.ask, f"  setpoint {v} V: DMM voltage across the resistor [V]: ")
+                with self.inst.hold():      # armed while the operator reads the DMM
+                    dmm = ask_float(self.ask,
+                                    f"  setpoint {v} V: DMM voltage across the resistor [V]: ")
                 assert dmm is not None
                 v_codes.append(m.v_raw)
                 v_ref.append(dmm)
@@ -462,7 +543,8 @@ class CalibrationWorkflow:
         self.say(f"  g_i = {self.i_fit.gain_na:.6f} nA/code (rms {self.i_fit.rms * 1e9:.1f} nA)")
         return self.v_fit, self.i_fit
 
-    def _sweep_records(self, v_max: Any, step: Any):
+    def _sweep(self, v_max: Any, step: Any):
+        """A dual sweep -v_max..+v_max..-v_max -> :class:`SweepResult`."""
         from .sweeps import dual
         self.inst.sweep_waypoints(dual(-abs(Decimal(str(v_max))), abs(Decimal(str(v_max))), step))
         self.inst.arm()
@@ -470,14 +552,19 @@ class CalibrationWorkflow:
             res = self.inst.run_sweep()
         finally:
             self.inst.disarm()
-        return res.records
+        return res
+
+    def _sweep_records(self, v_max: Any, step: Any):
+        return self._sweep(v_max, step).records
 
     def step_dac(self, v_max: Any = 9, step: Any = 1) -> DacFit:
         """DUT open, Kelvin leads on the FORCE terminals (I = 0)."""
+        self._require_offsets()
         self.say("DAC: remove the DUT and clip the Kelvin leads onto the FORCE terminals.")
         self.ask("Press Enter when ready ")
-        recs = self._sweep_records(v_max, step)
-        o_v, _ = self._offsets()
+        res = self._sweep(v_max, step)
+        recs = res.records
+        o_v, _ = self._offsets(res.begin_fields)
         g_v = self._g_v()
         codes = [r.dac_code for r in recs]
         vsw = [vsweep_from_vk(g_v * (r.v_raw - o_v), self._r_top()) for r in recs]
@@ -487,10 +574,12 @@ class CalibrationWorkflow:
 
     def step_series_resistance(self, v_max: Any = 9, step: Any = 1) -> SeriesResistanceFit:
         """A load drawing >= 5 mA of each polarity at the higher setpoints."""
+        self._require_offsets()
         self.say("R_s: connect a load resistor (e.g. 470 ohm) with Kelvin leads on it.")
         self.ask("Press Enter when ready ")
-        recs = self._sweep_records(v_max, step)
-        o_v, o_i = self._offsets()
+        res = self._sweep(v_max, step)
+        recs = res.records
+        o_v, o_i = self._offsets(res.begin_fields)
         g_v, g_i = self._g_v(), self._g_i()
         if self.dac_fit is not None:
             g_dac, c_dac = self.dac_fit.g_dac, self.dac_fit.c_dac
@@ -510,7 +599,13 @@ class CalibrationWorkflow:
         return self.rs_fit
 
     def proposal(self) -> dict[str, Decimal]:
-        """The new coefficients, rounded to the CAL.SET resolutions."""
+        """The new coefficients, rounded to the CAL.SET resolutions.
+
+        The firmware counts a coefficient equal to its nominal value at that
+        resolution as nominal (protocol.md ``CAL.SET``). A fit that rounds to
+        exactly that value is moved one step towards the unrounded fit (so at
+        most one resolution step from it, far below the fit's uncertainty),
+        so that it counts as measured; :attr:`nudged` lists such keys."""
         new: dict[str, Any] = {}
         if self.dac_fit:
             new["g_dac_uv"] = self.dac_fit.g_dac_uv
@@ -521,7 +616,20 @@ class CalibrationWorkflow:
             new["g_i_na"] = self.i_fit.gain_na
         if self.rs_fit:
             new["r_s"] = self.rs_fit.r_s
-        return round_cal(**new)
+        out = round_cal(**new)
+        self.nudged = {}
+        for k, nom in self._rounded_nominal(out).items():
+            if out[k] == nom:
+                step = Decimal(1).scaleb(-CAL_DECIMALS[k])
+                fit = Decimal(repr(new[k])) if isinstance(new[k], float) else Decimal(new[k])
+                out[k] = nom + step if fit >= nom else nom - step
+                self.nudged[k] = out[k]
+        return out
+
+    @staticmethod
+    def _rounded_nominal(keys: Iterable[str]) -> dict[str, Decimal]:
+        """Nominal values of the core keys among ``keys``, as CAL? prints them."""
+        return round_cal(**{k: NOMINAL[k] for k in keys if k in CAL_CORE_KEYS})
 
     def apply(self, coeffs: Mapping[str, Any] | None = None, note: str | None = None,
               ts: int | None = None) -> int | None:
@@ -539,6 +647,14 @@ class CalibrationWorkflow:
                 self.say(f"  - {p}")
             return None
         line = build_command("CAL.SET", *format_cal_args(**coeffs))
+        for k, nom in self._rounded_nominal(coeffs).items():
+            value = round_cal(**{k: coeffs[k]})[k]
+            if k in self.nudged and value == self.nudged[k]:
+                self.say(f"Note: the {k} fit rounds to its nominal value; it is sent one "
+                         "step away so that the firmware counts it as measured.")
+            elif value == nom:
+                self.say(f"Note: {k} equals its nominal value at CAL.SET resolution; the "
+                         "firmware will count it as nominal (not calibrated).")
         self.say("Command to send:")
         self.say(f"  {line}")
         if not ask_yes(self.ask, "Send CAL.SET and save to flash? [y/N] "):
@@ -547,13 +663,23 @@ class CalibrationWorkflow:
         self.inst.cal_set(**coeffs)
         seq = self.inst.cal_save(ts=int(time.time()) if ts is None else ts, note=note)
         self.say(f"Saved calibration record seq={seq}.")
+        try:
+            still = self.inst.cal_get().nominal_core
+        except Stage1IVError as exc:   # incl. SessionLost: the record is saved anyway
+            # the record is saved; only the report is missing
+            self.say(f"Could not read CAL? back ({exc}); check CAL? measured= yourself.")
+            return seq
+        if still:
+            self.say(f"Still nominal: {', '.join(still)}. Until g_dac_uv, c_dac, g_v_uv, "
+                     "g_i_na and r_s are all calibrated, records keep CAL_NOMINAL and the "
+                     "wide Kelvin tolerance.")
         return seq
 
 
 __all__ = [
-    "NOMINAL", "CAL_KEYS", "CAL_UNITS", "CAL_DECIMALS", "R_SD_OHM", "format_cal_value",
-    "format_cal_args", "round_cal", "CalInfo", "check_plausible", "is_plausible",
-    "LinearFit", "linear_fit", "GainOffsetFit", "fit_gain_offset", "DacFit",
+    "NOMINAL", "CAL_KEYS", "CAL_CORE_KEYS", "CAL_UNITS", "CAL_DECIMALS", "R_SD_OHM",
+    "format_cal_value", "format_cal_args", "round_cal", "CalInfo", "check_plausible",
+    "is_plausible", "LinearFit", "linear_fit", "GainOffsetFit", "fit_gain_offset", "DacFit",
     "vsweep_from_vk", "fit_dac", "SeriesResistanceFit", "fit_series_resistance",
-    "CalibrationWorkflow", "DAC_LINEAR_MIN", "DAC_LINEAR_MAX",
+    "CalibrationWorkflow", "session_zero", "DAC_LINEAR_MIN", "DAC_LINEAR_MAX",
 ]

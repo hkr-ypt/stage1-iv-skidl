@@ -39,6 +39,7 @@
 #define SPD_HIGH    2u
 #define SPD_VHIGH   3u
 #define PULL_NONE   0u
+#define PULL_UP     1u
 #define PULL_DOWN   2u
 
 #define DAC_SPI_TIMEOUT_DEFAULT_US 50u
@@ -253,8 +254,19 @@ void stm32_gpio_init_rest(void)
     pin_mode(GPIOA, 11, MODE_AF);
     pin_mode(GPIOA, 12, MODE_AF);
 
+    /* PA10 OTG_FS_ID (not connected on this board): AF10, open drain, internal
+     * pull-up, as TinyUSB's tested STM32F4 board files set it. ID reads high
+     * (B-device), so the OTG core starts in device mode. As an analog pin the
+     * ID input would read 0 (RM0383 §8.3.12: the Schmitt trigger output is
+     * forced to 0) and the core could start as a host, which ignores
+     * device-register writes (GINTSTS.MMIS); usb.c also forces device mode. */
+    pin_pull(GPIOA, 10, PULL_UP);
+    GPIOA->OTYPER |= PIN(10);
+    pin_af(GPIOA, 10, 10u);
+    pin_mode(GPIOA, 10, MODE_AF);
+
     /* unconnected pins -> analog (PA13/PA14 SWD and PA4 untouched) */
-    static const uint8_t pa[] = { 1, 2, 3, 6, 10, 15 };
+    static const uint8_t pa[] = { 1, 2, 3, 6, 15 };
     static const uint8_t pb[] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 };
     static const uint8_t pc[] = { 0, 1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12, 14, 15 };
     for (size_t i = 0; i < sizeof pa; i++) {
@@ -311,6 +323,20 @@ bool port_adc_xfer(const uint8_t *tx, uint8_t *rx, size_t n, uint32_t timeout_us
 {
     stm32_timeout_t t;
     stm32_timeout_start(&t, timeout_us);
+    /* A transfer that timed out can leave its last byte in flight and its
+     * received byte unread. Left there, every later rx[i] would be the reply
+     * to tx[i-1] (the skew renews itself, as the last reply is left behind
+     * each time). Let it finish, discard it, and clear OVR (DR then SR read,
+     * RM0383 §20). In normal operation BSY = RXNE = 0 here. */
+    while ((SPI2->SR & SPI_SR_BSY) != 0u) {
+        if (stm32_timeout_expired(&t)) {
+            return false;
+        }
+    }
+    while ((SPI2->SR & SPI_SR_RXNE) != 0u) {
+        (void)*(volatile uint8_t *)&SPI2->DR;
+    }
+    (void)SPI2->SR;
     for (size_t i = 0; i < n; i++) {
         while ((SPI2->SR & SPI_SR_TXE) == 0u) {
             if (stm32_timeout_expired(&t)) {

@@ -284,6 +284,9 @@ void port_uid(uint32_t uid[3])
 
 void port_system_reset(void)
 {
-    port_hb_force_low();
+    /* Every reset path zeroes the output first (PC5 low, then the zero pair),
+     * as the fault path does; RESET is accepted only DISARMED or in FAULT, so
+     * this normally rewrites the code the DAC already holds. */
+    dac_zero_safe();
     NVIC_SystemReset();
 }

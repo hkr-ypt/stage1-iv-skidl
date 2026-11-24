@@ -196,15 +196,18 @@ void dac_zero_safe(void)
     /* 1. The heartbeat stops first (the gate starts to decay). */
     port_hb_force_low();
 
-    /* 2. SPI1 idle, else an RCC reset (the port never clears SPE while BSY). */
+    /* 2. /SYNC high >= 1 us: a partial frame (< 24 bits) is discarded
+     * (SLAS430A: /SYNC high before the 24th falling edge aborts the write).
+     * Raised before any SPI1 reset, so that no SCLK edge the reset may cause
+     * can reach the DAC's shift register. */
+    port_dac_cs(false);
+    port_delay_us(DAC_SYNC_HIGH_US);
+
+    /* 3. SPI1 idle, else an RCC reset (the port never clears SPE while BSY). */
     bool spi_ok = port_dac_wait_idle(DAC_ZS_IDLE_TIMEOUT_US);
     if (!spi_ok) {
         port_dac_spi_reinit();
     }
-
-    /* 3. /SYNC high >= 1 us: a partial frame (< 24 bits) is discarded. */
-    port_dac_cs(false);
-    port_delay_us(DAC_SYNC_HIGH_US);
     if (s_bb_active) {
         port_dac_bitbang_end(); /* we preempted a bit-bang: pins back to AF5 */
         s_bb_active = false;

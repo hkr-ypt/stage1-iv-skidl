@@ -46,9 +46,12 @@
 #define NOM_DAC_CODES   65536.0
 #define NOM_DAC_B_CODE  65535.0
 
-/* OPA548 current-limit plateau: 49.4 mA typical at R7 = 1.43 Mohm, NOT a
- * characterised limit (SBOS070D specifies ILIM only at 2.5 A). Replaced by
- * the bring-up measurement (i_plateau in the calibration record). */
+/* U5 OPA547T current-limit plateau with R7 = 348 kohm (blocks/output_buffer.py):
+ * the SBOS056 I_LIM equation gives 62.6 mA at +-30 V and 25 C; expected at the
+ * board's +-15 V 40...65 mA, sinking up to ~8 mA above sourcing, falling
+ * ~0.2 mA/K as U5 warms; 49 mA is the design centre (docs/final_audit.md
+ * §3.1), NOT a characterised limit. Replaced by the bring-up measurement
+ * (i_plateau in the calibration record). */
 #define NOM_I_PLATEAU_A 0.049
 
 #endif /* NOMINAL_H */

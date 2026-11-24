@@ -27,6 +27,7 @@
  */
 #include "calib.h"
 
+#include <math.h>
 #include <string.h>
 
 #include "nominal.h"
@@ -85,6 +86,19 @@ static bool within_rel(double x, double nominal, double rel)
     return in_window(x, nominal * (1.0 - rel), nominal * (1.0 + rel));
 }
 
+/* The zero code moves with the DAC8552 errors (SLAS430, -40..105 C): zero-code
+ * error 12 mV, gain error 0.2 % FSR at mid-scale 2.5 mV and half of channel
+ * B's 0.5 % FSR full-scale error 6.25 mV, i.e. 20.75 mV or 544 codes of
+ * 38.15 uV; with INL, the R1/R2 ratio, the difference amplifier's resistors
+ * and the OPA2277 offsets the corner case is about 615 codes (initial
+ * resistor tolerance; their drift over temperature comes on top, hence the
+ * margin). A dropped or extra digit still lands far outside. A
+ * thousands-digit slip can land inside: iv-cal computes c_dac; a value
+ * typed by hand that is that wrong flags KELVIN below about 0.8 i_plateau,
+ * nearer the plateau KELVIN or a false CLIM by polarity, and above about
+ * 55 mA nothing (calibration.md §2). */
+#define C_DAC_WINDOW_CODES 1000.0
+
 bool calib_plausible(const cal_coeffs_t *c)
 {
     if (c == NULL) {
@@ -93,7 +107,7 @@ bool calib_plausible(const cal_coeffs_t *c)
     cal_coeffs_t n;
     calib_nominal(&n);
     return within_rel(c->g_dac, n.g_dac, 0.02)
-        && in_window(c->c_dac, n.c_dac - 400.0, n.c_dac + 400.0)
+        && in_window(c->c_dac, n.c_dac - C_DAC_WINDOW_CODES, n.c_dac + C_DAC_WINDOW_CODES)
         && within_rel(c->g_v, n.g_v, 0.05)
         && within_rel(c->g_i, n.g_i, 0.05)
         && in_window(c->r_s, 80.0, 200.0)
@@ -109,7 +123,7 @@ static uint32_t record_crc(const cal_record_t *r)
     return crc32_ieee(r, offsetof(cal_record_t, crc));
 }
 
-void calib_build_record(cal_record_t *r, const cal_coeffs_t *c, uint32_t seq,
+void calib_build_record(cal_record_t *r, const cal_coeffs_t *c, uint32_t measured, uint32_t seq,
                         const uint32_t uid[3], uint32_t timestamp, const char *note)
 {
     memset(r, 0, sizeof *r);
@@ -121,6 +135,7 @@ void calib_build_record(cal_record_t *r, const cal_coeffs_t *c, uint32_t seq,
     r->uid[1] = uid[1];
     r->uid[2] = uid[2];
     r->timestamp = timestamp;
+    r->measured = CAL_MEASURED_MARK | (measured & CAL_M_ALL);
     r->c = *c;
     if (note != NULL) {
         /* At most CAL_NOTE_LEN - 1 characters: the note is always a
@@ -222,7 +237,42 @@ static void scan_port(const uint32_t uid[3], calib_scan_t *scan)
     }
 }
 
-bool calib_load(cal_coeffs_t *out, calib_scan_t *scan_out, uint32_t *seq_out)
+static const double *coeff(const cal_coeffs_t *c, unsigned k)
+{
+    switch (k) {
+    case 0:  return &c->g_dac;
+    case 1:  return &c->c_dac;
+    case 2:  return &c->g_v;
+    case 3:  return &c->g_i;
+    case 4:  return &c->r_s;
+    case 5:  return &c->r_top;
+    default: return &c->i_plateau;
+    }
+}
+
+/* CAL.SET resolution of each coefficient, as its inverse in SI units (the
+ * to_si of commands.c's k_cal_keys: 1 uV/code to 6 decimals is 1e-12 V/code,
+ * and so on). CAL? prints, and CAL.SET accepts, exactly these steps. */
+static const double k_cal_to_si[7] = { 1e12, 1e4, 1e12, 1e15, 1e4, 1e4, 1e9 };
+
+uint32_t calib_differs_from_nominal(const cal_coeffs_t *c)
+{
+    cal_coeffs_t nom;
+    calib_nominal(&nom);
+    uint32_t m = 0u;
+    for (unsigned k = 0; k < 7u; k++) {
+        /* the products are far below 2^53: floor() gives exact integers */
+        double v = floor(*coeff(c, k) * k_cal_to_si[k] + 0.5);
+        double n = floor(*coeff(&nom, k) * k_cal_to_si[k] + 0.5);
+        if (v < n || v > n) {
+            m |= 1u << k;   /* CAL_M_* follow the field order */
+        }
+    }
+    return m;
+}
+
+bool calib_load(cal_coeffs_t *out, calib_scan_t *scan_out, uint32_t *seq_out,
+                uint32_t *measured_out)
 {
     uint32_t uid[3];
     calib_scan_t scan;
@@ -230,16 +280,24 @@ bool calib_load(cal_coeffs_t *out, calib_scan_t *scan_out, uint32_t *seq_out)
     scan_port(uid, &scan);
 
     bool stored = false;
+    uint32_t measured = 0u;
     if (scan.newest >= 0) {
         cal_record_t rec;
         /* Re-check the copy that is actually used. */
         if (check_bytes(port_cal_sector((unsigned)scan.newest), uid, &rec) == CALREC_VALID) {
             *out = rec.c;
             stored = true;
+            /* a record without the mark (written before it existed): what
+             * CAL.SET would count as measured */
+            measured = (rec.measured & CAL_MEASURED_MARK) ? (rec.measured & CAL_M_ALL)
+                                                          : calib_differs_from_nominal(&rec.c);
         }
     }
     if (!stored) {
         calib_nominal(out);
+    }
+    if (measured_out != NULL) {
+        *measured_out = measured;
     }
     if (scan_out != NULL) {
         *scan_out = scan;
@@ -250,7 +308,7 @@ bool calib_load(cal_coeffs_t *out, calib_scan_t *scan_out, uint32_t *seq_out)
     return stored;
 }
 
-err_t calib_save(const cal_coeffs_t *c, uint32_t timestamp, const char *note,
+err_t calib_save(const cal_coeffs_t *c, uint32_t measured, uint32_t timestamp, const char *note,
                  uint32_t *seq_out)
 {
     if (c == NULL || !calib_plausible(c)) {
@@ -271,7 +329,7 @@ err_t calib_save(const cal_coeffs_t *c, uint32_t timestamp, const char *note,
     unsigned target = calib_target_sector(&scan);
 
     cal_record_t rec;
-    calib_build_record(&rec, c, seq, uid, timestamp, note);
+    calib_build_record(&rec, c, measured, seq, uid, timestamp, note);
 
     if (!port_cal_erase(target)) {
         return E_FLASH;

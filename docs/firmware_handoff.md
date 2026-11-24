@@ -157,14 +157,16 @@ V_SWEEP = (R4/R3)·(V_A − V_B/2) = 8.0321·(V_A − V_B/2), with V_A, V_B in 0
   comes from the `i_plateau` calibration coefficient, nominal 49 mA until the
   bring-up measurement replaces it.
 * **The software current cut-off and the plateau** (final audit, hardware
-  facts; no firmware was changed). `i_compliance` defaults to 50 mA, which
-  `firmware_spec.md` calls "effectively off, under the hardware plateau".
-  With the plateau expected at 40…65 mA, and the sinking one typically
-  above 50 mA, that default acts *before* U5 limits on most units, and
-  typically in the sinking polarity: the
-  output is zeroed instead of sitting on the plateau. Where the hardware
-  plateau is meant to act, set `i_compliance` to its 100 mA maximum (the
-  bring-up checklist does this before its plateau tests).
+  facts). `i_compliance` defaulted to 50 mA, which `firmware_spec.md` calls
+  "effectively off, under the hardware plateau". With the plateau expected
+  at 40…65 mA, and the sinking one typically above 50 mA, that default
+  acted *before* U5 limited on most units, and typically in the sinking
+  polarity: the output was zeroed instead of sitting on the plateau.
+  **[firmware]** The final firmware audit raised the default to its 100 mA
+  maximum (above the 92.6 mA worst-case passive bound), so by default the
+  hardware plateau limits and is flagged `CLIM`; set `i_compliance` lower to
+  protect a DUT. The bring-up checklist's explicit `CFG i_compliance=0.1`
+  steps are then the default, and stay harmless.
 * **An inductive DUT in negative current limit** (final audit, model
   evidence, `final_audit.md` §3.7). In TI's OPA547 model, when the command
   falls at once out of the negative limit with about 0.2…30 mH in the
@@ -190,8 +192,9 @@ V_SWEEP = (R4/R3)·(V_A − V_B/2) = 8.0321·(V_A − V_B/2), with V_A, V_B in 0
   PA9's OTG_FS_VBUS alternate function. It must detect cable attach and detach
   from PA0 itself and drive the soft connect (device disconnect bit)
   accordingly. **[firmware]** PA0 is measured by ADC1 (attach > 3.8 V VBUS for
-  20 ms, detach < 3.0 V); losing VBUS, enumeration or DTR, or 30 s without a
-  byte from the host, disarms the output (`docs/firmware/protocol.md` §1).
+  20 ms, detach < 3.6 V since the final firmware audit, for the back-feed
+  below); losing VBUS, enumeration or DTR, or 30 s without a byte from the
+  host, disarms the output (`docs/firmware/protocol.md` §1).
   Hardware note (final audit, review estimate; the USBLC6-2 data sheet
   could not be read): after the cable is pulled, U10's diode from D+ to its
   VBUS pin can hold the sensed node near 2.7…3.0 V while the D+ pull-up is

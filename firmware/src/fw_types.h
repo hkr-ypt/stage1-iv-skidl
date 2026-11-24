@@ -46,7 +46,7 @@ typedef enum {
 /* ---- warning bits reported in STAT? (not latched faults) ----------------- */
 enum {
     W_BOR_OFF      = 1u << 0,  /* option bytes not at BOR level 3: ARM refused  */
-    W_CAL_NOMINAL  = 1u << 1,  /* no valid calibration record: nominal constants */
+    W_CAL_NOMINAL  = 1u << 1,  /* a CAL_M_CORE coefficient is nominal (calib.h) */
     W_ZERO_STALE   = 1u << 2,  /* no valid session zero                         */
     W_CRASH        = 1u << 3,  /* a crash record from a previous run is held    */
     W_KELVIN       = 1u << 4,  /* KELVIN flagged on >= 3 consecutive points     */
@@ -55,6 +55,11 @@ enum {
     W_NO_OUTPUT    = 1u << 7,  /* NO_OUTPUT flagged recently                    */
     W_CAL_UID      = 1u << 8,  /* a stored record belongs to another MCU        */
     W_DEV_USB_PID  = 1u << 9,  /* running with the development USB PID         */
+    W_CAL_DAMAGED  = 1u << 10, /* a sector holds a damaged record (bad magic,
+                                * version or CRC, implausible): an older record
+                                * or nominal constants may be in use; the next
+                                * CAL.SAVE, or at most the one after it,
+                                * overwrites it                               */
 };
 
 /* ---- protocol error codes (docs/firmware/protocol.md) --------------------- */
@@ -86,6 +91,7 @@ enum {
     PF_CAL_NOMINAL = 1u << 8,
     PF_ZERO_STALE  = 1u << 9,
     PF_MEAS        = 1u << 10,
+    PF_SD_SAT      = 1u << 11,   /* a standard deviation hit its 6553.4-code ceiling */
 };
 
 /* ---- reset causes (decoded from RCC_CSR at boot) ---------------------------- */

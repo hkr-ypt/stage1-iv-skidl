@@ -29,8 +29,11 @@
 #ifndef FW_VERSION_STRING
 #define FW_VERSION_STRING "0.1.0-dev"
 #endif
-#define FW_PROTOCOL_VERSION 1
-#define FW_HW_REV "stage1-iv@8a84b55"
+/* 2: PT/MEAS? flag bit 11 SD_SAT, STAT? warn bit 10 CAL_DAMAGED, CAL?
+ * measured=, CAL_NOMINAL while any CAL_M_CORE coefficient is nominal, an
+ * empty line before EVT HELLO (protocol.md) */
+#define FW_PROTOCOL_VERSION 2
+#define FW_HW_REV "stage1-iv@c4e7592"   /* last hardware change: final design audit */
 
 /* ---- timing model (docs/firmware/firmware_spec.md §4.4, §7.1) ---------- */
 #define HB_HALF_PERIOD_US        250u     /* 2 kHz square wave on a fixed grid   */
@@ -50,14 +53,21 @@
 #define AFE_CHECK_MAX_AGE_US     1000000u
 #define VBUS_DEBOUNCE_US         20000u
 #define VBUS_ATTACH_MV           3800u    /* VBUS (not pin) voltage thresholds    */
-#define VBUS_DETACH_MV           3000u
+/* Detach: a valid VBUS is >= 4.4 V (4.27 V read with the +-3 % of VDDA and
+ * the divider); after a cable pull the D+ pull-up back-feeds the node through
+ * U10 to about 2.7...3.0 V (3.09 V read), which must read as absent or the
+ * pull-up holds itself on (firmware_handoff.md §6). */
+#define VBUS_DETACH_MV           3600u
 
 /* ---- output limits ------------------------------------------------------ */
 #define V_LIMIT_MAX_UV           10000000 /* 10.000 V absolute software ceiling  */
 #define SETTLE_MIN_US            100u
 #define SETTLE_MAX_US            60000000u
-#define RAMP_STEP_MAX_UV         10000    /* <= 10 mV per ramp step               */
-#define RAMP_STEP_PERIOD_US      1000u    /* >= 1 ms between ramp steps           */
+#define RAMP_STEP_MAX_UV         10000    /* <= 10 mV of setpoint per ramp step
+                                           * (<= 33 DAC codes, 10.1 mV)          */
+#define RAMP_STEP_PERIOD_US      1000u    /* ramp steps on a 1 ms grid (mean
+                                           * period; one after a late step can
+                                           * come sooner, spec §15 item 12)     */
 
 /* ---- capacities --------------------------------------------------------- */
 #define RESULTS_CAPACITY         1024u

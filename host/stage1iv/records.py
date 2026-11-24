@@ -11,9 +11,17 @@
   2**32 us = 71.6 min; consecutive records are far closer than that, so they
   are unwrapped monotonically (:class:`U32Unwrapper`,
   :func:`unwrap_record_times`).
-* ``i_sd``/``v_sd`` are ``-`` when ``n < 2`` and become ``None`` here.
-* Decimal fields are kept as :class:`decimal.Decimal`, which reproduces the
-  received text exactly (``str(rec.v_set_v)`` is what the device printed).
+* ``i_sd``/``v_sd`` are ``-`` when ``n < 2`` and become ``None`` here. They
+  saturate at 6553.4 codes; flag ``SD_SAT`` then says the true value is larger.
+* ``v_V``/``i_A`` are computed by the firmware from the *unrounded* means, the
+  active calibration and the session zero; ``i_raw``/``v_raw`` are those means
+  rounded to whole codes, so recomputing ``v_V``/``i_A`` from them can differ
+  by up to half a code.
+* Decimal fields are kept as :class:`decimal.Decimal` with the exponent the
+  device's fixed decimals define, so ``format(rec.i_a, "f")`` (used by
+  :meth:`PTRecord.wire_values`) reproduces the received text exactly.
+  ``str()`` does not: it switches to scientific notation for small values
+  (``Decimal("0.0000001234")`` -> ``"1.234E-7"``).
 """
 
 from __future__ import annotations
@@ -50,10 +58,20 @@ class Flag(enum.IntFlag):
     CAL_NOMINAL = 1 << 8  #: nominal (uncalibrated) constants in use
     ZERO_STALE = 1 << 9   #: no valid session zero
     MEAS = 1 << 10        #: (MEAS? only)
+    #: a standard deviation reached its 6553.4-code ceiling; the true value is larger
+    SD_SAT = 1 << 11
 
 
-#: Flags that mean the point is not valid DUT data.
+#: Flags that mean the point is not valid DUT data (``SD_SAT`` is not one of
+#: them: the means are valid, only the reported scatter is a lower bound).
 INVALID_DATA_FLAGS = Flag.OVR_V | Flag.OVR_I | Flag.CLIM | Flag.NO_OUTPUT
+
+
+def decimal_text(value: Decimal) -> str:
+    """Plain fixed-point text of a Decimal, keeping its exponent-defined
+    decimals (``Decimal("0E-10")`` -> ``"0.0000000000"``); never scientific
+    notation, unlike ``str()``."""
+    return format(value, "f")
 
 
 def decode_flags(flags: int) -> list[str]:
@@ -111,19 +129,22 @@ class PTRecord:
         return not (self.flags & int(INVALID_DATA_FLAGS))
 
     def wire_values(self) -> list[str]:
-        """The 17 fields as text, in wire order (``-`` for a missing sd)."""
+        """The 17 fields as text, in wire order (``-`` for a missing sd).
+
+        Decimals keep the device's fixed decimals (``0.0000001234``, never
+        ``1.234E-7``; see :func:`decimal_text`)."""
         def sd(x: Decimal | None) -> str:
-            return "-" if x is None else str(x)
+            return "-" if x is None else decimal_text(x)
         return [
             str(self.sweep_id), str(self.seq), str(self.idx), str(self.seg),
             str(self.t_set_us), str(self.t_i_us), str(self.t_v_us), str(self.dac_code),
-            str(self.v_set_v), str(self.n), str(self.i_raw), str(self.v_raw),
-            sd(self.i_sd), sd(self.v_sd), str(self.v_v), str(self.i_a),
+            decimal_text(self.v_set_v), str(self.n), str(self.i_raw), str(self.v_raw),
+            sd(self.i_sd), sd(self.v_sd), decimal_text(self.v_v), decimal_text(self.i_a),
             format_flags(self.flags),
         ]
 
     def to_line(self) -> str:
-        """Re-create the ``PT`` line."""
+        """Re-create the ``PT`` line (identical to the received one)."""
         return "PT " + ",".join(self.wire_values())
 
 
@@ -283,6 +304,6 @@ def unwrap_record_times(records: Sequence[PTRecord]) -> list[tuple[int, int, int
 
 __all__ = [
     "PT_FIELDS", "U32_WRAP", "Flag", "INVALID_DATA_FLAGS", "decode_flags",
-    "format_flags", "PTRecord", "parse_pt", "find_gaps", "missing_indices",
+    "format_flags", "decimal_text", "PTRecord", "parse_pt", "find_gaps", "missing_indices",
     "SeqTracker", "U32Unwrapper", "unwrap_u32", "unwrap_record_times",
 ]

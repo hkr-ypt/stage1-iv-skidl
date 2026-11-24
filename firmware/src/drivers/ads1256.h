@@ -22,7 +22,8 @@
  *    (8 tau = 1.04 us) /CS hold after the last SCLK; explicit delays.
  *  - Init after every RESET-pin pulse: STATUS = 0x00 (MSB first, ACAL off,
  *    BUFEN off), MUX, ADCON = CLK 00 (CLKOUT off) | SDCS 00 | PGA,
- *    DRATE, IO = 0x00 (D0-D3 outputs driven low); SYNC; SELFCAL; wait /DRDY;
+ *    DRATE, IO = 0x00 (D0-D3 outputs driven low); SYNC; WAKEUP; SELFCAL;
+ *    wait /DRDY;
  *    read back registers 0x00-0x04 and compare.
  *  - Integrity while running: register scrub (RREG 0x00-0x04 vs shadow,
  *    STATUS masked to bits 3:1) at least every ADC_SCRUB_PERIOD_US when idle
@@ -116,7 +117,8 @@ typedef enum {
 
 /* Start (or restart) the full init sequence with the given configuration. */
 void        ads_init_begin(const ads_cfg_t *cfg);
-/* Reconfigure (PGA and/or rate) from IDLE: WREG, SYNC, SELFCAL, read-back.
+/* Reconfigure (PGA and/or rate) from IDLE: WREG, SYNC, WAKEUP, SELFCAL,
+ * read-back.
  * Returns false (and does nothing) unless the driver is IDLE. */
 bool        ads_reconfigure(const ads_cfg_t *cfg);
 void        ads_service(void);

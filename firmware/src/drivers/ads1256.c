@@ -39,7 +39,8 @@
  * Timeouts: reset 100 ms (crystal start + automatic self-cal); calibration
  * Table 21 * 3/2 + 5 ms; conversion: first accepted edge within
  * t18 * 3/2 + 2 ms after WAKEUP; after a late (missed-deadline) edge the next
- * edge must come within 1/DR * 3/2 + 2 ms of it, at most ADS_MAX_LATE times.
+ * edge must come within 1/DR * 3/2 + 2 ms of the re-arm that follows it, at
+ * most ADS_MAX_LATE times.
  *
  * Register scrub: every ADC_SCRUB_PERIOD_US / 2 (so that detection is within
  * ADC_SCRUB_PERIOD_US even when the scrub has to wait for a slot), or on
@@ -125,6 +126,7 @@ static struct {
     uint64_t          t_drdy;
     bool              late;
     uint32_t          late_count;
+    uint8_t           cal_tries;         /* SYNC/WAKEUP/SELFCAL frames sent   */
     ads_sample_t      sample;
     /* stuck-DOUT detector */
     uint32_t          stuck_run;
@@ -263,12 +265,24 @@ static bool txn_rreg5(uint8_t rx[5])
     return true;
 }
 
+/* SYNC, WAKEUP, SELFCAL in one /CS frame. SYNC + WAKEUP is the documented
+ * synchronisation (p.27: after a PGA or data-rate change "perform a
+ * synchronization operation to force DRDY high"; Table 24: WAKEUP "completes
+ * SYNC"). SELFCAL then starts from normal operation (p.25: "calibration can
+ * be done at any time"; p.36: /DRDY high until it completes with settled
+ * data). What SELFCAL does while SYNC holds the part stopped, with no WAKEUP,
+ * the data sheet does not say. */
 static bool txn_sync_selfcal(void)
 {
     static const uint8_t sync = ADS_CMD_SYNC;
+    static const uint8_t wakeup = ADS_CMD_WAKEUP;
     static const uint8_t cal = ADS_CMD_SELFCAL;
     port_adc_cs(true);
     if (!xfer(&sync, NULL, 1u)) {
+        return txn_fail();
+    }
+    port_delay_us(ADS_T11_LONG_US);
+    if (!xfer(&wakeup, NULL, 1u)) {
         return txn_fail();
     }
     port_delay_us(ADS_T11_LONG_US);
@@ -423,7 +437,21 @@ static void service_init(void)
 
     case PH_CAL_WAIT: {
         uint32_t limit = s.rate->selfcal_us * 3u / 2u + ADS_CAL_TIMEOUT_EXTRA_US;
-        if (elapsed(now, s.t_phase) >= ADS_DRDY_POLL_MIN_US && port_adc_drdy_low()) {
+        uint64_t el = elapsed(now, s.t_phase);
+        if (el >= ADS_DRDY_POLL_MIN_US && port_adc_drdy_low()) {
+            if (el < s.rate->selfcal_us / 2u) {
+                /* /DRDY low in less than half the Table 21 time (> t18 at
+                 * every v1 rate): the part did not calibrate; a SELFCAL it
+                 * ignored leaves only old data or the WAKEUP's conversion.
+                 * Send the frame once more, then fail as a calibration that
+                 * never ends would, rather than run on an old calibration. */
+                if (++s.cal_tries < 2u) {
+                    s.ph = PH_SYNC_CAL;
+                } else {
+                    fail(ADS_ERR_TIMEOUT);
+                }
+                break;
+            }
             uint8_t rx[5] = { 0, 0, 0, 0, 0 };
             if (!txn_rreg5(rx)) {
                 break;
@@ -501,7 +529,13 @@ static void missed_edge(void)
         fail(ADS_ERR_TIMEOUT);
         return;
     }
-    s.t_wait_from = s.t_drdy;
+    /* The timeout runs from the re-arm, not from the missed edge: after a
+     * main-loop stall of more than one period the following edge has already
+     * gone by and the re-arm clears it, so the next one can come up to one
+     * period after now (from t_drdy that would exceed 3/2 P + 2 ms at every
+     * rate up to 100 SPS and fault a recoverable late read). */
+    uint64_t now = port_now_us();
+    s.t_wait_from = (now > s.t_drdy) ? now : s.t_drdy;
     s.wait_limit_us = ads_period_us(s.rate) * 3u / 2u + ADS_CONV_TIMEOUT_EXTRA_US;
     s.t_next_edge_min = s.t_drdy + ads_period_us(s.rate) * 9u / 10u;
     port_adc_drdy_arm();
@@ -621,6 +655,7 @@ bool ads_reconfigure(const ads_cfg_t *cfg)
     s.shadow[ADS_REG_DRATE] = cfg->drate;
     s.state = ADS_INIT;
     s.ph = PH_RECONF_WRITE;
+    s.cal_tries = 0;
     return true;
 }
 

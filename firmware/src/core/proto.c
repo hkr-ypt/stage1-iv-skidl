@@ -370,11 +370,22 @@ static void reset_io(void)
     commands_cancel_deferred();
 }
 
+static bool tx_line(const char *s, size_t n);
+
 void proto_session_start(void)
 {
     reset_io();
     results_skip_unsent();
     s_p.session = true;
+    /* An empty line first. Output of the old session that the port already
+     * took cannot be withdrawn: a host that stopped reading and closed the
+     * port gets it when it opens the port again (on the target, up to the
+     * 4 KB CDC TX FIFO, which TinyUSB's DWC2 driver may be sending from,
+     * plus one 64-byte packet in the OTG FIFO).
+     * It can end mid-line; the newline ends it, so EVT HELLO always starts
+     * a line. Hosts ignore empty lines (protocol.md §2) and everything
+     * before the session's EVT HELLO (§1). */
+    (void)tx_line("", 0u);
 }
 
 void proto_session_end(void)
@@ -595,9 +606,9 @@ size_t proto_format_pt(const pt_rec_t *r, char *buf, size_t cap)
     lb_putc(&b, ',');
     put_sd(&b, r->v_sd);
     lb_putc(&b, ',');
-    lb_fix(&b, div_round(scaling_v_nv(c, z, (double)r->v_raw), 1000), 6);
+    lb_fix(&b, div_round(scaling_v_nv(c, z, pt_mean_v(r)), 1000), 6);
     lb_putc(&b, ',');
-    lb_fix(&b, div_round(scaling_i_pa(c, z, (double)r->i_raw), 100), 10);
+    lb_fix(&b, div_round(scaling_i_pa(c, z, pt_mean_i(r)), 100), 10);
     lb_putc(&b, ',');
     lb_hex(&b, r->flags, 4);
     return b.overflow ? 0 : b.len;

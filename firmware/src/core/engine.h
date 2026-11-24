@@ -32,12 +32,22 @@ typedef enum { CALSRC_NOMINAL = 0, CALSRC_STORED, CALSRC_RAM } cal_source_t;
 const cal_coeffs_t *engine_cal(void);
 cal_source_t        engine_cal_source(void);
 const char         *engine_cal_source_name(void);
-uint32_t            engine_cal_seq(void);           /* 0 if none stored      */
+uint32_t            engine_cal_seq(void);           /* newest stored record's
+                                                     * sequence, 0 if none  */
 const calib_scan_t *engine_cal_scan(void);
-void                engine_cal_set(const cal_coeffs_t *c);   /* source := ram */
+/* source := ram; for the coefficients in `given` (CAL_M_* bits), `measured`
+ * says which now hold a measured value; the other coefficients keep theirs. */
+void                engine_cal_set(const cal_coeffs_t *c, uint32_t given, uint32_t measured);
+uint32_t            engine_cal_measured(void);      /* CAL_M_* of engine_cal() */
+/* Some CAL_M_CORE coefficient is still nominal: records carry CAL_NOMINAL, the
+ * classifier uses the nominal Kelvin tolerance, STAT? warns. */
+bool                engine_cal_nominal(void);
 void                engine_cal_default(void);
 void                engine_cal_reload(void);
-err_t               engine_cal_save(uint32_t timestamp, const char *note, uint32_t *seq);
+/* Persist *c / measured (the CAL.SAVE job's snapshot); RAM becomes "stored"
+ * only if it still holds that record. */
+err_t               engine_cal_save(const cal_coeffs_t *c, uint32_t measured,
+                                    uint32_t timestamp, const char *note, uint32_t *seq);
 
 /* ---- session zero --------------------------------------------------------- */
 typedef enum { ZERO_NONE = 0, ZERO_VALID, ZERO_STALE } zero_state_t;

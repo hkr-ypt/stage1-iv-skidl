@@ -1,6 +1,6 @@
 """stage1iv — host library for the Stage 1 I-V characterization instrument.
 
-Protocol: docs/firmware/protocol.md (version 1). Main entry points:
+Protocol: docs/firmware/protocol.md (version 2). Main entry points:
 
 * :class:`stage1iv.client.Instrument` — command/response client, events,
   keep-alive, sweeps with gap recovery;
@@ -17,10 +17,10 @@ Accuracy figures are provisional until the bring-up measurements
 from .client import Instrument, SweepResult
 from .errors import (BringupBuildRefused, DeviceError, ProtocolError, SessionLost,
                      Stage1IVError, SweepFailed)
+from .protocol import PROTOCOL_VERSION
 from .records import Flag, PTRecord
 
 __version__ = "0.1.0"
-PROTOCOL_VERSION = 1
 
 __all__ = [
     "Instrument", "SweepResult", "PTRecord", "Flag", "Stage1IVError", "DeviceError",

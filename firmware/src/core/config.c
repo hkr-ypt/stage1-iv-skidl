@@ -17,7 +17,11 @@ void cfg_defaults(cfg_t *c)
     c->first_settle_us = 50000u;
     c->ramp_rate_uv_s = 10000000u;     /* 10 V/s */
     c->v_limit_uv = V_LIMIT_MAX_UV;
-    c->i_compliance_na = 50000000u;    /* 50 mA */
+    /* 100 mA, the maximum: above the 92.6 mA worst-case passive bound, so the
+     * default never acts on a passive DUT and the hardware plateau (OPA547T,
+     * expected 40..65 mA) is what limits, flagged CLIM in both polarities
+     * (spec §7.5 "effectively off"). 50 mA lay inside that plateau. */
+    c->i_compliance_na = CFG_I_COMPL_MAX_NA;
     c->on_compliance = ONC_STOP;
     c->end = END_ZERO;
     c->line_hz = 50u;

@@ -504,6 +504,33 @@ static void test_zero_safe_healthy_is_spi_only(void)
     TEST_ASSERT_EQUAL_UINT32(1, s.updates); /* a zero is not an update */
 }
 
+/* /SYNC rises, and stays high >= 1 us, before SPI1 is waited on or reset: a
+ * partial frame is aborted by the DAC8552's /SYNC rule (SLAS430A, /SYNC
+ * interrupt), never completed by a stray SCK edge of an SPI1 reset. */
+static void test_zero_safe_raises_sync_before_touching_spi1(void)
+{
+    static const uint8_t partial[3] = { 0x00, 0x12, 0x34 };
+    for (int mode = ZS_HEALTHY; mode <= ZS_BSY_RESET_HEALS; mode++) {
+        dtp_reset();
+        dac_init();
+        dtp_preload_bits(partial, 13);      /* /SYNC low, 13 bits of a frame in */
+        zs_inject((zs_mode_t)mode, 0);
+        dtp_clear_obs();
+        dac_zero_safe();
+        assert_zero_pair_everywhere();
+        int rise = dtp_find(DEV_CS_RELEASE, 0);
+        int wait_ok = dtp_find(DEV_WAIT_IDLE_OK, 0);
+        int wait_fail = dtp_find(DEV_WAIT_IDLE_FAIL, 0);
+        int wait = (wait_ok >= 0 && (wait_fail < 0 || wait_ok < wait_fail)) ? wait_ok : wait_fail;
+        TEST_ASSERT_TRUE(rise >= 0 && wait > rise);
+        TEST_ASSERT_TRUE(dtp.ev[wait].t >= dtp.ev[rise].t + 1u);
+        int reinit = dtp_find(DEV_REINIT, 0);
+        if (mode == ZS_BSY_RESET_HEALS) {
+            TEST_ASSERT_TRUE(reinit > rise);
+        }
+    }
+}
+
 static void test_zero_safe_bitbang_waveform_is_mode1(void)
 {
     dtp.spi_dead = true;
@@ -720,6 +747,7 @@ int main(void)
     RUN_TEST(test_init_resets_all_state);
     RUN_TEST(test_zero_safe_matrix);
     RUN_TEST(test_zero_safe_healthy_is_spi_only);
+    RUN_TEST(test_zero_safe_raises_sync_before_touching_spi1);
     RUN_TEST(test_zero_safe_bitbang_waveform_is_mode1);
     RUN_TEST(test_zero_safe_reinit_path_then_bitbang);
     RUN_TEST(test_zero_safe_preempting_its_own_bitbang);

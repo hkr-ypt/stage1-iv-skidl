@@ -124,8 +124,9 @@ openocd -f interface/stlink.cfg -f target/stm32f4x.cfg \
 
 Program the `.elf` or `.hex`: they contain only sector 0 and sectors 3 and up,
 so the calibration in sectors 1–2 survives. The `.bin` is a flat image from
-0x08000000 and **overwrites the calibration sectors** with 0xFF; use it only
-for a deliberate full erase.
+0x08000000 (`objcopy --gap-fill 0xFF`) and **overwrites the calibration
+sectors** with 0xFF, the erased state; use it only for a deliberate full
+erase.
 
 After flashing: `iv-diag` (or `*IDN?`) shows the variant and revision;
 `STAT?` must show `bor=3` before the board can arm.

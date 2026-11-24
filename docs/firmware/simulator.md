@@ -11,7 +11,9 @@ objects as the target image) on a simulation of the board:
   aborted frames, power-down bits, B ≠ 0xFFFF loads are counted);
 * `sim/model_ads1256.c` models the ADS1256 command set, registers,
   conversions, /DRDY, self-calibration and resets, and records every SBAS288K
-  timing violation (t6, t10, t11, SCLK, reads while not ready, ...);
+  timing violation (t6, t10, t11, SCLK, reads while not ready, ...) and every
+  command other than WAKEUP or RESET sent while SYNC holds the part
+  (`adc_viol_after_sync`: undocumented in the data sheet);
 * `sim/model_board.c` models the charge pump and reference gate (driven by
   the firmware's real PC5 edges), V_SWEEP, the output stage with its
   current-limit plateau, R_top/R_bot, the Kelvin attenuators, the INA128
@@ -46,6 +48,26 @@ CTL <control socket path>
   `dtr` (default 1) AND a client has the slave open".
 * An emulated MCU reset (watchdog, dead-man, `RESET`, `mcu_reset`) behaves
   like a USB re-enumeration: hosts should close and reopen the port.
+* An emulated reset re-runs `app_init()` but cannot clear the firmware's
+  static variables as the target's startup code clears `.bss`. Every module's
+  init resets its own state; the ADS1256 driver's state is reset by the POST
+  that `app_init()` starts, so a conversion the previous run left pending can
+  send one transaction to the freshly powered ADC model before that (the
+  model counts it as a command while busy). That traffic does not exist on
+  the target.
+* The device-side TX ring stands for TinyUSB's CDC TX FIFO, 4 KB by default
+  (`tx_limit`): what the host has not read stays there when it drops DTR or
+  closes the pty, and reaches the next session ahead of its empty line and
+  `EVT HELLO`, cut off mid-line, as on the target (protocol.md §1); what the
+  departed client's pty queues held is dropped, like a host's tty buffers.
+  A re-enumeration clears it, as SET_CONFIGURATION does in TinyUSB: a
+  return of the link that the firmware sees (`configured` 0 → 1 across a
+  loop pass, or its soft reconnect after it saw VBUS go); a VBUS or
+  `configured` glitch no pass sees leaves the session and its output alone.
+  While the link is down the host reads nothing. `configured` models a
+  re-enumeration only: a suspend/resume, which on the target ends the
+  session but keeps the FIFO, is not modelled. The one 64-byte packet the
+  target's OTG FIFO can also hold is not modelled either.
 
 From Python: `stage1iv.sim.SimulatorProcess` starts the simulator, opens an
 `Instrument` on the pty and gives a control client (`sim.ctl`).
@@ -57,7 +79,7 @@ UNIX stream socket; one command per line; reply `OK [key=value ...]` or
 
 | Command | Effect |
 |---|---|
-| `vbus <mV>` | VBUS at PA0 ×2 (attach > 3800, detach < 3000) |
+| `vbus <mV>` | VBUS at PA0 ×2 (attach > 3800 for 20 ms, detach < 3600) |
 | `dtr 0\|1`, `configured 0\|1` | host-side session flags |
 | `dut open\|short\|resistor <Ω>\|diode <Is> <n> <Rs>\|cell <V> <Ω>\|capacitor <F>` | device under test (capacitor = open at DC) |
 | `rails <pos 0\|1> <neg 0\|1>` | ±15 V present (a missing rail opens U12 and gives the AFE signature) |
@@ -68,7 +90,7 @@ UNIX stream socket; one command per line; reply `OK [key=value ...]` or
 | `adc_stuck none\|low\|high`, `adc_drdy_dead 0\|1`, `adc_reset` | ADC faults (DOUT stuck, no /DRDY, spontaneous reset) |
 | `stall <µs>` | the next loop pass takes this long (dead-man / gap tests) |
 | `bor 0..3`, `tim2_frozen 0\|1` | option-byte BOR level, DBG_TIM2_STOP |
-| `tx_limit <bytes>\|-1` | stall the host link (−1 = unlimited) |
+| `tx_limit <bytes>\|-1` | limit the device-side TX FIFO (0 stalls the host link; −1 = the default, 4096 bytes like the target's CDC TX FIFO) |
 | `mcu_reset`, `power_cycle` | MCU reset (DAC/pump/ADC/flash/crash record survive) or full power cycle (flash survives) |
 | `crash hardfault\|hang\|hang_irqoff` | emulated fault handler, hang (dead-man or IWDG) |
 | `obs?` | one line of key=value: `t_us v_sweep vref_dac v_arm gate gate_on_events gate_off_events v_dut i_dut v_hi v_lo i_shunt in_limit dac_a dac_b dac_pd_a dac_pd_b dac_frames dac_aborted dac_reserved_violations dac_b_not_fs_loads hb_edges hb_level hb_last_edge_us led passes resets resets_requested reset_flags crash crash_cause iwdg_kicks iwdg_fires deadman_enabled deadman_fires adc_conversions adc_selfcals adc_viol_*  vbus_mv dtr configured connected client cal_erases cal_programs hung` |

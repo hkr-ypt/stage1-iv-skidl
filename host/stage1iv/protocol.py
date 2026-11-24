@@ -1,4 +1,4 @@
-"""Line protocol v1 (docs/firmware/protocol.md): classification, parsing and
+"""Line protocol v2 (docs/firmware/protocol.md): classification, parsing and
 exact argument formatting.
 
 Device -> host lines start with one of ``OK``, ``ERR``, ``EVT``, ``PT`` or
@@ -34,7 +34,12 @@ from typing import Any, Iterable, Mapping
 
 from .errors import ProtocolError
 
-PROTOCOL_VERSION = 1
+#: ``proto=`` of ``*IDN?``/``EVT HELLO`` this library implements. Version 2
+#: added flag bit 11 ``SD_SAT``, ``v_V``/``i_A`` from the unrounded means and
+#: the 100 mA ``i_compliance`` default (host-visible), besides firmware-side
+#: changes that need no host support (empty line before ``EVT HELLO``,
+#: ``CAL? measured=``, warn bit 10, ``ERR PRECOND busy``).
+PROTOCOL_VERSION = 2
 
 #: Maximum host -> device line length in characters (without the newline).
 LINE_MAX = 256

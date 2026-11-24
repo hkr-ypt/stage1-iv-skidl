@@ -67,6 +67,7 @@
 #define CTL_LINE_MAX        512
 #define CTL_MAX_ARGS        8
 #define PTY_CHUNK           4096
+#define SIM_CDC_TX_FIFO_BYTES 4096u   /* CFG_TUD_CDC_TX_BUFSIZE */
 #define SHORT_DUT_OHM       0.001
 
 typedef struct {
@@ -96,7 +97,6 @@ static struct {
     uint8_t  txp[PTY_CHUNK];
     size_t   txp_len;
     uint64_t pty_rx_discarded;
-    uint64_t pty_tx_discarded;
     uint32_t lag_rebases;
 } G;
 
@@ -255,7 +255,11 @@ static void pty_service(void)
     if (client != G.client_present) {
         G.client_present = client;
         if (!client) {
-            /* drop whatever the departed client left in the pty queues */
+            /* The departed client's pty queues and the staging buffer are the
+             * host side, dropped like a host's tty buffers on close. The
+             * device side (the TX ring: TinyUSB's CDC TX FIFO) keeps what
+             * was not taken, as on the target: the next client gets it first
+             * (protocol.md section 1). */
             (void)tcflush(G.master, TCIOFLUSH);
             G.txp_len = 0;
         }
@@ -281,13 +285,7 @@ static void pty_service(void)
     }
 
     if (!client) {
-        /* nobody listening: what the firmware sent is lost, as on a USB
-         * host with the port closed */
-        size_t n;
-        while ((n = psim_host_take_tx(buf, sizeof(buf))) > 0) {
-            G.pty_tx_discarded += n;
-        }
-        return;
+        return;   /* nobody reading: the TX ring keeps its content */
     }
     for (int round = 0; round < 4; round++) {
         if (G.txp_len < sizeof(G.txp)) {
@@ -380,7 +378,7 @@ static void obs_line(ctl_client_t *c)
     adsm_violations_t v;
     adsm_get_violations(a, &v);
     uint32_t vtot = v.sclk + v.t6 + v.t11 + v.t10 + v.read_not_ready + v.busy +
-                    v.unknown_cmd + v.short_read;
+                    v.unknown_cmd + v.short_read + v.after_sync;
     double v_hi, v_lo, i_dut, i_shunt;
     bool lim;
     board_solve(b, &v_hi, &v_lo, &i_dut, &i_shunt, &lim);
@@ -399,6 +397,7 @@ static void obs_line(ctl_client_t *c)
              " adc_conversions=%u adc_selfcals=%u adc_viol_total=%u adc_viol_sclk=%u"
              " adc_viol_t6=%u adc_viol_t11=%u adc_viol_t10=%u adc_viol_read_not_ready=%u"
              " adc_viol_busy=%u adc_viol_unknown_cmd=%u adc_viol_short_read=%u"
+             " adc_viol_after_sync=%u"
              " vbus_mv=%u dtr=%d configured=%d connected=%d client=%d"
              " cal_erases=%u cal_programs=%u hung=%d",
              (unsigned long long)psim_time_us(), board_vsweep(b), board_vref_dac(b),
@@ -414,7 +413,7 @@ static void obs_line(ctl_client_t *c)
              crash ? crash_cause_name(cr.cause) : "none", o.iwdg_kicks, x.iwdg_fires,
              o.deadman_enabled ? 1 : 0, x.deadman_fires,
              adsm_conversions(a), adsm_selfcals(a), vtot, v.sclk, v.t6, v.t11, v.t10,
-             v.read_not_ready, v.busy, v.unknown_cmd, v.short_read,
+             v.read_not_ready, v.busy, v.unknown_cmd, v.short_read, v.after_sync,
              port_vbus_mv(), port_host_dtr() ? 1 : 0, port_host_configured() ? 1 : 0,
              psim_host_connected() ? 1 : 0, G.client_present ? 1 : 0,
              o.cal_erases, o.cal_programs, psim_hung() ? 1 : 0);
@@ -600,7 +599,7 @@ static void ctl_command(ctl_client_t *c, char *line)
         ctl_send(c, "OK");
     } else if (strcmp(cmd, "tx_limit") == 0) {
         if (argc == 2 && strcmp(argv[1], "-1") == 0) {
-            psim_set_tx_space_limit(PSIM_TX_NO_LIMIT);
+            psim_set_tx_space_limit(SIM_CDC_TX_FIFO_BYTES);   /* the default */
         } else if (argc == 2 && parse_u64(argv[1], &u64)) {
             psim_set_tx_space_limit((size_t)u64);
         } else {
@@ -845,6 +844,8 @@ int main(int argc, char **argv)
     signal(SIGPIPE, SIG_IGN);
 
     psim_power_on(&opt);
+    /* the TX ring stands for TinyUSB's 4 KB CDC TX FIFO (tusb_config.h) */
+    psim_set_tx_space_limit(SIM_CDC_TX_FIFO_BYTES);
     app_init();
     pace_rebase();
 
