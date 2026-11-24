@@ -636,7 +636,7 @@ to draw by hand. In suggested order:
 | 1 | `GROUND` stitching | (73 via pours) | Fill both zones, add stitching vias along each pour. Everything else references these. |
 | 2 | `POWER_HV` `+15VA`, `-15VA` | 27 | Widest tracks, least routable later. Feed U5 first, then U6/U7. |
 | 3 | `POWER_LV` `+3V3D`, `+5VA`, `+5V_RAW`, `VDDA`, `VBUS` | 42 | `+3V3D` alone is 21 connections across the MCU; get it down before signals. |
-| 4 | `FORCE` | 12 | The DUT drive path U5→R9→F1→R30→D5→J4. Short and direct; it carries fault current. |
+| 4 | `FORCE` | 12 | The DUT drive path U5→R9→F1→R30→U12→D5→J4. Short and direct; it carries fault current. |
 | 5 | `SENSE` | 23 | The Kelvin pair and `VREF_2V5`. Route as a tight pair, away from digital, entirely over the AGND pour. |
 | 6 | `LOCAL_ANALOG` | 35 | Block-local; short by construction once the blocks are placed. |
 | 7 | `USB` | 8 | `USB_DP`/`USB_DM` as a matched pair, 0.38/0.20 mm, over unbroken DGND. |

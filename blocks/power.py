@@ -20,7 +20,7 @@ PARTIAL SUPPLY — WHY D8/D9 EXIST
 --------------------------------
 With one +/-15 V rail absent (bench output off or unplugged) the other one
 still powers U3, U5, U6 and U7 through their supply pins, and their
-quiescent current (U5 alone is up to 20 mA, SBOS070D) flows out of the
+quiescent current (U5 alone is up to 15 mA, SBOS056F) flows out of the
 DEAD rail pin and pulls that rail TOWARDS the live one. A floating -15VA
 can rise above AGND. The sense clamps D2/D4 (anode on -15VA, Sheet 6) then
 conduct INTO SENSE+/SENSE-, i.e. into the DUT, with nothing but the dead
@@ -88,9 +88,10 @@ def create_power_block(n):
     # +3V3 rail: 10 V rated on 3.3 V working is 33% of rating.
     C8 = C_POL("Capacitor_SMD:CP_Elec_6.3x5.4")(
         ref="C8", tag="C8", value="100uF/10V")
-    # REF5025 output capacitor. SBOS410O: stable for CL = 1..100 uF (ESR
-    # <= 1.5 ohm). A 1 uF 0603 sat at the floor of that range before DC-bias
-    # loss; 4.7 uF X7R (~3 uF or more at 2.5 V) is inside it with margin.
+    # REF5025 output capacitor. SBOS410O, for the REF50xxAI: decouple the
+    # output with 1..50 uF, ESR <= 1.5 ohm. A 1 uF 0603 sat at the floor of
+    # that range before DC-bias loss; 4.7 uF X7R (~3 uF or more at 2.5 V) is
+    # inside it with margin.
     C9 = C()(ref="C9", tag="C9", value="4.7uF 10V X7R")
     C10 = C()(ref="C10", tag="C10", value="100nF")
     # Dead-rail clamps (header, PARTIAL SUPPLY).

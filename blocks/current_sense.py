@@ -15,7 +15,7 @@ G*R10*I = 24.006 V/A * I, signed:
 
     I = -91.3 mA  ->  AIN0 = 0.309 V,  AIN0 - AINCOM = -2.191 V
     I =   0       ->  AIN0 = 2.500 V,  AIN0 - AINCOM =  0
-    I = +49.4 mA  ->  (nominal ILIM)                  +1.185 V
+    I = +49 mA    ->  (the intended plateau)          +1.176 V
     I = +91.3 mA  ->  AIN0 = 4.691 V,  AIN0 - AINCOM = +2.191 V
 
 WHY G = 2.40 (R11 was 13.0k, G = 4.846)
@@ -23,16 +23,17 @@ WHY G = 2.40 (R11 was 13.0k, G = 4.846)
 The gain is sized to the largest current the hardware can PHYSICALLY pass,
 not to the programmed current limit. For any passive DUT, V and I share a
 sign, so |I| <= |V_SWEEP| / (R30 + R10 + R_F1) <= 10.04 V / 110 ohm = 91.3 mA
-whatever the OPA548 limit does (Sheet 3 sets V_SWEEP, Sheet 8 holds R30).
+whatever U5's current limit does (Sheet 3 sets V_SWEEP, Sheet 8 holds R30).
 The NEGATIVE half of that bound is hardware; the positive half holds while
 firmware keeps DAC channel B at full scale (Sheet 3, "firmware contract").
-A sweep commanded past it can reach the ~127 mA fault-envelope current and
+A sweep commanded past it can reach the ~128 mA fault-envelope current and
 over-range this channel; validation/measurement_range.py reports both.
-That independence matters: SBOS070 specifies the ILIM tolerance only at a
-2.5 A setting (+/-100 mA typ, +/-250 mA max), so the ~49 mA setting of R7 is
-not a bound anyone can rely on. At the old G = 4.846 the channel would clip at
-~48-52 mA, i.e. at or below the nominal limit, and every forward-bias plateau
-of a hysteresis sweep would be lost. At G = 2.40:
+That independence matters: the current limit is a plateau with a tolerance,
+not a bound. U5 is an OPA547 (Sheet 4): its plateau, designed for 49 mA by
+R7, shifts with polarity and temperature (expected 40..65 mA) and by up to
++/-30 mA between units (SBOS056F), 8..89 mA in all. At the old G = 4.846 the
+channel would clip at ~48-52 mA, i.e. inside that span, and every forward-bias
+plateau of a hysteresis sweep would be lost. At G = 2.40:
 
     ADC full scale, PGA = 2 (+/-2.500 V) ........... +/-104.1 mA
     ADC pin window at AVDD = 4.75 V (+/-2.35 V) .... +/-97.9 mA
@@ -61,8 +62,8 @@ Footprint: KiCad DIN0614 (14.3 x 5.7 mm) at 20.32 mm pitch, horizontal:
 the body lies flat, so its two terminations sit at the same height and
 temperature (no lead-length asymmetry to turn self-heating into thermal EMF
 across the shunt). Why a 3 W part for a 24 mW job: R10 must survive an
-external source on J7 until F2 trips — up to 1.19 A, ~14 W, ~0.6 s typical
-(Sheet 8) — and the RS02B's short-time overload test (5 x rated power,
+external source on J7 until F2 trips — up to 1.19 A, ~14 W, well under 1 s
+typical (Sheet 8) — and the RS02B's short-time overload test (5 x rated power,
 5 s, dR <= 0.2 % + 0.05 ohm) covers that. A 0.5 W metal film does not:
 Vishay CMF (doc. 31018) tests 2.5 x rated voltage for 5 s, i.e. ~3 W. Costs, stated: the element is CuNi or
 NiCr depending on value (data sheet), so thermal EMF at the terminations is

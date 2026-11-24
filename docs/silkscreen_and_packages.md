@@ -1,5 +1,14 @@
 # Silkscreen and package selection
 
+> **Later changes.** This note is kept as written. Two rows of its
+> capacitor table need a correction that the final design audit
+> ([`final_audit.md`](final_audit.md) §3.8) made in the parts list: **C17
+> and C18** (10 µF / 35 V on the 3528 footprint, "already decided") cannot
+> be bought as an MnO2 tantalum, because none of that rating is made in
+> that case. They are a **polymer** tantalum by order code,
+> TCJB106M035R0200E; value, rating and footprint are as below. U5, which
+> they decouple, is now an OPA547T, and C49 is fitted.
+
 Prompt 4: make the board assembly-legible, and fix the packages that were
 inherited rather than chosen.
 

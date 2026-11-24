@@ -17,12 +17,18 @@ beside VREFP (pin 4), which already carries VREF_2V5.
 
 Recommended configuration: PGA = 2 for BOTH channels (full scale +/-2*VREF/PGA
 = +/-2.500 V, matching the +/-2.35..2.6 V absolute-input window around 2.5 V),
-input buffer OFF (buffer on narrows the window to AGND .. AVDD - 2 V = 0 ..
-3 V, leaving only +0.5 V above the 2.5 V zero; use it only for |signal| <
-0.5 V). One PGA for both
+input buffer OFF (buffer on narrows the window to AGND .. AVDD - 2 V, which
+is 0 .. 2.75 V at the minimum AVDD of 4.75 V: only +0.25 V above the 2.5 V
+zero; use it only for |signal| < 0.25 V). One PGA for both
 channels means no PGA switch between the V and I conversions of a sweep
 point. Higher PGA (up to 64) is legal for small signals, because the inputs
-sit near 2.5 V whatever the gain.
+sit near 2.5 V whatever the gain. With the buffer off it has a price: each
+selected input also draws from AVDD/2 through ZeffA (130 k at PGA 2, 8 k at
+PGA 32 and 64; SBAS288K Table 10), AIN0/AIN2 have R15/R17 (100 ohm) in
+series and AINCOM has nothing, so a zero term R * (2.5 V - AVDD/2) / ZeffA
+appears: up to 96 uV (4 uA) at PGA 2 over AVDD 4.75..5.25 V, 1.6 mV at PGA
+64, moving with the +5 V supply. A zero taken at the PGA in use removes
+it; above PGA 2 the buffer (legal below 0.25 V) avoids it.
 
 AIN1/AIN3 keep their R16/R18 connection to AGND and are no longer part of the
 two measurements. They are useful self-checks: AIN1 - AIN3 reads the ADC's
@@ -48,8 +54,11 @@ def create_adc_block(n):
     U8 = ADS1256()(ref="U8", tag="U8", value="ADS1256IDBR")
     Y1 = Crystal()(ref="Y1", tag="Y1", value="7.6800MHz",
                    footprint="Crystal:Crystal_SMD_HC49-SD")
-    C26 = C()(ref="C26", tag="C26", value="22pF")
-    C27 = C()(ref="C27", tag="C27", value="22pF")
+    # Crystal load capacitors. SBAS288K Figure 22: "C1, C2: 5pF to 20pF";
+    # TI's own ADS1255 circuit (Figure 25) uses 18 pF with a 7.68 MHz
+    # crystal. They were 22 pF, outside that range (final audit).
+    C26 = C()(ref="C26", tag="C26", value="18pF")
+    C27 = C()(ref="C27", tag="C27", value="18pF")
     C28 = C()(ref="C28", tag="C28", value="100nF")
     C29 = C_POL("Capacitor_Tantalum_SMD:CP_EIA-3528-21_Kemet-B")(
         ref="C29", tag="C29", value="10uF/16V")

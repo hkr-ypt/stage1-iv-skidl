@@ -16,8 +16,8 @@ circuit it recomputes
     so the checked envelope is that contract. What the hardware alone allows
     if the contract is broken is computed and REPORTED, not passed;
   * the largest current a passive DUT can draw, |I| <= |V_SWEEP|/(R30 + R10):
-    V and I share a sign in a passive DUT, and R30 + R10 sit outside the
-    OPA548 loop, so this bound holds whatever the OPA548 current limit does;
+    V and I share a sign in a passive DUT, and R30 + R10 sit outside U5's
+    loop, so this bound holds whatever U5's current limit does;
   * both channels' transfer functions onto the ADS1256 inputs;
   * the FORCE-path fault envelope: U5's output driven into a rail (ILIM
     ineffective, sweep saturated, or U5 failed), current set only by the
@@ -27,14 +27,35 @@ circuit it recomputes
     R30's minimum includes its TCR at the hottest film temperature its
     rating allows. Every resistor in that path must be RATED (a "W" in its
     value or MPN) for its share of it. This bound is the one the protection
-    relies on; the OPA548 ILIM setting (~49 mA nominal) is reported beside
-    it but is not a bound (SBOS070D specifies ILIM accuracy only at 2.5 A);
+    relies on; U5's current-limit plateau is reported beside it with its
+    data-sheet spread and is not a bound;
+  * that the ILIM setting is one U5 can actually deliver. The unit-to-unit
+    tolerance of the limit is specified as a current, at one setting; the
+    shift at this board's +/-15 V rails (the equation holds at +/-30 V) and
+    the drift with case temperature are, on the OPA547's typical curves, the
+    same number of mA at each of the three settings plotted (250..500 mA).
+    Taken as currents at this board's much lower setting (an extrapolation,
+    and the conservative reading), a setting no larger than their sum can
+    come out at ZERO, i.e. an output stage that cannot drive the DUT at all.
+    The build fails unless the plateau stays above ILIM_FLOOR with all of
+    them against it: R7 at the high end of its tolerance, the rails at
+    RAIL_MIN, the case at U5_CASE_HOT and the maximum unit tolerance. It
+    also fails if the setting is so high that a TYPICAL unit would show no
+    plateau at all into a shorted DUT (the series path, not U5, would set
+    the current; the path is taken with R30, R10 and the sweep at the
+    tolerance limits that pass least), if U5's value and order code name
+    different parts, or if R7 is not fitted, by a 'DNP' value or by the
+    dnp() mark (an open ILIM pin programs zero output current). The high
+    end of the stack takes a 25 C case as the coldest; a colder case adds
+    0.19 mA/K;
   * an external source on J7 (FORCE-): only F2 + R10 limit it, so R10's
     short-time overload rating must cover that current until F2 trips;
 
 and fails if any normal operating point, at worst-case tolerance, would put
 an ADC input outside its absolute window or the signal outside full scale,
-or if a FORCE-path resistor is under-rated for the fault envelope.
+if a FORCE-path resistor is under-rated for the fault envelope, or if any
+resistor the calculation reads is not fitted (R14, U7's gain resistor, is
+open by design and gives a gain of 1).
 
 The measurement check is for the NORMAL operating envelope: a passive DUT and
 the source inside its contracted span. External voltage on the jacks is the
@@ -46,16 +67,37 @@ ADS1256, TI SBAS288K, Electrical Characteristics:
     absolute input voltage, buffer off ... AGND - 0.1 V .. AVDD + 0.1 V
     full-scale input (AINP - AINN) ....... +/-2 VREF / PGA
     AVDD ................................. 4.75 .. 5.25 V
-REF5025, TI SBOS410H: 2.500 V, initial accuracy +/-0.1 % (standard grade).
+REF5025, TI SBOS410O: 2.500 V, initial accuracy +/-0.1 % (standard grade).
 INA128, TI SBOS051G: G = 1 + 50 kOhm/RG; RTI offset 50 uV + 500 uV/G max
     (P grade). The 50 kOhm is internal, so G carries its tolerance: a +/-0.5 %
     allowance is used below.
 
 OPA2277, TI SBOS079C: output swing at least (V+) - 1.2 V (RL = 10 kOhm).
-OPA548, TI SBOS070D: ILIM = 15000 * 4.75 V / (13750 + R_CL); the +/-100 mA
-    typ / +/-250 mA max accuracy is specified at R_CL = 14.8 k (2.5 A) only.
+OPA547, TI SBOS056F (the part fitted as U5): ILIM = 5000 * 4.75 V /
+    (31600 + R_CL) at VS = +/-30 V and a 25 C case; tolerance +/-10 mA typ /
+    +/-30 mA max, specified at R_CL = 31.6 k (375 mA). Typical curves
+    "Current Limit vs Supply Voltage" and "Current Limit vs Temperature",
+    read at R_CL = 15.9 k, 31.6 k and 63.4 k (500, 375, 250 mA): from +/-30 V
+    to +/-15 V +ILIM falls 11.9 / 11.9 / 12.0 mA and -ILIM 4.0 / 4.1 / 4.1 mA
+    (0.80 and 0.27 mA per volt of rail); from 20 C to 70 C the limit falls
+    9.7 / 9.3 / 9.3 mA (0.19 mA/K; 0.14 mA/K above 70 C). The same mA at
+    each of the three settings, so they are applied below as offsets. That
+    carries TYPICAL curves from 250..500 mA down to a setting near 60 mA,
+    below anything TI tabulates or plots (lowest: 100 mA); only the
+    +/-30 mA is a data-sheet LIMIT, and it too is stated at 375 mA.
+OPA548, TI SBOS070D (same pinout and package): ILIM = 15000 * 4.75 V /
+    (13750 + R_CL); +/-100 mA typ / +/-250 mA max at R_CL = 14.8 k (2.5 A).
+    Its curves (Fig. 3, 4) are not offsets of one size (at +/-15 V: -80 mA at
+    the 1 A setting, 0 at 2.5 A, -50 mA at 4 A; +0.65..0.95 mA/K), so none is
+    applied here: the tolerance alone decides.
+    TI's OPA549 data sheet says of that part's limit that "offset in the
+    current limit circuitry may introduce approximately +/-0.25 A variation
+    at low current limit values". TI publishes no such statement for the
+    OPA547 or OPA548; applying their tolerance as an absolute current, not
+    as a percentage of the setting, is the conservative reading.
 Bel 0ZRM0010FF1E (F1, F2): resistance 3.0 .. 7.5 ohm (the low end maximises
-    fault current); Imax 2 A.
+    fault current; the high end gives the least current into a short);
+    Imax 2 A.
 Vishay PR02 (R30, doc. 28729): TCR +/-250 ppm/K, Rth 75 K/W.
 Vishay RS02B (R10, doc. 30204): short-time overload 5 x rated power, 5 s.
 Toshiba TLP176AM (U12): RON <= 2 ohm, no minimum (taken as 0 ohm); ION
@@ -66,7 +108,14 @@ Engineering allowances (NOT datasheet values; stated so they can be argued)
 SWEEP_TOL 0.5 %: 0.1 % R1-R6 (+/-0.2 % on the gain), REF5025 +/-0.1 %, and
     the DAC8552's full-scale error, rounded up.
 UNSPECIFIED_R_TOL 1 %: for any resistor whose value carries no tolerance.
-RAIL_MAX 15.5 V: the +/-15 V bench supply, set high by ~3 %.
+RAIL_MAX 15.5 V, RAIL_MIN 14.5 V: the +/-15 V bench supply, set high or low
+    by ~3 %.
+U5_CASE_HOT 85 C: the top of the OPA547's specified range. A unit at the
+    low end of the plateau spread dissipates under 0.6 W in limit and stays
+    below it up to about 48 C ambient (65 K/W, no heat sink).
+ILIM_FLOOR 5 mA: what the worst-case plateau must still exceed. It covers
+    what the stack does not model: 1 uA of leakage at the ILIM node (R7 is
+    348 k; flux residue) moves the limit by about 4.6 mA.
 """
 
 import os
@@ -92,6 +141,7 @@ PGA = 2                     # one PGA for both channels (see blocks/adc.py)
 
 U3_SWING_MIN = 1.2          # OPA2277: output reaches at least (V+) - 1.2 V
 PTC_R_MIN = 3.0             # 0ZRM0010FF1E minimum resistance, ohm (F1, F2)
+PTC_R_MAX = 7.5             # ... and its maximum (R1max), ohm
 PTC_I_MAX = 2.0             # 0ZRM0010FF1E Imax, A
 R30_TCR = 250e-6            # PR02, per K
 R30_RTH = 75.0              # PR02 hot-spot thermal resistance, K/W
@@ -99,13 +149,33 @@ R10_OVERLOAD_X = 5.0        # RS02B short-time overload, x rated power, 5 s
 U12_RON_MIN = 0.0           # TLP176AM: no minimum RON is specified
 U12_RON_MAX = 2.0           # TLP176AM RON max, ohm
 U12_ION_MAX = 0.7           # TLP176AM ON-state current, A
-ILIM_K, ILIM_R0 = 15000 * 4.75, 13750.0   # OPA548 ILIM equation
+# U5 current limit, by fitted part (read from U5's value, which must be the
+# whole orderable name and agree with the MPN field):
+#   k, r0  : ILIM = K / (R0 + R_CL), valid at ILIM_EQ_RAIL and ILIM_EQ_CASE;
+#   tol    : unit-to-unit tolerance there (typ, max), A;
+#   supply : typical change of (+ILIM, -ILIM) per volt each rail is below
+#            ILIM_EQ_RAIL, A/V;
+#   temp   : typical drift per K of case temperature, A/K (header).
+ILIM_PARTS = {
+    "OPA547": {"k": 5000 * 4.75, "r0": 31600.0, "tol": (0.010, 0.030),
+               "supply": (-0.80e-3, -0.27e-3), "temp": -0.19e-3,
+               "doc": "SBOS056F"},
+    "OPA548": {"k": 15000 * 4.75, "r0": 13750.0, "tol": (0.100, 0.250),
+               "supply": (0.0, 0.0), "temp": 0.0,
+               "doc": "SBOS070D"},
+}
+ILIM_EQ_RAIL = 30.0         # the limit equation's supply condition, +/-V
+ILIM_EQ_CASE = 25.0         # ... and case temperature, C
+U5_CASE_HOT = 85.0          # hottest U5 case allowed for (its specified range)
+U5_NAME = re.compile(r"(OPA54[78])T")   # the stagger-formed TO-220 (KVT) parts
 
 # ---- engineering allowances --------------------------------------------------
 SWEEP_TOL = 0.005
 UNSPECIFIED_R_TOL = 0.01
 RAIL_MAX = 15.5             # +/-15 V bench rail, high
 RAIL_NOM = 15.0
+RAIL_MIN = 14.5             # ... and low
+ILIM_FLOOR = 5e-3           # least acceptable worst-case plateau, A (header)
 FORCE_PATH = ("R9", "R30", "R10")     # in series with F1, U12, F2 to AGND
 
 
@@ -118,9 +188,11 @@ _MULT = {"": 1.0, "R": 1.0, "k": 1e3, "K": 1e3, "M": 1e6}
 
 
 def ohms(part):
-    """'40.2k 0.1%' -> 40200.0; 'DNP (...)' -> None (an open pad pair)."""
+    """'40.2k 0.1%' -> 40200.0; None for an open pad pair: a value that
+    starts with 'DNP', or a part marked with libraries.custom_symbols.dnp()
+    (which leaves the value text as it was)."""
     text = str(part.value)
-    if text.strip().upper().startswith("DNP"):
+    if text.strip().upper().startswith("DNP") or getattr(part, "dnp", False):
         return None
     m = _VALUE.match(text)
     if not m:
@@ -163,6 +235,18 @@ def compute(circuit):
          ("R1", "R2", "R3", "R4", "R5", "R6", "R7", "R9", "R10", "R11",
           "R12", "R13", "R14", "R30", "R32", "R33")}
     problems = []
+    # R14 (U7's RG) is DNP by design: an open RG is a gain of 1. An open R7
+    # is judged below. Every other resistor read here must be fitted,
+    # R11 (U6's RG, which sets the current channel's design gain of 2.4)
+    # included: the calculation that follows depends on each of them.
+    unfitted = sorted(ref for ref, value in R.items()
+                      if value is None and ref not in ("R7", "R14"))
+    if unfitted:
+        raise MeasurementRangeError(
+            f"{', '.join(unfitted)} not fitted (DNP): this check's "
+            f"calculation of the source span, the fault envelope and the "
+            f"measurement channels depends on "
+            f"{'it' if len(unfitted) == 1 else 'them'}")
 
     # ---- source ------------------------------------------------------------
     if (R["R3"], R["R4"]) != (R["R5"], R["R6"]):
@@ -239,8 +323,91 @@ def compute(circuit):
         problems.append(f"external {RAIL_MAX} V on J7 puts {p_ext:.1f} W in "
                         f"R10 until F2 trips, above its short-time overload "
                         f"rating ({R10_OVERLOAD_X:g} x {r10_rating:g} W)")
-    # The OPA548 current limit, reported, never relied on.
-    i_ilim = ILIM_K / (ILIM_R0 + R["R7"])
+    # U5's current limit: a plateau, never relied on as a bound. It must
+    # still be a setting the fitted amplifier can deliver (header).
+    u5_value = str(parts["U5"].value).strip()
+    u5_mpn = str(parts["U5"].fields.get("MPN", "") or "").strip()
+    m = U5_NAME.fullmatch(u5_value)
+    if m is None:
+        raise MeasurementRangeError(
+            f"U5 value {u5_value!r} is not the orderable name of an amplifier "
+            f"whose current-limit equation is known here "
+            f"({', '.join(name + 'T' for name in sorted(ILIM_PARTS))})")
+    u5_family = m.group(1)
+    if u5_mpn != u5_value:
+        problems.append(
+            f"U5 value {u5_value!r} and its MPN field {u5_mpn!r} differ: the "
+            f"current limit is checked for one part and another is ordered")
+    lim = ILIM_PARTS[u5_family]
+    ilim_typ, ilim_max = lim["tol"]
+    # A dead short across the jacks at full sweep: what the series path
+    # (outside U5's loop) passes with U5 NOT limiting. A unit whose limit is
+    # above this shows no plateau; that is reported, and is a failure only
+    # if a typical unit would do it. i_short is the range with the PTCs and
+    # U12 at their limits and the resistors nominal (the figure reported);
+    # i_short_floor is its low end with R30, R10 and the sweep at their
+    # tolerance limits as well, which is what the typical-unit test uses.
+    i_short = (v_sweep / (PTC_R_MAX + R["R30"] + U12_RON_MAX + PTC_R_MAX
+                          + R["R10"]),
+               v_sweep / (PTC_R_MIN + R["R30"] + U12_RON_MIN + PTC_R_MIN
+                          + R["R10"]))
+    r30_hi = R["R30"] * (1 + tolerance(parts["R30"], UNSPECIFIED_R_TOL))
+    i_short_floor = (v_sweep * (1 - SWEEP_TOL)
+                     / (PTC_R_MAX + r30_hi + U12_RON_MAX + PTC_R_MAX + r10_hi))
+    if R["R7"] is None:
+        problems.append(
+            f"R7 is not fitted: an open ILIM pin programs zero output "
+            f"current ({lim['doc']}), i.e. U5 unable to drive the DUT")
+        i_ilim = 0.0
+        ilim_cold = ilim_hot = (0.0, 0.0)
+        ilim_lo = ilim_hi = ilim_typ_hi = 0.0
+    else:
+        r7_tol = tolerance(parts["R7"], UNSPECIFIED_R_TOL)
+        eq = lambda r_cl: lim["k"] / (lim["r0"] + r_cl)
+        i_ilim = eq(R["R7"])                           # the equation value
+        # At this board's nominal rails: (+ILIM, -ILIM), case at 25 C and at
+        # its hottest. Reported as the typical expectation.
+        shift = lambda rail: tuple(per_volt * (ILIM_EQ_RAIL - rail)
+                                   for per_volt in lim["supply"])
+        d_hot = lim["temp"] * (U5_CASE_HOT - ILIM_EQ_CASE)
+        ilim_cold = tuple(i_ilim + d for d in shift(RAIL_NOM))
+        ilim_hot = tuple(i + d_hot for i in ilim_cold)
+        # The extremes: every term at the end that hurts. Low: R7 high, the
+        # rail (low or high) and the case (25 C or hot) that give less, the
+        # weaker polarity, the maximum unit tolerance against. High: the
+        # opposite of each. The typical-unit high end takes the typical
+        # tolerance instead.
+        corners = [eq(r7) + d + dt
+                   for r7 in (R["R7"] * (1 + r7_tol), R["R7"] * (1 - r7_tol))
+                   for rail in (RAIL_MIN, RAIL_MAX)
+                   for d in shift(rail)
+                   for dt in (0.0, d_hot)]
+        ilim_lo = min(corners) - ilim_max
+        ilim_hi = max(corners) + ilim_max
+        ilim_typ_hi = max(corners) + ilim_typ
+        terms = [f"R7 +{r7_tol * 100:g} %"]
+        if any(lim["supply"]):
+            terms.append(f"+/-{RAIL_MIN:g} V rails")
+        if lim["temp"]:
+            terms.append(f"an {U5_CASE_HOT:g} C case")
+        terms.append(f"the +/-{ilim_max * 1e3:.0f} mA maximum tolerance")
+        if ilim_lo < ILIM_FLOOR:
+            problems.append(
+                f"U5 ({u5_value}) current limit: R7 sets "
+                f"{i_ilim * 1e3:.1f} mA by the {lim['doc']} equation, but "
+                f"with {', '.join(terms[:-1])} and {terms[-1]} the plateau "
+                f"can be as low as "
+                f"{ilim_lo * 1e3:.1f} mA, below the {ILIM_FLOOR * 1e3:g} mA "
+                f"floor: the real limit can be zero, i.e. U5 unable to drive "
+                f"the DUT")
+        if ilim_typ_hi > i_short_floor:
+            problems.append(
+                f"U5 ({u5_value}) current limit: R7 sets "
+                f"{i_ilim * 1e3:.1f} mA by the {lim['doc']} equation, so a "
+                f"typical unit can limit as high as "
+                f"{ilim_typ_hi * 1e3:.0f} mA, but the series path passes only "
+                f"{i_short_floor * 1e3:.0f} mA into a shorted DUT: no "
+                f"current-limit plateau")
 
     # ---- voltage channel: Kelvin attenuator -> U7 (G from R14) -------------
     if (R["R12"], R["R32"]) != (R["R13"], R["R33"]):
@@ -275,9 +442,13 @@ def compute(circuit):
     swing = min(pin_hi - vref_hi, vref_lo - pin_lo, full_scale)
 
     channels = []
-    for name, s, gain, unit, reach in (
-            ("V", s_v, v_gain, "V", v_sweep),
-            ("I", s_i, i_gain, "A", i_max)):
+    # (gain at its limit, offset at its limit): what the measurable range is
+    # when the channel itself, not only the ADC window, is at worst case.
+    v_lim = (g_v_worst * k_worst, INA_VOS_IN * g_v + INA_VOS_OUT)
+    i_lim = (g_i_worst * r10_hi, INA_VOS_IN * g_i + INA_VOS_OUT)
+    for name, s, gain, unit, reach, (gain_hi, offset) in (
+            ("V", s_v, v_gain, "V", v_sweep, v_lim),
+            ("I", s_i, i_gain, "A", i_max, i_lim)):
         hi, lo = vref_hi + s, vref_lo - s
         if hi > pin_hi:
             problems.append(f"{name} channel: AIN reaches {hi:.3f} V at the "
@@ -296,7 +467,11 @@ def compute(circuit):
             "adc_at_reach": gain * reach,          # nominal differential
             "worst_signal": s,
             "pin_span": (lo, hi),
-            "measurable": swing / gain,            # guaranteed, symmetric
+            # ADC window at its limits (AVDD_MIN, VREF tolerance), channel
+            # gain NOMINAL: the figure the documents quote.
+            "measurable": swing / gain,
+            # ... and with the channel gain and offset at their limits too.
+            "measurable_limits": (swing - offset) / gain_hi,
             "fs_limit": (2 * VREF_NOM / PGA) / gain,
             "headroom": swing - s,
         })
@@ -309,6 +484,10 @@ def compute(circuit):
         "i_fault": i_fault, "i_fault_gnd": i_fault_gnd, "fault": fault,
         "r30_lo": r30_min, "i_ext": i_ext, "p_ext": p_ext,
         "r10_overload": R10_OVERLOAD_X * r10_rating, "i_ilim": i_ilim,
+        "u5": u5_value, "ilim_doc": lim["doc"], "ilim_typ": ilim_typ,
+        "ilim_max": ilim_max, "ilim_cold": ilim_cold, "ilim_hot": ilim_hot,
+        "ilim_range": (ilim_lo, ilim_hi), "i_short": i_short,
+        "i_short_floor": i_short_floor,
         "i_max": i_max, "i_max_worst": i_max_worst,
         "k": k, "g_v": g_v, "g_i": g_i,
         "full_scale": full_scale, "pin_window": (pin_lo, pin_hi),
@@ -347,9 +526,28 @@ def run_measurement_range(circuit, verbose=True):
               + ", ".join(f"{ref} {p:.2f} W of {rating:g} W"
                           if rating else f"{ref} {p:.2f} W (unrated)"
                           for ref, (p, rating) in r["fault"].items()))
-        print(f"  OPA548 ILIM ........ {r['i_ilim'] * 1e3:.1f} mA nominal "
-              f"(R7): typical only, NOT a bound; the passive bound above "
-              f"holds with ILIM at any value")
+        lo, hi = r["ilim_range"]
+        (cold_p, cold_n), (hot_p, hot_n) = r["ilim_cold"], r["ilim_hot"]
+        print(f"  U5 ILIM ............ {r['u5']}, R7: {r['i_ilim'] * 1e3:.1f} "
+              f"mA by the {r['ilim_doc']} equation (+/-{ILIM_EQ_RAIL:g} V, "
+              f"{ILIM_EQ_CASE:g} C). At +/-{RAIL_NOM:g} V, typical: "
+              f"+{cold_p * 1e3:.1f} / -{cold_n * 1e3:.1f} mA cold, "
+              f"+{hot_p * 1e3:.1f} / -{hot_n * 1e3:.1f} mA with the case at "
+              f"{U5_CASE_HOT:g} C; +/-{r['ilim_typ'] * 1e3:.0f} mA typ, "
+              f"+/-{r['ilim_max'] * 1e3:.0f} mA max between units. With R7's "
+              f"tolerance and +/-{RAIL_MIN:g} .. {RAIL_MAX:g} V rails as "
+              f"well: {lo * 1e3:.1f} .. {hi * 1e3:.1f} mA in all (must stay "
+              f"above {ILIM_FLOOR * 1e3:g} mA). The supply and temperature "
+              f"terms are typical curves extrapolated to this setting, not "
+              f"limits. A plateau, NOT a bound (the passive bound above "
+              f"holds with ILIM at any value)")
+        print(f"      a shorted DUT at full sweep passes "
+              f"{r['i_short'][0] * 1e3:.0f} .. {r['i_short'][1] * 1e3:.0f} "
+              f"mA through the series parts alone ({r['i_short_floor'] * 1e3:.1f} "
+              f"mA with R30, R10 and the sweep at their limits as well): a "
+              f"unit limiting above that shows no plateau into a short "
+              f"(reported; a failure only if a typical unit would limit "
+              f"above {r['i_short_floor'] * 1e3:.1f} mA)")
         print(f"  external on J7 ..... {RAIL_MAX} V through F2 + R10: "
               f"{r['i_ext']:.2f} A (F2 Imax {PTC_I_MAX:g} A), R10 "
               f"{r['p_ext']:.1f} W until F2 trips (short-time rating "
@@ -373,6 +571,10 @@ def run_measurement_range(circuit, verbose=True):
                   f"guaranteed (+/-{_fmt(c['fs_limit'], c['unit'])} at "
                   f"nominal full scale) vs +/-"
                   f"{_fmt(c['reach'], c['unit'])} reachable")
+            print(f"      (that takes the channel gain at its nominal value; "
+                  f"with gain and offset at their limits as well: +/-"
+                  f"{_fmt(c['measurable_limits'], c['unit'])}. Both need "
+                  f"AVDD >= {AVDD_MIN} V at U8)")
     if r["problems"]:
         raise MeasurementRangeError(
             f"{len(r['problems'])} measurement-range problem(s):\n  "

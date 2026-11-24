@@ -35,7 +35,7 @@ zero scale and V_SWEEP = 8.03 * (0 - 0) = 0, residual offsets only.
                      (V+) - 1.2 V = +13.8 V (SBOS079C), so
                      the real ceiling is 13.8 V..the +15 V
                      rail, past U5's specified input range
-                     ((V+) - 3 V = +12 V, SBOS070D).
+                     ((V+) - 3 V = +12 V, SBOS056F).
 
 The firmware requirements this creates are listed in docs/firmware_handoff.md
 and are not hardware protection.
@@ -81,13 +81,14 @@ the nearest value below it (19.8k, E192) reaches only +/-9.94 V and so could
 never get to 10 V at all. 20.0k is E96 at the same 0.1% grade as R3/R5, and
 firmware simply leaves the top 0.40% of the DAC's codes unused.
 
-U5 headroom for that range (OPA548 on +/-15VA, Sheet 4). U5's feedback is taken
-past R9, so its OUT pin must reach V_SWEEP + I_LIM*R9 = 10.040 + 0.04935*10 =
-10.53 V, and its "+IN" sits at V_SWEEP = 10.04 V. SBOS070 guarantees, already
-at I_O = 0.6 A (12x this design's 49 mA limit):
+U5 headroom for that range (OPA547 on +/-15VA, Sheet 4). U5's feedback is taken
+past R9, so its OUT pin must reach V_SWEEP + I*R9: 10.040 + 0.049*10 = 10.53 V
+on the nominal 49 mA plateau, 10.95 V at the 91.3 mA passive bound, and its
+"+IN" sits at V_SWEEP = 10.04 V. SBOS056F guarantees, at I_O = 0.1 A (more
+than any current this stage can pass in normal operation):
 
-    output swing    (V+)-2.4 = +12.6 V  vs +10.53 V needed  ->  2.07 V spare
-                    (V-)+1.3 = -13.7 V  vs -10.53 V needed  ->  3.17 V spare
+    output swing    (V+)-1.8 = +13.2 V  vs +10.95 V needed  ->  2.25 V spare
+                    (V-)+1.2 = -13.8 V  vs -10.95 V needed  ->  2.85 V spare
     input com-mode  (V+)-3.0 = +12.0 V  vs +10.04 V on +IN  ->  1.96 V spare
 
 so the rails deliver +/-10.04 V with margin. D5 (SMBJ15CA, 15 V standoff,
@@ -123,7 +124,7 @@ def create_dac_block(n):
     # during U11's ~50 ms disarm. To +5VA, the DAC's own rail, because only
     # that rail is on this side of the AGND/DGND split here; 100 k keeps the
     # current into PA4 when it is an input or driven to 3.3 V at <= 17 uA
-    # (DS10314 allows +/-5 mA injection on TC pins; FT pins take 5 V). SYNC's
+    # (PA4 is an FT pin, DS10314 Table 8: 5 V tolerant, nothing is injected). SYNC's
     # VINH is 2.4 V, so the MCU's 3.3 V drive still reads high.
     R34 = R()(ref="R34", tag="R34", value="100k")
 

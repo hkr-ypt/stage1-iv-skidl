@@ -12,9 +12,12 @@ and on the FORCE- return:
 
 What each stage does, and what it does NOT do:
 
-  * OPA548 ILIM (Sheet 4) sets the normal current plateau, ~49 mA nominal.
-    It is not characterised at this setting (SBOS070D specifies ILIM accuracy
-    only at 2.5 A), so nothing below relies on its value.
+  * U5's ILIM (OPA547, Sheet 4) sets the normal current plateau: design
+    centre 49 mA, expected 40..65 mA depending on polarity and U5's
+    temperature, and anywhere from 8 to 89 mA once the data sheet's
+    +/-30 mA maximum unit tolerance is stacked on its typical supply and
+    temperature shifts (SBOS056F; an extrapolation, see Sheet 4). It is a
+    plateau, not a protection bound: nothing below relies on its value.
   * R30 (100 ohm) is the element that BOUNDS the current, passively. With U5's
     output driven hard into a rail (the worst credible fault: ILIM
     ineffective, the sweep saturated, or U5 itself failed) the current is set
@@ -28,24 +31,27 @@ What each stage does, and what it does NOT do:
     validation/measurement_range.py recomputes both from the live values and
     fails if any resistor in the path is under-rated. R30 is a Vishay PR02
     (2 W at 70 C, hot spot <= 220 C), mounted with the body raised off the
-    board (docs/physical_design.md); it carries <= 1.95 W in the D5-short case.
+    board (docs/physical_design.md); it carries <= 1.96 W in the D5-short case.
   * F1 and F2 are NOT backstops for that envelope. 0ZRM0010FF1E holds 100 mA
     and trips at 200 mA at 23 C (Bel 0ZRM data sheet); 128..143 mA lies
     between the two, where the data sheet promises neither. They may trip on
     a sustained fault, especially warm, and that is all. They derate: hold
     current is 68 mA at 50 C, 56 mA at 60 C and 45 mA at 70 C. F1 therefore
-    sits away from U5's heat sink and R30 (docs/physical_design.md); if
+    sits away from U5 and R30 (docs/physical_design.md); if
     bench testing still shows nuisance trips, the contingency is 0ZRM0017FF1E
     (170 mA hold, same body, lead pitch and footprint) — conditional, not a
-    default.
+    default, and for F1 ONLY: its 2.0 ohm minimum resistance still leaves
+    R30 inside its rating (1.99 W of 2 W), but in F2 it would let an external
+    source on J7 put 16.7 W into R10, above the 15 W short-time rating the
+    next bullet relies on.
   * F2 is the FORCE- protection, against what F1/R30 cannot see: an EXTERNAL
     source on J7 (a miswired bench lead, an energised DUT). J7 otherwise sees
     10 ohm to AGND: 15.5 V there is 1.5 A and 24 W in R10. With F2 in series
     the current is <= 15.5 V / (3.0 + 9.99) ohm = 1.19 A, inside F2's 2 A
     Imax, and R10 is a 3 W wirewound (Sheet 5) whose short-time-overload
     rating (5 x 3 W for 5 s) covers the ~14 W it carries until F2 trips
-    (~0.6 s typical at 1.2 A, Bel curve A; the data sheet bounds it only at
-    0.5 A, <= 10 s). Recalibrate R10 after any such event. F2 is in SERIES:
+    (well under 1 s typical at 1.2 A by Bel's time-to-trip curves, which
+    are guidance only; the data sheet bounds it only at 0.5 A, <= 10 s). Recalibrate R10 after any such event. F2 is in SERIES:
     nothing is connected across the shunt, so it adds no leakage path, does
     not touch the Kelvin pair (J5/J6), is symmetric for signed current and
     leaves AGND where it was. Its 3..7.5 ohm sits outside both measurements;
@@ -55,21 +61,64 @@ What each stage does, and what it does NOT do:
   * U12 (TLP176AM photorelay) DISCONNECTS FORCE+ unless BOTH +/-15 V rails are
     up. Its LED is driven by a string across the two rails:
 
-        +15VA -> R39 (620R) -> U12 LED -> D7 (BZT52C24) -> -15VA
+        +15VA -> R39 (620R) -> U12 LED -> D7 (BZT52B24) -> -15VA
 
     With either rail absent (held within 0.51 V of AGND by the rail clamps
     D8/D9, Sheet 1) the string has <= 15.5 + 0.51 = 16.0 V across it, below
-    D7's 16.8 V leakage test point (IR <= 0.1 uA), so IF <= 0.1 uA, a
-    thousandth of U12's 0.1 mA guaranteed-off (IFC) current: U12 is OPEN,
-    guaranteed by data-sheet limits at 25 C. It is guaranteed CLOSED
-    (IF >= IFT max 3 mA) at a rail-to-rail total >= 25.6 + 1.4 + 3 mA x
-    626 ohm = 28.9 V, i.e. +/-14.45 V. Between the two it is not guaranteed
+    D7's 18 V leakage test point (IR <= 0.1 uA, Vishay doc. 86342), so
+    IF <= 0.1 uA, a thousandth of U12's 0.1 mA guaranteed-off (IFC) current:
+    U12 is OPEN, guaranteed by data-sheet limits at 25 C. (For a passive
+    DUT. One that holds ~9.5 V or more of the missing rail's polarity lifts
+    the dead rail through D1..D4, Sheet 6, and can close the relay; U5 is
+    then powered. Energised DUTs are outside the envelope.)
+
+    CLOSED needs IF >= IFT (3 mA max at 25 C, a data-sheet limit. Toshiba
+    gives no limit at other temperatures; 3.3 mA is taken here at 50 C,
+    where its typical curve, Fig. 14.1.6, is about 8 % up), and the string
+    only has (rails) - VZ - VF = ~4.7 V of headroom for R39, so D7's voltage
+    decides it. The first analysis took D7 at its pulsed data-sheet voltage.
+    In service D7 heats itself (~140 mW at the operating point, RthJA
+    420 K/W, up to +10e-4/K), which puts its voltage ~1.3 V higher. With
+    that in (final audit; minimum = D7 at its upper limit and upper tempco
+    with no fall of VZ below the 5 mA test current, LED at 1.4 V, R39 +1 %):
+
+                              BZT52C24 (<= 25.6 V, was)  BZT52B24 (+/-2 %, now)
+        typical IF, +/-15.0 V        5.6 mA                  5.6 mA
+        minimum IF, +/-15.0 V, 25 C  3.3 mA                  4.6 mA
+        minimum IF, +/-15.0 V, 50 C  2.6 mA (< IFT)          3.9 mA
+        closed from, 25 C            +/-14.9 V               +/-14.3 V
+        closed from, 50 C            +/-15.35 V              +/-14.75 V
+
+    The 25 C row follows from data-sheet limits, with RthJA the data
+    sheet's one figure (its FR-4 test board; +/-14.4 V if this board cools
+    D7 30 % worse). The 50 C row also leans on Toshiba's typical curve
+    (+/-14.9 V at 30 % worse cooling). Neither allows for LED ageing. The
+    earlier part did not keep the relay closed at the nominal rails once
+    warm; the +/-2 % part does, up to about 65 C ambient at +/-15.0 V
+    (expected: typical curves), with
+    the same nominal voltage, the same footprint and a better leakage test
+    point. The margin is in the rails: at +/-14.5 V closure holds only to
+    about 38 C (expected), so the bench supplies are to be SET to +/-15.0 V +/-0.2 V
+    at J1 (bring-up checklist). Lowering R39 instead would raise D7's
+    dissipation, which is what limits this string. A BZT52B22 with R39 =
+    910 ohm would hold 4.0 mA at +/-14.5 V and 50 C, but it halves the
+    margin of the OPEN guarantee above (17 V leakage test point against the
+    16.0 V string) and closes the relay about 2 V earlier on the way up; it
+    was not adopted. Toshiba's recommended IF is >= 5 mA; the typical
+    5.6 mA meets it, the guaranteed minimum does not, and RON is specified
+    at IF = 5 mA: the guarantee above is "closed" (IF >= IFT), which is what
+    protection needs, and U12's resistance is outside both U5's loop and the
+    Kelvin sense in any case. Between open and closed U12 is not guaranteed
     either way, but any state in that band has >= 16 V across U5, twice its
-    8 V minimum supply, so U5 is operating. Typical: closes near 26 V total.
-    At +/-15.5 V the worst-case string current is 11.6 mA (D7 0.26 W of
-    0.37 W, R39 0.08 W). U12 adds <= 2 ohm (data sheet) to FORCE+, outside
-    U5's loop and outside the Kelvin sense; taken as 0 ohm for the fault
-    bound. Off, it blocks 60 V and leaks <= 1 uA.
+    8 V minimum supply, so U5 is operating. Typical: closes near 26 V
+    total. At +/-15.5 V with D7 at its lowest voltage the string carries
+    7.9 mA (D7 0.20 W of 0.30 W on FR-4, junction 108 C at 25 C ambient and
+    145 C of 150 C at 70 C; with the earlier part's 22.8 V minimum it was
+    8.9 mA, 0.22 W, 116 C and 153 C at the same thermal resistance), and
+    <= 8.5 mA if the board cools D7 better than the
+    data sheet's 420 K/W; R39 <= 0.05 W. U12 adds <= 2 ohm (data sheet) to
+    FORCE+, outside U5's loop and outside the Kelvin sense; taken as 0 ohm
+    for the fault bound. Off, it blocks 60 V and leaks <= 1 uA.
   * D5 (SMBJ15CA, 15 V standoff) clamps transients into J4 without clipping
     the legitimate +/-10.04 V sweep (Sheet 3), and shields U12's output from
     anything above its 60 V rating.
@@ -105,14 +154,23 @@ from skidl import Net
 
 def create_protection_block(n):
     F1 = Fuse_PTC()(ref="F1", tag="F1", value="0ZRM0010FF1E")
-    # Vishay PR02, 100 ohm +/-1 %, Cu 0.78 mm leads, loose in bulk
-    # (PR02 part-number scheme, Vishay doc. 28729). DIN 0411 body: the
-    # footprint is KiCad's DIN0411 at 12.7 mm pitch with 1.2 mm holes for the
-    # 0.78 mm leads. Mount with the body raised ~3 mm (lead kink or spacer).
+    # Vishay PR02, 100 ohm +/-1 %, COPPER 0.78 mm leads, straight (axial),
+    # taped in an ammo pack: PR0200 0 2 0 1000 F A1 00 (Vishay doc. 28729,
+    # "Part number" and "Termination wire types"). The lead material is part
+    # of the rating: the Cu-lead PR02 is the 2 W / 75 K/W part this design
+    # needs, the FeCu-lead one is 1.3 W / 115 K/W. The number used before
+    # ended in ...FB100: packaging B1 exists only with FeCu 0.78 mm leads,
+    # pre-formed ("double kink") at 15 mm pitch, so that number named no real
+    # part, and the nearest real one is the 1.3 W version at the wrong pitch.
+    # The 1 % matters too: with the commonly stocked 5 % part (...JA100) the
+    # rail-fault envelope puts 2.02 W in it (measurement_range.py fails it).
+    # DIN 0411 body (10.0 x 3.9 mm max): the footprint is KiCad's DIN0411 at
+    # 12.7 mm pitch with 1.2 mm holes for the 0.78 mm leads. Form the leads
+    # by hand and mount with the body raised ~3 mm (lead kink or spacer).
     R30 = R()(ref="R30", tag="R30", value="100R 1% 2W",
               footprint="Resistor_THT:"
                         "R_Axial_DIN0411_L9.9mm_D3.6mm_P12.70mm_Horizontal")
-    R30.fields["MPN"] = "PR02000201000FB100"
+    R30.fields["MPN"] = "PR02000201000FA100"
 
     D5 = D_TVS()(ref="D5", tag="D5", value="SMBJ15CA")
 
@@ -123,7 +181,7 @@ def create_protection_block(n):
     U12 = PhotoRelay_TLP176AM()(ref="U12", tag="U12", value="TLP176AM")
     R39 = R()(ref="R39", tag="R39", value="620R 1% 0.25W",
               footprint="Resistor_SMD:R_1206_3216Metric")
-    D7 = D_Zener()(ref="D7", tag="D7", value="BZT52C24")
+    D7 = D_Zener()(ref="D7", tag="D7", value="BZT52B24")
 
     # One panel-mount 4 mm banana jack per DUT terminal.
     J4 = BananaJack("FORCE+")(ref="J4", tag="J4", value="DUT FORCE+")

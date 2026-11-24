@@ -114,7 +114,7 @@ SHEET_OF = {
     # FLG9: DAC_VREF, driven from VREF_2V5 through U11's passive switch.
     "3 DAC/Sweep": ["U4", "C13", "U3", "C11", "C12", "R1", "R2", "R3", "R4",
                     "R5", "R6", "TP1", "U11", "C46", "R35", "R34", "#FLG9"],
-    # R38/C49: the output snubber, DNP (audit V1).
+    # R38/C49: the output R-C network (pads: audit V1; fitted: final audit).
     "4 Power Buffer": ["U5", "R7", "R8", "C14", "C15", "C16", "C17", "C18", "R9",
                        "C19", "TP2", "R38", "C49"],
     "5 Current Sense": ["R10", "U6", "R11", "C20", "C21", "TP3", "TP4"],
@@ -170,6 +170,12 @@ def write_component_manifest(circuit):
         f"Total components: **{len(rows)}** — {len(rows) - n_virtual} on the "
         f"board ({len(rows) - n_virtual - n_dnp} fitted, {n_dnp} DNP "
         f"footprints) and {n_virtual} schematic-only PWR_FLAG symbols.",
+        "",
+        "**Before buying.** A line whose MPN is `generic` is not a free "
+        "choice. The tolerance, dielectric, power and voltage ratings that "
+        "the values below do not carry, and the parts that must be bought by "
+        "exact code, are in `docs/final_audit.md` §6 (\"Buying the parts\") "
+        "and `docs/bringup_checklist.md` §1.",
         "",
         "| Ref | Value | MPN | KiCad Library | Footprint | Sheet | Fit | Status |",
         "|-----|-------|-----|---------------|-----------|-------|-----|--------|",

@@ -431,6 +431,118 @@ assert old in s
 p.write_text(s.replace(old, "MountingHole_3.2mm_M3_Isolated\" F 110 60 0)"))
 '
 
+# --- the final hardware audit (docs/final_audit.md) -----------------------------
+
+# 34. U5 back to an OPA548T programmed for 49 mA: 1 % of that part's range and
+#     inside its +/-250 mA current-limit tolerance, so the real limit can be
+#     zero, i.e. an output stage that cannot drive the DUT at all
+expect_fail range "U5 current limit set inside the amplifier limit tolerance" '
+import pathlib
+p = pathlib.Path("blocks/output_buffer.py"); s = p.read_text()
+for old, new in (("value=\"OPA547T\"", "value=\"OPA548T\""),
+                 ("value=\"348k 1%\"", "value=\"1.43M\"")):
+    assert old in s
+    s = s.replace(old, new)
+p.write_text(s)
+p = pathlib.Path("libraries/custom_symbols.py"); s = p.read_text()
+old = "\"OPA547T\", \"RESOLVED\""
+assert s.count(old) == 1
+p.write_text(s.replace(old, "\"OPA548T\", \"RESOLVED\""))
+'
+
+# 35. R7 = 412 k on the OPA547T: above zero by 0.1 mA with a nominal resistor
+#     and nominal rails, below zero with R7 at +1 % and the rails 0.5 V low.
+#     The stack must include both, and leave a floor
+expect_fail range "U5 current limit positive only at nominal R7 and rails" '
+import pathlib
+p = pathlib.Path("blocks/output_buffer.py"); s = p.read_text()
+old = "value=\"348k 1%\""
+assert old in s
+p.write_text(s.replace(old, "value=\"412k 1%\""))
+'
+
+# 36. R7 = 200 k: a 100 mA setting, above what R30 + R10 and the PTCs pass into
+#     a shorted DUT, so a typical unit would show no current-limit plateau
+expect_fail range "U5 current limit set above what the series path passes" '
+import pathlib
+p = pathlib.Path("blocks/output_buffer.py"); s = p.read_text()
+old = "value=\"348k 1%\""
+assert old in s
+p.write_text(s.replace(old, "value=\"200k 1%\""))
+'
+
+# 37. the order code of U5 left at OPA548T while its value says OPA547T: the
+#     limit would be checked for one amplifier and the other bought
+expect_fail range "U5 value and order code name different amplifiers" '
+import pathlib
+p = pathlib.Path("libraries/custom_symbols.py"); s = p.read_text()
+old = "\"OPA547T\", \"RESOLVED\""
+assert s.count(old) == 1
+p.write_text(s.replace(old, "\"OPA548T\", \"RESOLVED\""))
+'
+
+# 38. R7 = 374 k: the worst-case stack is still above zero (4 mA) but under
+#     the 5 mA floor that covers leakage at the ILIM node. Proves the floor
+expect_fail range "U5 current limit above zero but under the floor" '
+import pathlib
+p = pathlib.Path("blocks/output_buffer.py"); s = p.read_text()
+old = "value=\"348k 1%\""
+assert old in s
+p.write_text(s.replace(old, "value=\"374k 1%\""))
+'
+
+# 39. R7 left unfitted with the dnp() mark, its value text unchanged: an open
+#     ILIM pin programs zero output current
+expect_fail range "R7 marked do-not-populate" '
+import pathlib
+p = pathlib.Path("blocks/output_buffer.py"); s = p.read_text()
+old = "R7 = R()(ref=\"R7\", tag=\"R7\", value=\"348k 1%\",\n             footprint=\"Resistor_SMD:R_1206_3216Metric\")"
+assert old in s
+s = s.replace(old, "R7 = R()(ref=\"R7\", tag=\"R7\", value=\"348k 1%\",\n             footprint=\"Resistor_SMD:R_1206_3216Metric\")\n    R7.dnp = True")
+p.write_text(s)
+'
+
+# 40. U5 named by family only ("OPA547"): the value must be the whole
+#     orderable name, or the limit would be judged for a part nobody can buy
+expect_fail range "U5 value is not an orderable part name" '
+import pathlib
+p = pathlib.Path("blocks/output_buffer.py"); s = p.read_text()
+old = "value=\"OPA547T\""
+assert old in s
+p.write_text(s.replace(old, "value=\"OPA547\""))
+'
+
+# 41. R7 given the value "DNP" (the other way a part is left unfitted): an
+#     open ILIM pin programs zero output current
+expect_fail range "R7 valued DNP" '
+import pathlib
+p = pathlib.Path("blocks/output_buffer.py"); s = p.read_text()
+old = "value=\"348k 1%\""
+assert old in s
+p.write_text(s.replace(old, "value=\"DNP\""))
+'
+
+# 42. R11 (U6 gain resistor) marked do-not-populate: an open RG would give
+#     the current channel a gain of 1 instead of 2.4; the check must stop,
+#     not compute with it or crash
+expect_fail range "R11 marked do-not-populate" '
+import pathlib
+p = pathlib.Path("blocks/current_sense.py"); s = p.read_text()
+old = "    R11 = R()(ref=\"R11\", tag=\"R11\", value=\"35.7k 0.1%\")\n"
+assert s.count(old) == 1
+p.write_text(s.replace(old, old + "    R11.dnp = True\n"))
+'
+
+# 43. R30 (the passive current bound) marked do-not-populate: the fault
+#     envelope cannot be computed without it
+expect_fail range "R30 marked do-not-populate" '
+import pathlib
+p = pathlib.Path("blocks/protection.py"); s = p.read_text()
+old = "                        \"R_Axial_DIN0411_L9.9mm_D3.6mm_P12.70mm_Horizontal\")\n"
+assert s.count(old) == 1
+p.write_text(s.replace(old, old + "    R30.dnp = True\n"))
+'
+
 echo "----------------------------------------------------------------------"
 if [ "$FAILURES" -eq 0 ]; then
     echo "ALL INJECTED FAULTS CAUGHT — the guard works."

@@ -72,7 +72,7 @@ def a_force_path_chain(n, circuit):
     c4 = (_has(n.FORCE_PLUS, "U12") and _has(n.FORCE_PLUS, "D5")
           and _has(n.FORCE_PLUS, "J4") and not _has(n.FORCE_PLUS, "R30"))
     ok = c1 and c2 and c3 and c4
-    return ("FORCE+ path = OPA548(U5) -> R9 -> F1(fuse) -> R30 -> U12 "
+    return ("FORCE+ path = power amp (U5) -> R9 -> F1(fuse) -> R30 -> U12 "
             "(photorelay) -> D5(TVS) -> J4",
             ok, f"VO_SENSE={sorted(_refs_on(n.VO_SENSE))}, "
                 f"F1_MID={sorted(_refs_on(n.F1_MID))}, "

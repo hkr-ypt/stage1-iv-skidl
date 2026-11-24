@@ -26,6 +26,12 @@ schematic instantiates**. Two kinds of symbol live in it:
                   opa548_sbos070d_pin_functions.txt, the verbatim "Pin
                   Functions" table of TI SBOS070D (page 3). The build stops
                   if the two disagree about any pin's function.
+                  U5 is FITTED with an OPA547T (same family, same package;
+                  blocks/output_buffer.py says why), so the same pins are
+                  also checked against opa547_sbos056f_pin_configurations.txt,
+                  the verbatim "PIN CONFIGURATIONS" drawing text of TI
+                  SBOS056F (page 2): every lead must carry the same function
+                  on both parts, or the build stops.
 
 2. **Upstream-derived** — every other part. Pin numbers, names and electrical
    types are read from the installed KiCad libraries by
@@ -66,6 +72,8 @@ OUT_JSON = os.path.join(PROV_DIR, "stage1_iv_pin_provenance.json")
 ADS_SRC = os.path.join(PROV_DIR, "ads1256_sbas288k_terminal_functions.txt")
 OPA_SRC = os.path.join(PROV_DIR, "opa548t_akl_symbol.txt")
 OPA_DS_SRC = os.path.join(PROV_DIR, "opa548_sbos070d_pin_functions.txt")
+OPA547_DS_SRC = os.path.join(PROV_DIR,
+                             "opa547_sbos056f_pin_configurations.txt")
 
 # AKL symbol pin name -> the TI SBOS070D "Pin Functions" NAME on the same pin.
 # This is the claim the cross-check tests; it is not a pin-number table.
@@ -166,12 +174,57 @@ def parse_opa548_datasheet(path=OPA_DS_SRC):
     return out
 
 
+_LABEL_ROW_RE = re.compile(r"\S+(?: \S+)*")       # words one space apart
+
+
+def parse_opa547_datasheet(path=OPA547_DS_SRC):
+    """{lead number: TI name} from the SBOS056F "PIN CONFIGURATIONS" excerpt.
+
+    SBOS056F has no pin table. Its drawing numbers each package's leads
+    "1 2 3 4 5 6 7" left to right and labels every lead with a leader line,
+    the seven labels staggered over two text rows (four above, three below)
+    so that they fit. One package's labels read in left-to-right order are
+    therefore leads 1..7. Every package drawn must give the same answer.
+    """
+    with open(path, encoding="utf-8") as fh:
+        lines = fh.read().split("BEGIN VERBATIM EXCERPT", 1)[-1].splitlines()
+    packages = sum(m.group(0) == "1 2 3 4 5 6 7"
+                   for line in lines for m in _LABEL_ROW_RE.finditer(line))
+    found = []
+    for upper, lower in zip(lines, lines[1:]):
+        for top in _LABEL_ROW_RE.finditer(upper):
+            if len(top.group(0).split()) != 4:
+                continue
+            for bottom in _LABEL_ROW_RE.finditer(lower):
+                if (len(bottom.group(0).split()) != 3
+                        or not top.start() < bottom.start() < top.end()):
+                    continue
+                labels = sorted(
+                    (row.start() + word.start(), word.group(0))
+                    for row in (top, bottom)
+                    for word in re.finditer(r"\S+", row.group(0)))
+                # The data sheet prints the minus sign as U+2013 (en dash).
+                found.append({str(n): name.replace("\u2013", "-")
+                              for n, (_, name) in enumerate(labels, 1)})
+    if (not found or len(found) != packages
+            or any(f != found[0] for f in found)
+            or len(set(found[0].values())) != 7):
+        raise SystemExit(
+            f"{path}: expected one set of seven distinct lead labels per "
+            f"numbered package drawing ({packages}), all alike; parsed "
+            f"{found}")
+    return found[0]
+
+
 def parse_opa548t(path=OPA_SRC):
     """Read (number, name, etype) for every OPA548T pin out of the excerpt.
 
     Each pin is then checked against the TI data sheet's own pin table
     (:func:`parse_opa548_datasheet`): a pin whose AKL name does not map to
-    the function TI assigns that number stops the build.
+    the function TI assigns that number stops the build. The same pins are
+    then checked against the OPA547 data sheet
+    (:func:`parse_opa547_datasheet`), because an OPA547T is what U5 is
+    fitted with.
     """
     with open(path, encoding="utf-8") as fh:
         text = fh.read()
@@ -199,6 +252,14 @@ def parse_opa548t(path=OPA_SRC):
                 f"OPA548T pin {p['number']}: the AKL symbol calls it "
                 f"{p['name']!r} ({want}), TI SBOS070D says {ti[p['number']]}. "
                 f"The symbol does not match the data sheet.")
+    fitted = parse_opa547_datasheet()
+    for number, name in sorted(ti.items()):
+        if fitted.get(number) != name:
+            raise SystemExit(
+                f"U5 pin {number}: TI SBOS070D (OPA548) calls it {name}, TI "
+                f"SBOS056F (OPA547, the part fitted) calls it "
+                f"{fitted.get(number)}. The OPA547 does not fit the OPA548T "
+                f"symbol and footprint.")
     return pins
 
 
@@ -325,6 +386,18 @@ def provenance_record(model, circuit):
                     "excerpt_file": os.path.relpath(OPA_DS_SRC, REPO_ROOT),
                     "excerpt_sha256": digest(OPA_DS_SRC),
                     "pins": parse_opa548_datasheet(),
+                },
+                "fitted_part_verified_against": {
+                    "fitted_part": "OPA547T",
+                    "source_document": "Texas Instruments OPA547 data sheet",
+                    "document_number": "SBOS056F",
+                    "revision": "F — JANUARY 2002, revised JULY 2005",
+                    "table": "PIN CONFIGURATIONS drawing, page 2 (each "
+                             "package's lead labels read left to right as "
+                             "leads 1..7)",
+                    "excerpt_file": os.path.relpath(OPA547_DS_SRC, REPO_ROOT),
+                    "excerpt_sha256": digest(OPA547_DS_SRC),
+                    "pins": parse_opa547_datasheet(),
                 },
                 "pins": parse_opa548t(),
             },

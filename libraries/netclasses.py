@@ -110,7 +110,7 @@ NETCLASSES = {
             "uncoated for 16-30 V is 0.13 mm, BELOW the fab floor, so IPC is "
             "not binding here; the doubling is margin for the 30 V rail-to-rail "
             "between +15VA and -15VA under assembly-residue variation. "
-            "track 0.50 mm: OPA548 supply feed at I_LIMIT 49 mA is trivial for "
+            "track 0.50 mm: the U5 supply feed at I_LIMIT 49 mA is trivial for "
             "this width; 0.50 mm is chosen for low impedance on the buffer's "
             "supply rather than for current. via 0.8/0.4 mm >= F7."),
         "nets": ["+15VA", "-15VA",
@@ -158,10 +158,10 @@ NETCLASSES = {
         "via_diameter": 0.80,
         "via_drill": 0.40,
         "derivation": (
-            "The DUT drive path: OPA548 -> R9 -> F1 -> R30 -> U12 -> D5 -> "
+            "The DUT drive path: U5 -> R9 -> F1 -> R30 -> U12 -> D5 -> "
             "J4, and the return J7 -> F2 -> R10. "
             "clearance 0.25 mm for +/-11 V compliance with margin over F4. "
-            "track 0.50 mm: OPA548 ILIM is set to ~49 mA (R7 = 1.43 M), but "
+            "track 0.50 mm: U5's ILIM is set to ~49 mA (R7), but "
             "the fuse F1 holds 100 mA and the TVS D5 conducts fault current, "
             "so the track is sized for the FAULT case, not the operating one; "
             "0.50 mm at 1 oz carries ~1.4 A at a 10 C rise."),
@@ -169,7 +169,7 @@ NETCLASSES = {
                  # R30 -> U12 (photorelay) and F2 -> R10 (shunt high side):
                  # the same current and the same +/-11 V as FORCE+/FORCE-.
                  "FORCE_SW", "ISENSE_HI",
-                 # U5 output snubber midpoint (R38/C49, DNP): sits on the
+                 # U5 output snubber midpoint (R38/C49): sits on the
                  # +/-11 V output node, so it keeps the output's clearance.
                  "VO_SNUB"],
     },
