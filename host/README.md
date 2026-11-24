@@ -98,7 +98,9 @@ with Instrument.open_serial(serial="0034002B3436511233353533") as inst:
   (`--no-overwrite`). `iv-sweep` checks that both files can be written
   before it starts; if writing still fails afterwards, it writes them to a
   new directory of their own in the temporary directory (`iv-sweep-*`,
-  nothing there is overwritten) and says where. It also writes what it
+  nothing there is overwritten) and says where. An empty test file of the
+  check that another program holds (it cannot be removed at once) is
+  replaced by the results, or removed or reported at the end. It also writes what it
   collected when the sweep, the session or the final DISARM fails (sidecar
   `host.error`; `host.partial` and `sweep.status` `unknown` if the sweep did
   not end) and exits non-zero; errors are one-line messages, not tracebacks.

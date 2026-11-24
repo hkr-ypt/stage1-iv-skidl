@@ -268,3 +268,69 @@ def test_a_probe_file_that_cannot_be_removed_does_not_block_the_sweep(tmp_path, 
     assert rc == 0, err
     assert "could not remove the empty test file" in err
     assert len(W.read_csv(tmp_path / "r.csv")) == 3
+
+
+@pytest.mark.parametrize("case", ["another file appears", "the test file gains content"])
+def test_no_overwrite_replaces_only_this_runs_empty_test_file(tmp_path, monkeypatch, capsys,
+                                                              use_fake, device, case):
+    """--no-overwrite lets the results replace the pre-check's own leftover
+    empty test file, and nothing else: a file that appears meanwhile, or the
+    test file once it has content, is kept and the results are rescued."""
+    from pathlib import Path
+    real_unlink = Path.unlink
+
+    def held(self, *a, **k):
+        if self.suffix == ".csv" and self.parent == tmp_path:
+            raise PermissionError(32, "being used by another process")
+        return real_unlink(self, *a, **k)
+    monkeypatch.setattr(Path, "unlink", held)
+    real_handle = device.handle
+
+    def handle(line):
+        if line.startswith("SWP.RUN"):           # during the sweep
+            if case == "another file appears":
+                (tmp_path / "r.json").write_text("OTHER PROGRAM")
+            else:
+                (tmp_path / "r.csv").write_text("OTHER PROGRAM")
+        real_handle(line)
+    device.handle = handle
+    fallback = tmp_path / "fallback"
+    fallback.mkdir()
+    monkeypatch.setattr(cli.tempfile, "tempdir", str(fallback))
+    rc = cli.sweep_main(["--wp", "0", "1", "--step", "0.5", "--no-overwrite",
+                         "--out", str(tmp_path / "r")])
+    out, err = capsys.readouterr()
+    assert rc == 1
+    kept = tmp_path / ("r.json" if case == "another file appears" else "r.csv")
+    assert kept.read_text() == "OTHER PROGRAM"
+    assert len(list(fallback.glob("iv-sweep-*/r.csv"))) == 1
+
+
+def test_a_leftover_test_file_is_removed_or_reported_when_no_results_replace_it(
+        tmp_path, monkeypatch, capsys):
+    """When no results replace the pre-check's empty test file (here the
+    instrument is never reached), it is removed at the end, or reported if
+    it still cannot be removed, so it does not block the next run."""
+    from pathlib import Path
+    from stage1iv.errors import SessionLost
+    real_unlink = Path.unlink
+    state = {"fail": 5}                          # all five attempts of the check
+
+    def held(self, *a, **k):
+        if self.suffix == ".csv" and state["fail"] > 0:
+            state["fail"] -= 1
+            raise PermissionError(32, "being used by another process")
+        return real_unlink(self, *a, **k)
+    monkeypatch.setattr(Path, "unlink", held)
+
+    def lost(*a, **k):
+        raise SessionLost("port vanished")
+    monkeypatch.setattr(cli, "_open", lost)
+    argv = ["--wp", "0", "1", "--step", "0.5", "--no-overwrite", "--out", str(tmp_path / "r")]
+    assert cli.sweep_main(argv) == 1
+    assert not (tmp_path / "r.csv").exists()     # removed at the end
+    capsys.readouterr()
+    state["fail"] = 1000                         # now it stays held
+    assert cli.sweep_main(argv) == 1
+    assert (tmp_path / "r.csv").exists()
+    assert "the empty test file" in capsys.readouterr().err

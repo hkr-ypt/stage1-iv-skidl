@@ -73,18 +73,24 @@ def _check_writable(targets: Iterable[Path]) -> list[Path]:
             continue
         with open(target, "x"):
             pass
-        for attempt in range(5):
-            try:
-                target.unlink()
-                break
-            except FileNotFoundError:
-                break
-            except OSError:
-                if attempt == 4:
-                    leftovers.append(target)
-                else:
-                    time.sleep(0.05)
+        if not _remove_probe(target):
+            leftovers.append(target)
     return leftovers
+
+
+def _remove_probe(path: Path) -> bool:
+    """Remove an empty test file of this run, retrying briefly (another
+    program may hold it for a moment); True once it is gone."""
+    for attempt in range(5):
+        try:
+            path.unlink()
+            return True
+        except FileNotFoundError:
+            return True
+        except OSError:
+            if attempt < 4:
+                time.sleep(0.05)
+    return False
 
 
 def _only_probes(paths: Iterable[Path], probes: list[Path]) -> bool:
@@ -282,6 +288,7 @@ def sweep_main(argv: Sequence[str] | None = None) -> int:
         return 1
 
     res: SweepResult | None = None
+    out_written = False
     meta: dict[str, Any] = {}
     errors: list[str] = []
     interrupted = False
@@ -331,6 +338,7 @@ def sweep_main(argv: Sequence[str] | None = None) -> int:
                 return None
         written = write(Path(args.out), not args.no_overwrite
                         or _only_probes(sweep_paths(args.out), probes))
+        out_written = written is not None
         if written is None:
             # Never lose a finished sweep: a new directory of its own in the
             # temporary directory (nothing there can be overwritten), under
@@ -348,6 +356,12 @@ def sweep_main(argv: Sequence[str] | None = None) -> int:
             prefix = "" if res.ended else "partial results: "
             print(f"{prefix}status={res.status} records={len(res.records)} -> "
                   f"{written[0]}, {written[1]}")
+    if not out_written:
+        # the results did not replace the empty test files left by the check
+        for p in probes:
+            if p.exists() and p.stat().st_size == 0 and not _remove_probe(p):
+                errors.append(f"the empty test file {p} remains; delete it before "
+                              "running with --no-overwrite again")
     for text in errors:
         print(f"iv-sweep: {text}", file=sys.stderr)
     if interrupted:

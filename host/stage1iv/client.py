@@ -48,8 +48,11 @@ abort of an interrupted sweep) are still sent then, without checking their
 responses.
 
 Session loss - a serial error, the port vanishing, a new ``EVT HELLO``
-after the first command was sent, or ``EVT STATE ... reason=
-session_lost`` - surfaces as :class:`SessionLost` in every waiting call.
+after the first command was sent, or ``EVT STATE DISARMING
+reason=host_timeout`` (the instrument's disarm after a host timeout) -
+surfaces as :class:`SessionLost` in every waiting call. (The disarm for a
+lost session is never sent to that session; the ``DISARMED`` that ends such a
+ramp can reach the next one and is not a loss.)
 Before the first command, ``HELLO``\\ s, events, responses and records can be
 an earlier session's unread output (protocol.md section 1): responses,
 records and cut-off lines are dropped, a later ``HELLO`` replaces an earlier
@@ -538,6 +541,14 @@ class Instrument:
     # ---- dispatcher --------------------------------------------------------------------
 
     def _dispatch_loop(self) -> None:
+        try:
+            self._dispatch()
+        finally:
+            # Nothing is left to deliver once the dispatcher has stopped:
+            # open() must not wait for it.
+            self._held_done.set()
+
+    def _dispatch(self) -> None:
         while not self._stop.is_set():
             if not self._opening and not self._held_done.is_set():
                 held, self._held = self._held, []
@@ -683,9 +694,10 @@ class Instrument:
             lst.offer_event(index, ev)
         if (ev.type == "STATE" and (ev.arg or "").upper() == "DISARMING"
                 and (ev.get("reason") or "").lower() in SESSION_LOSS_REASONS):
-            # The disarm for a lost session or a host timeout starts with
-            # DISARMING; the DISARMED with the same reason only ends that ramp
-            # and can arrive in the next session (its HELLO reported it).
+            # A disarm for a host timeout (or a lost session, which that
+            # session never sees) starts with DISARMING; the DISARMED with the
+            # same reason only ends the ramp and can arrive in the next
+            # session (its HELLO reported it).
             exc = SessionLost(f"instrument reports {ev.line}")
             for lst in listeners:
                 lst.fail(exc)

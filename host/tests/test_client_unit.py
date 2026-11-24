@@ -621,3 +621,52 @@ def test_only_a_disarm_for_a_loss_fails_listeners(device, inst):
         device.w("EVT STATE DISARMING reason=host_timeout")
         with pytest.raises(SessionLost):
             lst.get(1.0)
+
+
+def test_events_streaming_through_the_end_of_open_keep_their_order():
+    """Events that arrive while open() hands over from holding to delivering
+    are held too: none is lost, duplicated or delivered out of order."""
+    from stage1iv.transport import LoopbackTransport
+    from conftest import FakeDevice
+    t = LoopbackTransport()
+    t.device_write_line("")
+    t.device_write_line(HELLO)
+    sent = [f"X{k}" for k in range(250)]
+
+    def stream():
+        for name in sent:                     # no pause: open() ends at its limit
+            t.device_write_line(f"EVT WARN {name}")
+            time.sleep(0.002)
+    th = threading.Thread(target=stream)
+    th.start()
+    dev = FakeDevice(t)
+    i = Instrument(t, keepalive_interval=None, command_timeout=2.0, hello_timeout=0.3)
+    try:
+        i.open()
+        for _ in range(3):
+            assert i.ping() > 0
+        th.join()
+        assert i.ping() > 0
+        assert [e.arg for e in i.events if e.type == "WARN"] == sent
+    finally:
+        th.join()
+        i.close()
+        dev.stop()
+        t.close()
+
+
+def test_open_does_not_wait_for_held_events_once_the_port_is_gone():
+    """If the port vanishes while open() waits for HELLO, there is nothing
+    left to deliver: open() returns after its HELLO wait, not a second later."""
+    from stage1iv.transport import LoopbackTransport
+    t = LoopbackTransport()
+    threading.Timer(0.05, lambda: t.device_disconnect("unplugged")).start()
+    i = Instrument(t, keepalive_interval=None, command_timeout=1.0, hello_timeout=0.5)
+    try:
+        t0 = time.monotonic()
+        i.open()
+        assert time.monotonic() - t0 < 1.0     # 0.5 s HELLO wait, no extra 1 s
+        assert i.session_lost is not None
+    finally:
+        i.close()
+        t.close()

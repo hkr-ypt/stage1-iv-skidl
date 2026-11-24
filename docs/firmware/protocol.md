@@ -49,9 +49,9 @@ command, field or error code is a protocol change and increments
   it send its first command. A `HELLO` that arrives after a command was sent
   means a new session: the device restarted or the session was lost, and
   commands in flight may be lost. The host library does exactly this when
-  it waits for `HELLO` at open (`Instrument.open_serial`, or `hello_timeout`
-  > 0): it waits until no line has arrived for 0.1 s after a `HELLO`, and
-  drops the events before the last `HELLO` as well.
+  it waits for `HELLO` at open (`Instrument.open_serial`, or a
+  `hello_timeout` above 0): it waits until no line has arrived for 0.1 s
+  after a `HELLO`, and drops the events before the last `HELLO` as well.
 
 ## 2. Framing
 
