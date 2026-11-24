@@ -218,7 +218,12 @@ def hysteresis_loop(vmax: Any, step: Any, cycles: int = 1) -> WaypointSweep:
 # ---- list sweeps ---------------------------------------------------------------
 
 class ListPoint(NamedTuple):
-    """A list-sweep point: setpoint (V) and optional own settle time (us)."""
+    """A list-sweep point: setpoint (V) and optional own settle time (us).
+
+    ``settle_us=None`` (omitted) means "use the configuration's ``settle_us``"
+    (protocol.md section 5.5): the point is sent as plain ``V``. An explicit
+    settle time must be 100-60000000 us; ``0`` is not a way to omit it.
+    """
 
     v: Decimal
     settle_us: int | None = None
@@ -237,13 +242,17 @@ class ListPoint(NamedTuple):
 
 
 def as_list_point(p: Any) -> ListPoint:
-    """Accept ``ListPoint``, ``(v, settle_us)`` or a bare voltage."""
+    """Accept ``ListPoint``, ``(v, settle_us)`` / ``[v, settle_us]`` (``settle_us``
+    may be ``None``), ``(v,)`` / ``[v]`` or a bare voltage. A missing or
+    ``None`` settle time means the configuration's ``settle_us``."""
     if isinstance(p, ListPoint):
         return ListPoint(uv_to_volts(to_uv(p.v)), p.settle_us)
-    if isinstance(p, tuple):
-        if len(p) != 2:
-            raise ValueError(f"list point tuple must be (v, settle_us), got {p!r}")
-        return ListPoint(uv_to_volts(to_uv(p[0])), None if p[1] is None else int(format_us(p[1])))
+    if isinstance(p, (tuple, list)):
+        if not 1 <= len(p) <= 2:
+            raise ValueError(f"list point must be (v, settle_us) or (v,), got {p!r}")
+        settle = p[1] if len(p) == 2 else None
+        return ListPoint(uv_to_volts(to_uv(p[0])),
+                         None if settle is None else int(format_us(settle, "settle_us")))
     return ListPoint(uv_to_volts(to_uv(p)))
 
 

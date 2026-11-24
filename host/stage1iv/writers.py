@@ -2,14 +2,20 @@
 
 The CSV keeps the 17 protocol fields exactly as the device printed them (raw
 codes are the authoritative data; ``v_set_V``, ``v_V``, ``i_A`` keep their
-fixed decimals), followed by derived columns: the decoded flag names and the
-three times unwrapped to 64-bit microseconds from the sweep start.
+fixed decimals, never scientific notation), followed by derived columns: the
+decoded flag names and the three times unwrapped to 64-bit microseconds from
+the sweep start.
 
 The JSON sidecar holds ``*IDN?``, the ``SWEEP_BEGIN`` and ``SWEEP_END``
 event fields (configuration, calibration record and session zero, so raw
 codes can be reprocessed), ``CFG?``, ``CAL?``, host metadata and a statement
 that accuracy figures are provisional. Device values are stored as the exact
 strings received.
+
+File names: :func:`write_sweep` appends ``.csv``/``.json`` to the base name
+(``diode_0.5V`` -> ``diode_0.5V.csv``); only an explicit ``.csv``/``.json``
+suffix is replaced. Existing files are overwritten unless
+``overwrite=False``.
 """
 
 from __future__ import annotations
@@ -22,12 +28,16 @@ import os
 import platform
 import socket
 import sys
+from decimal import Decimal
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
-from .records import PT_FIELDS, PTRecord, decode_flags, unwrap_record_times
+from .records import PT_FIELDS, PTRecord, decimal_text, decode_flags, unwrap_record_times
 
 SIDECAR_FORMAT = "stage1iv-sweep/1"
+
+#: Suffixes :func:`sweep_paths` replaces instead of appending to.
+SWEEP_SUFFIXES = (".csv", ".json")
 
 ACCURACY_STATEMENT = (
     "Accuracy figures for this instrument are provisional targets and are UNVERIFIED "
@@ -39,11 +49,18 @@ CSV_EXTRA_FIELDS = ("flag_names", "t_set_us_unwrapped", "t_i_us_unwrapped", "t_v
 CSV_FIELDS = PT_FIELDS + CSV_EXTRA_FIELDS
 
 
-def write_csv(path: str | os.PathLike, records: Sequence[PTRecord]) -> Path:
-    """Write ``records`` (in point order) to ``path``; returns the path."""
+def _mode(overwrite: bool) -> str:
+    return "w" if overwrite else "x"
+
+
+def write_csv(path: str | os.PathLike, records: Sequence[PTRecord], *,
+              overwrite: bool = True) -> Path:
+    """Write ``records`` (in point order) to ``path``; returns the path.
+
+    With ``overwrite=False`` an existing file raises :class:`FileExistsError`."""
     path = Path(path)
     times = unwrap_record_times(records)
-    with path.open("w", newline="", encoding="ascii") as fh:
+    with path.open(_mode(overwrite), newline="", encoding="ascii") as fh:
         w = csv.writer(fh, lineterminator="\n")
         w.writerow(CSV_FIELDS)
         for rec, (ts, ti, tv) in zip(records, times):
@@ -64,8 +81,10 @@ def _fields(obj: Any) -> dict[str, str] | None:
     f = getattr(obj, "fields", None)
     if f is not None:
         return {str(k): str(v) for k, v in dict(f).items()}
-    if isinstance(obj, Mapping):
-        return {str(k): ("-" if v is None else str(v)) for k, v in obj.items()}
+    if isinstance(obj, Mapping):     # e.g. converted values: Decimals in fixed-point text
+        return {str(k): ("-" if v is None else
+                         decimal_text(v) if isinstance(v, Decimal) else str(v))
+                for k, v in obj.items()}
     raise TypeError(f"cannot store {type(obj).__name__} in the sidecar")
 
 
@@ -110,7 +129,8 @@ def build_sidecar(*, idn: Any = None, sweep_begin: Any = None, sweep_end: Any = 
         doc["sweep"] = {
             "sweep_id": result.sweep_id,
             "points_planned": result.points_planned,
-            "est_s": str(result.est_s),
+            "est_s": decimal_text(result.est_s) if isinstance(result.est_s, Decimal)
+            else str(result.est_s),
             "status": result.status,
             "status_inferred": result.status_inferred,
             "records": len(result.records),
@@ -125,25 +145,47 @@ def build_sidecar(*, idn: Any = None, sweep_begin: Any = None, sweep_end: Any = 
     return doc
 
 
-def write_sidecar(path: str | os.PathLike, **kwargs: Any) -> Path:
-    """Write :func:`build_sidecar` as JSON to ``path``."""
+def write_sidecar(path: str | os.PathLike, *, overwrite: bool = True, **kwargs: Any) -> Path:
+    """Write :func:`build_sidecar` as JSON to ``path``.
+
+    With ``overwrite=False`` an existing file raises :class:`FileExistsError`."""
     path = Path(path)
     doc = build_sidecar(**kwargs)
-    path.write_text(json.dumps(doc, indent=2, sort_keys=False) + "\n", encoding="utf-8")
+    with path.open(_mode(overwrite), encoding="utf-8") as fh:
+        fh.write(json.dumps(doc, indent=2, sort_keys=False) + "\n")
     return path
+
+
+def sweep_paths(base: str | os.PathLike) -> tuple[Path, Path]:
+    """``(<base>.csv, <base>.json)``. The suffixes are appended, so a dot in
+    the name is kept (``diode_0.5V`` -> ``diode_0.5V.csv``); only an explicit
+    ``.csv``/``.json`` suffix is replaced (``run1.csv`` -> ``run1.csv``,
+    ``run1.json``)."""
+    base = Path(base)
+    if base.suffix.lower() in SWEEP_SUFFIXES:
+        base = base.with_suffix("")
+    return base.with_name(base.name + ".csv"), base.with_name(base.name + ".json")
 
 
 def write_sweep(base: str | os.PathLike, result: Any, *, idn: Any = None, cfg: Any = None,
                 cal: Any = None, note: str | None = None,
-                extra: Mapping[str, Any] | None = None) -> tuple[Path, Path]:
-    """Write ``<base>.csv`` and ``<base>.json`` for a :class:`SweepResult`."""
-    base = Path(base)
-    if base.suffix in (".csv", ".json"):
-        base = base.with_suffix("")
-    csv_path = write_csv(base.with_suffix(".csv"), result.records)
-    json_path = write_sidecar(base.with_suffix(".json"), idn=idn, sweep_begin=result.begin,
+                extra: Mapping[str, Any] | None = None,
+                overwrite: bool = True) -> tuple[Path, Path]:
+    """Write ``<base>.csv`` and ``<base>.json`` for a :class:`SweepResult`
+    (names from :func:`sweep_paths`).
+
+    Existing files are replaced (the default, as before). With
+    ``overwrite=False`` nothing is written and :class:`FileExistsError` is
+    raised if either file exists."""
+    csv_target, json_target = sweep_paths(base)
+    if not overwrite:
+        existing = [str(p) for p in (csv_target, json_target) if p.exists()]
+        if existing:
+            raise FileExistsError(f"refusing to overwrite {', '.join(existing)}")
+    csv_path = write_csv(csv_target, result.records, overwrite=overwrite)
+    json_path = write_sidecar(json_target, idn=idn, sweep_begin=result.begin,
                               sweep_end=result.end, cfg=cfg, cal=cal, note=note, result=result,
-                              csv_name=csv_path.name, extra=extra)
+                              csv_name=csv_path.name, extra=extra, overwrite=overwrite)
     return csv_path, json_path
 
 
@@ -154,5 +196,5 @@ def records_from_lines(lines: Iterable[str]) -> list[PTRecord]:
 
 
 __all__ = ["ACCURACY_STATEMENT", "CSV_FIELDS", "CSV_EXTRA_FIELDS", "SIDECAR_FORMAT",
-           "write_csv", "read_csv", "host_metadata", "build_sidecar", "write_sidecar",
-           "write_sweep", "records_from_lines"]
+           "SWEEP_SUFFIXES", "write_csv", "read_csv", "host_metadata", "build_sidecar",
+           "write_sidecar", "sweep_paths", "write_sweep", "records_from_lines"]

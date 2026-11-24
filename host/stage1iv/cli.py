@@ -4,6 +4,13 @@ Device selection (all tools): ``--port <name>`` or discovery by USB VID/PID
 (``--pid``, default the development PID 0x0001 or ``$STAGE1IV_PID``) and
 optionally ``--serial <24 hex>``. A fixed device path is never assumed.
 ``--sim [EXE]`` runs against the firmware simulator instead (testing).
+
+Errors (no instrument found, a bad sweep definition or configuration value,
+a refused command, a lost session, ...) are reported in one line on stderr,
+never as a traceback. Exit status: 0 success, 1 error, 2 sweep not complete,
+3 calibration not saved, 130 interrupted. ``iv-sweep`` writes whatever it
+collected (``status=unknown`` if the sweep did not end) also when the sweep
+or the final DISARM fails.
 """
 
 from __future__ import annotations
@@ -14,17 +21,27 @@ import json
 import logging
 import sys
 import tomllib
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import Any, Iterator, Sequence
+from typing import Any, Iterable, Iterator, Sequence
 
 from .calibration import CalibrationWorkflow
-from .client import Instrument
+from .client import Instrument, SweepResult
+from .discovery import DeviceNotFound
 from .errors import Stage1IVError
-from .sweeps import ListPoint, waypoint_sweep
-from .writers import write_sweep
+from .records import decimal_text
+from .sim import SimulatorError
+from .sweeps import ListPoint, as_list_point, list_add_commands, waypoint_sweep
+from .writers import sweep_paths, write_sweep
 
 log = logging.getLogger(__name__)
+
+#: Errors the tools report in one line (exit status 1) instead of a traceback:
+#: library errors, no/ambiguous instrument, simulator problems, invalid values
+#: (ValueError includes GridError and JSON/TOML syntax errors), decimal
+#: syntax, and OS errors (serial port, files).
+CLI_ERRORS = (Stage1IVError, DeviceNotFound, SimulatorError, ValueError, ArithmeticError,
+              OSError)
 
 
 def _add_device_args(ap: argparse.ArgumentParser) -> None:
@@ -57,6 +74,12 @@ def _print_fields(title: str, fields: dict[str, Any]) -> None:
         print(f"  {k:20s} {v}")
 
 
+def _text(value: Any) -> str:
+    """A converted value as text; Decimals keep their fixed decimals (never
+    scientific notation)."""
+    return decimal_text(value) if isinstance(value, Decimal) else str(value)
+
+
 # ---- iv-diag ------------------------------------------------------------------------
 
 def diag_main(argv: Sequence[str] | None = None) -> int:
@@ -69,12 +92,15 @@ def diag_main(argv: Sequence[str] | None = None) -> int:
         with _open(args) as inst:
             out = {
                 "idn": inst.idn().fields,
-                "stat": {k: str(v) for k, v in inst.stat().items()},
-                "diag": {k: str(v) for k, v in inst.diag().items()},
+                "stat": {k: _text(v) for k, v in inst.stat().items()},
+                "diag": {k: _text(v) for k, v in inst.diag().items()},
                 "cal": inst.command("CAL?").fields,
                 "cfg": inst.command("CFG?").fields,
             }
-    except Stage1IVError as exc:
+    except KeyboardInterrupt:
+        print("iv-diag: interrupted", file=sys.stderr)
+        return 130
+    except CLI_ERRORS as exc:
         print(f"iv-diag: {exc}", file=sys.stderr)
         return 1
     if args.json:
@@ -104,7 +130,17 @@ def _parse_kv(items: Sequence[str]) -> dict[str, str]:
     return out
 
 
+def _decimal(value: Any, what: str) -> Decimal:
+    try:
+        return Decimal(str(value).strip())
+    except InvalidOperation:
+        raise ValueError(f"{what}: {value!r} is not a decimal number") from None
+
+
 def _list_points(path: str) -> list[ListPoint]:
+    """A list file: one ``volts[,settle_us]`` per line (``;`` also separates,
+    ``#`` starts a comment). An omitted settle time means the configuration's
+    ``settle_us`` (``ListPoint.settle_us=None``)."""
     pts = []
     for n, line in enumerate(Path(path).read_text(encoding="utf-8").splitlines(), 1):
         line = line.split("#", 1)[0].strip()
@@ -113,11 +149,26 @@ def _list_points(path: str) -> list[ListPoint]:
         parts = [x.strip() for x in line.replace(";", ",").split(",")]
         try:
             v = Decimal(parts[0])
-            settle = int(parts[1]) if len(parts) > 1 and parts[1] else 0
+            settle = int(parts[1]) if len(parts) > 1 and parts[1] else None
         except Exception as exc:  # noqa: BLE001
             raise SystemExit(f"{path}:{n}: cannot parse {line!r}: {exc}") from exc
         pts.append(ListPoint(v, settle))
     return pts
+
+
+def _config_list_points(items: Iterable[Any]) -> list[ListPoint]:
+    """``list`` of a --config file: entries ``v``, ``[v]`` or ``[v, settle_us]``;
+    a missing or null ``settle_us`` means the configuration's ``settle_us``."""
+    out = []
+    for p in items:
+        if isinstance(p, (list, tuple)):
+            if not 1 <= len(p) <= 2:
+                raise ValueError(f"list entry {p!r}: expected v, [v] or [v, settle_us]")
+            settle = p[1] if len(p) == 2 else None
+            out.append(as_list_point((_decimal(p[0], "list voltage"), settle)))
+        else:
+            out.append(as_list_point(_decimal(p, "list voltage")))
+    return out
 
 
 def sweep_main(argv: Sequence[str] | None = None) -> int:
@@ -131,57 +182,113 @@ def sweep_main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--wp", nargs="+", metavar="V", help="waypoints in volts")
     ap.add_argument("--step", help="step in volts (exact grid)")
     ap.add_argument("--cycles", type=int, default=None)
-    ap.add_argument("--list", metavar="FILE", help="list sweep: one 'volts[,settle_us]' per line")
+    ap.add_argument("--list", metavar="FILE",
+                    help="list sweep: one 'volts[,settle_us]' per line (no settle_us: the "
+                         "configured settle_us)")
     ap.add_argument("--cfg", nargs="*", default=[], metavar="KEY=VALUE",
                     help="instrument configuration (CFG keys)")
-    ap.add_argument("--out", required=True, help="output base name (no extension)")
+    ap.add_argument("--out", required=True,
+                    help="output base name: <out>.csv and <out>.json are appended "
+                         "(a dot in the name is kept)")
     ap.add_argument("--note", help="free text stored in the JSON sidecar")
     ap.add_argument("--allow-bringup", action="store_true",
                     help="permit a sweep on a bring-up build (normally refused)")
-    ap.add_argument("--keep-armed", action="store_true", help="do not DISARM afterwards")
+    ap.add_argument("--keep-armed", action="store_true",
+                    help="do not send DISARM after the sweep. This has no lasting effect: "
+                         "when the tool exits it closes the port, DTR drops and the "
+                         "instrument disarms by itself (session lost)")
+    ap.add_argument("--no-overwrite", action="store_true",
+                    help="refuse to run if <out>.csv or <out>.json exists (default: replace)")
     args = ap.parse_args(argv)
 
-    conf: dict[str, Any] = _load_config(args.config) if args.config else {}
-    cfg = dict(conf.get("cfg", {}))
-    cfg.update(_parse_kv(args.cfg))
-    note = args.note or conf.get("note")
-    waypoints = args.wp or conf.get("waypoints")
-    step = args.step or conf.get("step")
-    cycles = args.cycles or int(conf.get("cycles", 1))
-    list_file = args.list or conf.get("list_file")
-    list_pts = conf.get("list")
-    if not waypoints and not list_file and not list_pts:
-        ap.error("give --wp/--step, --list, or a --config with a definition")
-    if waypoints:
-        if step is None:
-            ap.error("--wp needs --step")
-        definition = waypoint_sweep([Decimal(str(w)) for w in waypoints], Decimal(str(step)), cycles)
+    # Everything that can be checked without the instrument is checked first.
+    try:
+        conf: dict[str, Any] = _load_config(args.config) if args.config else {}
+        cfg = dict(conf.get("cfg", {}))
+        cfg.update(_parse_kv(args.cfg))
+        note = args.note or conf.get("note")
+        waypoints = args.wp or conf.get("waypoints")
+        step = args.step or conf.get("step")
+        cycles = args.cycles or int(conf.get("cycles", 1))
+        list_file = args.list or conf.get("list_file")
+        list_pts = conf.get("list")
+        if not waypoints and not list_file and not list_pts:
+            ap.error("give --wp/--step, --list, or a --config with a definition")
+        definition = None
+        points: list[ListPoint] | None = None
+        if waypoints:
+            if step is None:
+                ap.error("--wp needs --step")
+            definition = waypoint_sweep([_decimal(w, "waypoint") for w in waypoints],
+                                        _decimal(step, "step"), cycles)
+        else:
+            points = _list_points(list_file) if list_file else _config_list_points(list_pts)
+            list_add_commands(points)           # range and grid checks
+        if args.no_overwrite:
+            existing = [str(p) for p in sweep_paths(args.out) if p.exists()]
+            if existing:
+                raise FileExistsError(f"refusing to overwrite {', '.join(existing)} "
+                                      "(--no-overwrite)")
+    except CLI_ERRORS as exc:
+        print(f"iv-sweep: {exc}", file=sys.stderr)
+        return 1
+
+    res: SweepResult | None = None
+    meta: dict[str, Any] = {}
+    errors: list[str] = []
+    interrupted = False
     try:
         with _open(args, allow_bringup=args.allow_bringup) as inst:
-            idn = inst.idn()
+            meta["idn"] = inst.idn()
             if cfg:
                 inst.cfg(**cfg)
-            if waypoints:
+            if definition is not None:
                 d = inst.sweep_waypoints(definition)
-            elif list_file:
-                d = inst.sweep_list(_list_points(list_file))
             else:
-                d = inst.sweep_list([ListPoint(Decimal(str(p[0])), int(p[1])) if isinstance(p, list)
-                                     else ListPoint(Decimal(str(p)), 0) for p in list_pts])
+                assert points is not None
+                d = inst.sweep_list(points)
             print(f"sweep: {d.kind}, {d.points} points, ~{d.est_s} s")
+            # read before the sweep: the sidecar has them even if the session is lost
+            meta["cfg"] = inst.command("CFG?")
+            meta["cal"] = inst.command("CAL?")
             inst.arm()
             try:
                 res = inst.run_sweep(allow_incomplete=True, allow_bringup=args.allow_bringup)
+            except BaseException:
+                res = inst.last_sweep           # the records collected so far
+                raise
             finally:
-                if not args.keep_armed:
-                    inst.disarm()
-            csv_path, json_path = write_sweep(args.out, res, idn=idn,
-                                              cfg=inst.command("CFG?"),
-                                              cal=inst.command("CAL?"), note=note)
-    except Stage1IVError as exc:
-        print(f"iv-sweep: {exc}", file=sys.stderr)
+                # On a lost session the instrument has disarmed by itself.
+                if not args.keep_armed and inst.session_lost is None:
+                    try:
+                        inst.disarm()
+                    except CLI_ERRORS as exc:
+                        errors.append(f"DISARM failed: {exc}")
+    except KeyboardInterrupt:
+        interrupted = True
+        errors.insert(0, "interrupted")
+    except CLI_ERRORS as exc:
+        errors.insert(0, str(exc))
+
+    if res is not None:
+        extra = {"error": "; ".join(errors), "partial": not res.ended} if errors else None
+        try:
+            csv_path, json_path = write_sweep(args.out, res, idn=meta.get("idn"),
+                                              cfg=meta.get("cfg"), cal=meta.get("cal"),
+                                              note=note, extra=extra,
+                                              overwrite=not args.no_overwrite)
+        except OSError as exc:
+            errors.append(f"cannot write the results: {exc}")
+        else:
+            prefix = "" if res.ended else "partial results: "
+            print(f"{prefix}status={res.status} records={len(res.records)} -> "
+                  f"{csv_path}, {json_path}")
+    for text in errors:
+        print(f"iv-sweep: {text}", file=sys.stderr)
+    if interrupted:
+        return 130
+    if errors or res is None:
         return 1
-    print(f"status={res.status} records={len(res.records)} -> {csv_path}, {json_path}")
     return 0 if res.status == "complete" else 2
 
 
@@ -195,7 +302,9 @@ def cal_main(argv: Sequence[str] | None = None) -> int:
                     "with a load. Shows the CAL.SET line and asks before sending and saving.")
     _add_device_args(ap)
     ap.add_argument("--steps", default="zero,gains,dac,rs",
-                    help="comma-separated subset of zero,gains,dac,rs")
+                    help="comma-separated subset of zero,gains,dac,rs (dac and rs need the "
+                         "ADC offsets: from zero or gains in the same run, or a valid "
+                         "session zero)")
     ap.add_argument("--r-ref", type=float, help="reference resistor in ohm (gains step)")
     ap.add_argument("--vmax", default="9", help="sweep amplitude for the dac/rs steps (V)")
     ap.add_argument("--n-avg", type=int, default=16)
@@ -217,7 +326,10 @@ def cal_main(argv: Sequence[str] | None = None) -> int:
             if "rs" in steps:
                 wf.step_series_resistance(args.vmax)
             seq = wf.apply(note=args.note)
-    except Stage1IVError as exc:
+    except KeyboardInterrupt:
+        print("iv-cal: interrupted", file=sys.stderr)
+        return 130
+    except CLI_ERRORS as exc:
         print(f"iv-cal: {exc}", file=sys.stderr)
         return 1
     return 0 if seq is not None else 3

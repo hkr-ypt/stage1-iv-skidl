@@ -9,7 +9,7 @@ import pytest
 from stage1iv import calibration as C
 from stage1iv import sweeps as S
 from stage1iv import writers as W
-from stage1iv.records import parse_pt
+from stage1iv.records import PT_FIELDS, parse_pt
 
 
 def test_exact_grid_and_turning_points_once():
@@ -80,3 +80,102 @@ def test_writers(tmp_path):
     data = json.loads(js.read_text())
     assert data["format"] == W.SIDECAR_FORMAT
     assert "provisional" in json.dumps(data).lower()
+
+
+# ---- review fixes (host-library audit) ----------------------------------------------
+
+def _result(lines=(), est_s="0.12"):
+    from stage1iv.client import SweepResult
+    return SweepResult(sweep_id=1, points_planned=len(lines), est_s=Decimal(est_s),
+                       status="complete", records=[parse_pt(x) for x in lines])
+
+
+def test_write_sweep_keeps_dots_in_the_base_name(tmp_path):
+    """HL-5: 'diode_0.5V' must not become 'diode_0.csv'."""
+    c1, j1 = W.write_sweep(tmp_path / "diode_0.5V", _result())
+    c2, j2 = W.write_sweep(tmp_path / "diode_0.7V", _result())
+    assert (c1.name, j1.name) == ("diode_0.5V.csv", "diode_0.5V.json")
+    assert (c2.name, j2.name) == ("diode_0.7V.csv", "diode_0.7V.json")
+    assert json.loads(j1.read_text())["csv"] == "diode_0.5V.csv"
+    assert W.sweep_paths(tmp_path / "run1.csv") == (tmp_path / "run1.csv", tmp_path / "run1.json")
+    assert W.sweep_paths(tmp_path / "run1.JSON")[0].name == "run1.csv"
+    assert W.sweep_paths("a.b.c")[0].name == "a.b.c.csv"
+
+
+def test_write_sweep_overwrite_is_opt_out(tmp_path):
+    W.write_sweep(tmp_path / "r", _result())
+    W.write_sweep(tmp_path / "r", _result())          # default: replace (as before)
+    with pytest.raises(FileExistsError):
+        W.write_sweep(tmp_path / "r", _result(), overwrite=False)
+    c, j = W.write_sweep(tmp_path / "new", _result(), overwrite=False)
+    assert c.exists() and j.exists()
+
+
+def test_csv_keeps_fixed_decimals_for_small_currents(tmp_path):
+    """HL-6: the CSV holds the device's text, never 1.234E-7 / 0E-10."""
+    lines = ["PT 1,5,0,0,100,200,300,32768,0.000153,4,12,-34,1.2,0.7,-0.000051,0.0000001234,0x0380",
+             "PT 1,6,1,1,100,200,300,32768,0.000000,1,0,0,-,-,0.000000,0.0000000000,0x0300"]
+    c, j = W.write_sweep(tmp_path / "small", _result(lines, est_s="0.0000001"))
+    rows = W.read_csv(c)
+    assert [r["i_A"] for r in rows] == ["0.0000001234", "0.0000000000"]
+    assert rows[1]["v_V"] == "0.000000"
+    assert [",".join(r[k] for k in PT_FIELDS) for r in rows] == [x[3:] for x in lines]
+    assert json.loads(j.read_text())["sweep"]["est_s"] == "0.0000001"
+    doc = W.build_sidecar(cfg={"i_a": Decimal("0.0000000124"), "vk_v": None, "n": 3})
+    assert doc["cfg"] == {"i_a": "0.0000000124", "vk_v": "-", "n": "3"}
+
+
+def test_list_point_omitted_settle_uses_the_configuration():
+    """HL-7: an omitted settle time is None (plain V), never 0."""
+    assert S.ListPoint(Decimal("0.5")).token() == "0.5"
+    assert S.list_add_commands([S.ListPoint(Decimal("0.5"), None), ("-0.5", None), ["1"],
+                                ["0.25", 2000], (Decimal("2"), 100)]) == \
+        ["SWP.LIST.ADD 0.5 -0.5 1 0.25:2000 2:100"]
+    with pytest.raises(ValueError):
+        S.ListPoint(Decimal("0.5"), 0).token()       # an explicit 0 is still invalid
+    with pytest.raises(ValueError):
+        S.as_list_point(("0.5", "2000.5"))           # inexact settle time
+
+
+def test_session_zero_from_sweep_begin():
+    assert C.session_zero({"zero": "valid", "o_v": "-112.40", "o_i": "387.10"}) == (-112.4, 387.1)
+    assert C.session_zero({"zero": "stale", "o_v": "-112.40", "o_i": "387.10"}) is None
+    assert C.session_zero({"zero": "none", "o_v": "-", "o_i": "-"}) is None
+    assert C.session_zero({}) is None and C.session_zero(None) is None
+
+
+def test_cal_offsets_never_fall_back_to_zero():
+    """HL-9: without ZERO/gains the offsets come from the session zero, else error."""
+    wf = C.CalibrationWorkflow(inst=None)
+    with pytest.raises(ValueError):
+        wf._offsets({"zero": "none", "o_v": "-", "o_i": "-"})
+    assert wf._offsets({"zero": "valid", "o_v": "-112.40", "o_i": "387.10"}) == (-112.4, 387.1)
+    codes = [-600000, 0, 600000]
+    wf.v_fit = C.fit_gain_offset(codes, [1.5e-6 * (c - 12.0) for c in codes])
+    wf.i_fit = C.fit_gain_offset(codes, [1.2e-8 * (c - 7.0) for c in codes])
+    o_v, o_i = wf._offsets({"zero": "valid", "o_v": "-112.40", "o_i": "387.10"})
+    assert o_v == pytest.approx(12.0, abs=1e-3) and o_i == pytest.approx(7.0, abs=1e-3)
+
+
+def test_cal_dac_step_refuses_without_offsets(device, inst):
+    """HL-9 (FakeDevice): no zero step, no gains, session zero 'none' -> refuse
+    before anything is measured."""
+    wf = C.CalibrationWorkflow(inst, ask=lambda p: "", say=lambda t: None)
+    with pytest.raises(ValueError, match="zero"):
+        wf.step_dac()
+    assert not any(x.startswith(("SWP.", "ARM")) for x in device.received)
+
+
+def test_cal_dac_step_uses_the_session_zero(device, inst):
+    """HL-9 (FakeDevice): with a valid session zero the SWEEP_BEGIN offsets are used."""
+    device.zero, device.zero_o_v, device.zero_o_i = "valid", "-112.40", "387.10"
+    wf = C.CalibrationWorkflow(inst, ask=lambda p: "", say=lambda t: None)
+    fit = wf.step_dac(v_max=1, step="0.25")
+    recs = inst.last_sweep.records
+    g_v = C.NOMINAL["g_v_uv"] * 1e-6
+    expect = C.fit_dac([r.dac_code for r in recs],
+                       [C.vsweep_from_vk(g_v * (r.v_raw + 112.4)) for r in recs])
+    assert fit.c_dac == pytest.approx(expect.c_dac, abs=1e-9)
+    biased = C.fit_dac([r.dac_code for r in recs],
+                       [C.vsweep_from_vk(g_v * r.v_raw) for r in recs])
+    assert abs(biased.c_dac - fit.c_dac) > 0.1       # what the old 0 fallback produced

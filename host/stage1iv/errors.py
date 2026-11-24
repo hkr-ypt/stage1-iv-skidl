@@ -138,7 +138,7 @@ del _code, _cls
 def device_error(code: str, message: str = "", command: str | None = None) -> DeviceError:
     """Build the :class:`DeviceError` subclass for ``code``.
 
-    An error code that protocol v1 does not define yields a plain
+    An error code that the protocol does not define yields a plain
     :class:`DeviceError` (the caller may additionally treat it as a protocol
     violation).
     """

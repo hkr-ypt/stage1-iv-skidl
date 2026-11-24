@@ -52,3 +52,23 @@ def test_gaps():
 def test_unwrap_u32():
     w = 2 ** 32
     assert unwrap_u32([w - 10, w - 1, 5, 100]) == [w - 10, w - 1, w + 5, w + 100]
+
+
+@pytest.mark.parametrize("line", [
+    # HL-6: str(Decimal) would print 1.234E-7, 0E-10, -1E-10
+    "PT 1,5,0,0,100,200,300,32768,0.000153,4,12,-34,1.2,0.7,-0.000051,0.0000001234,0x0380",
+    "PT 1,5,0,0,100,200,300,32768,0.000000,1,0,0,-,-,0.000000,0.0000000000,0x0380",
+    "PT 1,6,1,1,100,200,300,32769,-0.000001,2,1,-1,0.0,0.0,-0.000001,-0.0000000001,0x0300",
+])
+def test_small_values_keep_the_device_text(line):
+    rec = parse_pt(line)
+    assert rec.to_line() == line
+    assert not any("E" in v for v in rec.wire_values())
+
+
+def test_sd_sat_flag():
+    assert Flag.SD_SAT == 1 << 11
+    assert decode_flags(0x0C00) == ["MEAS", "SD_SAT"]
+    r = parse_pt(LINE.replace("1.4,3.5", "6553.4,3.5").replace("0x0300", "0x0B00"))
+    assert r.has(Flag.SD_SAT) and "SD_SAT" in r.flag_names
+    assert r.valid_data                  # the means are valid; only the sd is a bound

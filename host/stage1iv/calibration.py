@@ -378,6 +378,19 @@ def ask_yes(ask: Ask, prompt: str) -> bool:
     return ask(prompt).strip().lower() in ("y", "yes")
 
 
+def session_zero(begin_fields: Mapping[str, str] | None) -> tuple[float, float] | None:
+    """``(o_v, o_i)`` in codes of the session zero the firmware applied to a
+    sweep, from its ``EVT SWEEP_BEGIN`` fields, if ``zero=valid``; else None
+    (``stale``: older than the firmware's limit, from an earlier session or
+    another ADC rate; ``none``: never measured)."""
+    if not begin_fields or begin_fields.get("zero") != "valid":
+        return None
+    try:
+        return float(Decimal(begin_fields["o_v"])), float(Decimal(begin_fields["o_i"]))
+    except (KeyError, ArithmeticError, ValueError):
+        return None
+
+
 @dataclass
 class CalibrationWorkflow:
     """Guided calibration (``iv-cal``): ZERO, ADC gains with a reference
@@ -385,7 +398,15 @@ class CalibrationWorkflow:
     CAL.SET (after confirmation) and CAL.SAVE.
 
     ``ask``/``say`` default to :func:`input`/:func:`print`; tests inject
-    their own.
+    their own. Prompts answered while the output is armed (the DMM readings
+    of the gains step) run inside :meth:`Instrument.hold`, so a slow
+    operator is not disarmed by the host timeout.
+
+    The dac and rs steps reprocess raw codes and need the ADC offsets: from
+    the zero step of this run, else from the gains fit, else the session zero
+    the firmware reports in the sweep's ``SWEEP_BEGIN`` (``zero=valid``,
+    e.g. after :meth:`Instrument.zero` in this session). Without any of them
+    the step refuses to run (offset 0 would bias ``c_dac`` by the V offset).
     """
 
     inst: "Instrument"
@@ -406,11 +427,36 @@ class CalibrationWorkflow:
     def _r_top(self) -> float:
         return float(self.current.get("r_top", NOMINAL["r_top"]))
 
-    def _offsets(self) -> tuple[float, float]:
+    def _have_offsets(self) -> bool:
+        return self.zero_result is not None or (self.v_fit is not None and self.i_fit is not None)
+
+    def _require_offsets(self) -> None:
+        """Before measuring: refuse early if no ADC offsets will be available."""
+        if self._have_offsets():
+            return
+        zero = self.inst.stat().get("zero")
+        if zero != "valid":
+            raise ValueError(
+                f"no ADC offsets: run the zero step first (e.g. --steps zero,dac) or the gains "
+                f"step in the same run; the instrument's session zero is {zero!r}, not 'valid'")
+
+    def _offsets(self, begin_fields: Mapping[str, str] | None = None) -> tuple[float, float]:
+        """``(o_v, o_i)`` in codes: the zero step, else the gains fits, else the
+        session zero of ``begin_fields`` (a sweep's SWEEP_BEGIN); ValueError if
+        none is available (never a silent 0)."""
         if self.zero_result is not None:
             return float(self.zero_result.o_v), float(self.zero_result.o_i)
-        o_v = self.v_fit.offset if self.v_fit else 0.0
-        o_i = self.i_fit.offset if self.i_fit else 0.0
+        o_v = self.v_fit.offset if self.v_fit else None
+        o_i = self.i_fit.offset if self.i_fit else None
+        if o_v is None or o_i is None:
+            sz = session_zero(begin_fields)
+            if sz is None:
+                zero = (begin_fields or {}).get("zero", "not reported")
+                raise ValueError(
+                    f"no ADC offsets: run the zero step first; the sweep's session zero is "
+                    f"{zero!r}, not 'valid'")
+            o_v = sz[0] if o_v is None else o_v
+            o_i = sz[1] if o_i is None else o_i
         return o_v, o_i
 
     def _g_v(self) -> float:
@@ -448,7 +494,9 @@ class CalibrationWorkflow:
             for v in usable:
                 self.inst.src(v)
                 m = self.inst.meas(self.n_avg)
-                dmm = ask_float(self.ask, f"  setpoint {v} V: DMM voltage across the resistor [V]: ")
+                with self.inst.hold():      # armed while the operator reads the DMM
+                    dmm = ask_float(self.ask,
+                                    f"  setpoint {v} V: DMM voltage across the resistor [V]: ")
                 assert dmm is not None
                 v_codes.append(m.v_raw)
                 v_ref.append(dmm)
@@ -462,7 +510,8 @@ class CalibrationWorkflow:
         self.say(f"  g_i = {self.i_fit.gain_na:.6f} nA/code (rms {self.i_fit.rms * 1e9:.1f} nA)")
         return self.v_fit, self.i_fit
 
-    def _sweep_records(self, v_max: Any, step: Any):
+    def _sweep(self, v_max: Any, step: Any):
+        """A dual sweep -v_max..+v_max..-v_max -> :class:`SweepResult`."""
         from .sweeps import dual
         self.inst.sweep_waypoints(dual(-abs(Decimal(str(v_max))), abs(Decimal(str(v_max))), step))
         self.inst.arm()
@@ -470,14 +519,19 @@ class CalibrationWorkflow:
             res = self.inst.run_sweep()
         finally:
             self.inst.disarm()
-        return res.records
+        return res
+
+    def _sweep_records(self, v_max: Any, step: Any):
+        return self._sweep(v_max, step).records
 
     def step_dac(self, v_max: Any = 9, step: Any = 1) -> DacFit:
         """DUT open, Kelvin leads on the FORCE terminals (I = 0)."""
+        self._require_offsets()
         self.say("DAC: remove the DUT and clip the Kelvin leads onto the FORCE terminals.")
         self.ask("Press Enter when ready ")
-        recs = self._sweep_records(v_max, step)
-        o_v, _ = self._offsets()
+        res = self._sweep(v_max, step)
+        recs = res.records
+        o_v, _ = self._offsets(res.begin_fields)
         g_v = self._g_v()
         codes = [r.dac_code for r in recs]
         vsw = [vsweep_from_vk(g_v * (r.v_raw - o_v), self._r_top()) for r in recs]
@@ -487,10 +541,12 @@ class CalibrationWorkflow:
 
     def step_series_resistance(self, v_max: Any = 9, step: Any = 1) -> SeriesResistanceFit:
         """A load drawing >= 5 mA of each polarity at the higher setpoints."""
+        self._require_offsets()
         self.say("R_s: connect a load resistor (e.g. 470 ohm) with Kelvin leads on it.")
         self.ask("Press Enter when ready ")
-        recs = self._sweep_records(v_max, step)
-        o_v, o_i = self._offsets()
+        res = self._sweep(v_max, step)
+        recs = res.records
+        o_v, o_i = self._offsets(res.begin_fields)
         g_v, g_i = self._g_v(), self._g_i()
         if self.dac_fit is not None:
             g_dac, c_dac = self.dac_fit.g_dac, self.dac_fit.c_dac
@@ -555,5 +611,5 @@ __all__ = [
     "format_cal_args", "round_cal", "CalInfo", "check_plausible", "is_plausible",
     "LinearFit", "linear_fit", "GainOffsetFit", "fit_gain_offset", "DacFit",
     "vsweep_from_vk", "fit_dac", "SeriesResistanceFit", "fit_series_resistance",
-    "CalibrationWorkflow", "DAC_LINEAR_MIN", "DAC_LINEAR_MAX",
+    "CalibrationWorkflow", "session_zero", "DAC_LINEAR_MIN", "DAC_LINEAR_MAX",
 ]

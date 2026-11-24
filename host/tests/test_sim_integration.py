@@ -12,13 +12,20 @@ instrument's accuracy.
 
 from __future__ import annotations
 
+import contextlib
+import json
 import os
+import threading
 import time
 from decimal import Decimal
 
 import pytest
 
-from stage1iv.errors import ErrPrecond, ErrRange, SweepFailed
+from stage1iv import calibration as C
+from stage1iv import protocol as P
+from stage1iv import writers as W
+from stage1iv.client import Measurement
+from stage1iv.errors import DeviceError, ErrPrecond, ErrRange, SweepFailed
 from stage1iv.sim import SimulatorProcess, find_simulator
 from stage1iv.sweeps import hysteresis_loop, linear
 
@@ -68,7 +75,7 @@ def jacks_open(sim, open_):
 
 def test_identity_and_status(inst):
     idn = inst.idn()
-    assert idn.model == "stage1-iv" and idn.proto == 1
+    assert idn.model == "stage1-iv" and idn.proto == P.PROTOCOL_VERSION == 2
     assert idn.usb_vid == 0x1209 and idn.usb_pid == 1 and idn.planned_pid == "500S"
     st = inst.stat()
     assert st["state"] == "DISARMED" and st["session"] == 1 and st["afe"] == "ok"
@@ -111,8 +118,12 @@ def test_diode_hysteresis_loop_identical_codes(sim, inst):
 
 def test_zero_then_records_not_stale(sim, inst):
     jacks_open(sim, False)
+    # DUT connected: implausible offsets. An active DUT, because a 1 kohm
+    # resistor at the ~2 mV zero-pair output gives offsets (3.3 mV) inside the
+    # plausibility window of protocol 2 (100 uA / 10 mV; it was 30 uA / 3 mV).
+    sim.ctl.dut_cell(0.5, 100.0)
     with pytest.raises(ErrRange):
-        inst.zero()                       # DUT connected: implausible offsets
+        inst.zero()
     jacks_open(sim, True)
     z = inst.zero()
     assert z.pairs == 64
@@ -293,3 +304,205 @@ def test_bringup_dac_raw_only_in_bringup(sim, inst):
             inst.command("DAC.RAW 32768 0 CONFIRM=UNSAFE")
         assert sim.ctl.obs()["dac_b_not_fs_loads"] == 0
     inst.disarm()
+
+
+# ---- review fixes (host-library audit) ----------------------------------------------
+
+def arm_when_ready(inst, timeout=15.0):
+    """ARM, retrying while the ADC re-calibrates after an adc_rate change."""
+    end = time.monotonic() + timeout
+    while True:
+        try:
+            return inst.arm()
+        except ErrPrecond as e:
+            if time.monotonic() > end or e.precondition not in ("adc", "afe"):
+                raise
+            time.sleep(0.1)
+
+
+def test_idle_application_is_disarmed_by_the_host_timeout(sim, inst):
+    """HL-1: with the default keep-alive, an application that stops calling
+    the library (hung, or idle) is still disarmed after host_timeout_s (6 s:
+    longer than the old unconditional 5 s PING, which defeated it)."""
+    inst.cfg(host_timeout_s=6)
+    inst.arm()
+    inst.src(1)
+    time.sleep(7.5)
+    st = inst.stat()
+    assert st["state"] == "DISARMED" and st["disarm_reason"] == "host_timeout"
+    assert abs(sim.ctl.obs()["v_sweep"]) < 0.01
+
+
+def test_hold_keeps_a_short_host_timeout_alive(sim, inst):
+    """HL-1/HL-4: inside hold() the output stays armed, with PINGs every
+    host_timeout_s/3 (not every 5 s)."""
+    inst.cfg(host_timeout_s=2)
+    inst.arm()
+    with inst.hold():
+        time.sleep(4.5)
+    st = inst.stat()
+    assert st["state"] == "ARMED", st["disarm_reason"]
+    inst.disarm()
+
+
+def test_long_call_keeps_a_short_host_timeout_alive(sim, inst):
+    """HL-1/HL-3/HL-4: a deferred MEAS? longer than host_timeout_s does not
+    disarm: keep-alive PINGs are written while it is outstanding."""
+    sim.ctl.dut_resistor(1000)
+    inst.cfg(adc_rate="2.5", host_timeout_s=2)
+    arm_when_ready(inst)
+    inst.src(1)
+    t0 = time.monotonic()
+    m = inst.meas(6)
+    assert time.monotonic() - t0 > 3.0
+    assert m.n == 6
+    st = inst.stat()
+    assert st["state"] == "ARMED", st["disarm_reason"]
+    inst.disarm()
+
+
+def test_disarm_from_another_thread_acts_during_a_long_meas(sim, inst):
+    """HL-3: DISARM reaches the device at once although a MEAS? at 2.5 SPS
+    (about 8.6 s) is in progress in another thread."""
+    sim.ctl.dut_resistor(1000)
+    inst.cfg(adc_rate="2.5")
+    arm_when_ready(inst)
+    inst.src(5)
+    out = {}
+
+    def run():
+        try:
+            out["m"] = inst.meas(12)
+        except DeviceError as exc:       # the firmware may end it (ERR STATE disarming)
+            out["m"] = exc
+
+    th = threading.Thread(target=run)
+    th.start()
+    time.sleep(1.0)
+    t0 = time.monotonic()
+    inst.disarm()
+    dt = time.monotonic() - t0
+    obs = sim.ctl.obs()
+    assert dt < 2.5, f"disarm took {dt:.2f} s"
+    assert obs["gate"] == 0 and abs(obs["v_sweep"]) < 0.01
+    th.join(15.0)
+    assert not th.is_alive() and isinstance(out.get("m"), (Measurement, DeviceError))
+    assert inst.stat()["state"] == "DISARMED" and inst.ping() > 0
+    assert not inst.protocol_errors
+
+
+def test_sweep_aborted_when_the_record_callback_raises(sim, inst):
+    """HL-2: an exception from on_record aborts the sweep (end=hold would
+    otherwise keep it running and then hold 5 V)."""
+    inst.cfg(end="hold", settle_us=200000)
+    inst.sweep_waypoints(linear(0, 5, "0.5"))
+    inst.arm()
+
+    def cb(rec):
+        if rec.idx == 2:
+            raise RuntimeError("bug in the callback")
+
+    with pytest.raises(RuntimeError):
+        inst.run_sweep(on_record=cb)
+    time.sleep(0.5)
+    st = inst.stat()
+    assert st["state"] == "ARMED" and st["sweep_status"] == "aborted"
+    assert abs(st["vset_v"]) < Decimal("0.01")
+    assert abs(sim.ctl.obs()["v_sweep"]) < 0.01
+    assert [r.idx for r in inst.last_sweep.records] == [0, 1, 2]
+    inst.disarm()
+
+
+def test_rearm_right_after_disarm_at_a_low_adc_rate(sim, inst):
+    """HL-8: ARM right after DISARM (front-end check older than 1 s) works."""
+    sim.ctl.dut_resistor(1000)
+    inst.cfg(adc_rate="2.5")
+    arm_when_ready(inst)
+    inst.disarm()
+    for _ in range(2):
+        inst.arm()
+        inst.sweep_waypoints(linear(0, 1, "0.5"))
+        assert inst.run_sweep().status == "complete"
+        inst.disarm()
+
+
+def test_cal_gains_step_holds_the_output_during_a_slow_dmm_reading(sim, inst):
+    """HL-1: the DMM prompts run inside hold(); a slow operator (2.5 s with
+    host_timeout_s=1) is not disarmed."""
+    sim.ctl.dut_resistor(200.0)
+    inst.cfg(host_timeout_s=1)
+    asked = {"n": 0}
+
+    def ask(prompt):
+        if "DMM" in prompt:
+            asked["n"] += 1
+            if asked["n"] == 1:
+                time.sleep(2.5)
+            return str(sim.ctl.obs()["v_dut"])
+        return ""
+
+    wf = C.CalibrationWorkflow(inst, ask=ask, say=lambda t: None, n_avg=4)
+    wf.load_current()
+    v_fit, i_fit = wf.step_gains(200.0)
+    assert asked["n"] == 6
+    assert inst.stat()["disarm_reason"] == "command"
+    assert not C.check_plausible({"g_v_uv": v_fit.gain_uv, "g_i_na": i_fit.gain_na})
+
+
+def test_cal_dac_step_uses_the_firmware_session_zero(sim, inst):
+    """HL-9: without the zero/gains steps the dac step refuses unless the
+    session zero is valid, and then uses the offsets from SWEEP_BEGIN."""
+    wf = C.CalibrationWorkflow(inst, ask=lambda p: "", say=lambda t: None)
+    wf.load_current()
+    with pytest.raises(ValueError, match="zero"):
+        wf.step_dac()                            # no ZERO in this session
+    assert inst.last_sweep is None
+    jacks_open(sim, True)
+    z = inst.zero()                              # by the application, not wf.step_zero()
+    sim.ctl.sense_plus_open(False)
+    sim.ctl.sense_minus_open(False)
+    sim.ctl.force_open(False)
+    sim.ctl.dut_open()                           # Kelvin leads on FORCE, I = 0
+    fit = wf.step_dac(v_max=9, step=1)
+    begin = inst.last_sweep.begin_fields
+    assert begin["zero"] == "valid" and Decimal(begin["o_v"]) == z.o_v
+    recs = inst.last_sweep.records
+    expect = C.fit_dac([r.dac_code for r in recs],
+                       [C.vsweep_from_vk(wf._g_v() * (r.v_raw - float(z.o_v)), wf._r_top())
+                        for r in recs])
+    assert fit.c_dac == pytest.approx(expect.c_dac, abs=1e-9)
+
+
+def test_iv_sweep_writes_partial_results_when_the_session_is_lost(sim, tmp_path, monkeypatch):
+    """HL-12: a device reset mid-sweep (SessionLost) must not lose the records
+    collected so far: they are written with status unknown, exit status 1."""
+    from stage1iv import cli
+
+    resets: list[threading.Thread] = []
+
+    def reset_after_30_records(rec):          # dispatcher thread: do not block it
+        if rec.idx >= 30 and not resets:
+            resets.append(threading.Thread(target=sim.ctl.mcu_reset))
+            resets[0].start()
+
+    @contextlib.contextmanager
+    def sim_open(args, **kwargs):
+        with sim.instrument(**kwargs) as i:
+            assert wait_state(i, "DISARMED")
+            i.add_record_callback(reset_after_30_records)
+            yield i
+
+    monkeypatch.setattr(cli, "_open", sim_open)
+    try:
+        rc = cli.sweep_main(["--wp", "0", "5", "--step", "0.05", "--cfg", "settle_us=20000",
+                             "--allow-bringup", "--out", str(tmp_path / "reset_0.5V")])
+    finally:
+        for t in resets:
+            t.join(5.0)
+    assert resets and rc == 1
+    rows = W.read_csv(tmp_path / "reset_0.5V.csv")
+    assert 30 < len(rows) < 101
+    assert [int(r["idx"]) for r in rows] == list(range(len(rows)))
+    doc = json.loads((tmp_path / "reset_0.5V.json").read_text())
+    assert doc["sweep"]["status"] == "unknown" and doc["host"]["partial"] is True
+    assert doc["sweep_begin"] is not None and doc["cfg"] is not None
