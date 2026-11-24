@@ -179,3 +179,15 @@ def test_cal_dac_step_uses_the_session_zero(device, inst):
     biased = C.fit_dac([r.dac_code for r in recs],
                        [C.vsweep_from_vk(g_v * r.v_raw) for r in recs])
     assert abs(biased.c_dac - fit.c_dac) > 0.1       # what the old 0 fallback produced
+
+
+def test_c_dac_window_mirrors_the_firmware():
+    """The host check accepts what the firmware accepts (the DAC8552 worst
+    case, about 580 codes) and refuses a dropped or extra digit."""
+    nom = C.NOMINAL["c_dac"]
+    assert C.C_DAC_WINDOW_CODES == 1000.0
+    assert not C.check_plausible({"c_dac": nom + 580.0})
+    assert not C.check_plausible({"c_dac": nom - 999.0})
+    assert C.check_plausible({"c_dac": nom + 1001.0})
+    assert C.check_plausible({"c_dac": nom / 10.0})
+    assert C.check_plausible({"c_dac": nom * 10.0})

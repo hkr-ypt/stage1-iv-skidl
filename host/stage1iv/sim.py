@@ -158,7 +158,8 @@ class SimControl:
         self.send("force_open", _b(on))
 
     def ilim(self, amps: float) -> None:
-        """OPA548 current-limit plateau in A."""
+        """U5 current-limit plateau in A (symmetric in the model; the OPA547T's
+        real one is expected at 40...65 mA, sinking higher)."""
         self.send("ilim", repr(float(amps)))
 
     def noise(self, codes: float) -> None:

@@ -13,7 +13,7 @@ import pytest
 from stage1iv.client import Instrument
 from stage1iv.transport import LoopbackTransport
 
-IDN = ("OK IDN model=stage1-iv fw=0.1.0 rev=test proto=2 hw=stage1-iv@8a84b55 build={build} "
+IDN = ("OK IDN model=stage1-iv fw=0.1.0 rev=test proto=2 hw=stage1-iv@c4e7592 build={build} "
        "serial=0034002B3436511233353533 usb_vid=0x1209 usb_pid=0x0001 "
        "usb_pid_status=dev-test planned_pid=500S")
 
@@ -170,7 +170,7 @@ class FakeDevice:
             time.sleep(self.meas_delay)
             self.w("OK ZERO o_v=-112.40 o_i=387.10 sd_v=2.10 sd_i=2.60 pairs=64 sps=1000.0")
         elif v == "CAL?":
-            self.w("OK CAL source=nominal seq=0 g_dac_uv=306.401387 c_dac=32767.5000 "
+            self.w("OK CAL source=nominal seq=0 measured=0x00 g_dac_uv=306.401387 c_dac=32767.5000 "
                    "g_v_uv=1.498587 g_i_na=12.435568 r_s=121.0000 r_top=106.0000 "
                    "i_plateau=0.049000000")
         elif v in ("CAL.SET", "SWP.ABORT", "FAULT.CLR", "DIAG.CLR", "CAL.DEFAULT"):

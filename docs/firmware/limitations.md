@@ -87,6 +87,10 @@ The user-visible ones:
   their `OK`), provided they fit in the 1 KB receive buffer: behind more
   unparsed input, only the host timeout (30 s by default) disarms.
 * The session zero is marked stale at the start of every new host session.
+* `ZERO` accepts offsets up to the INA128P worst case to 85 °C (10 mV,
+  100 µA referred to the DUT), so it catches a DUT or fixture left
+  connected only when that carries more than this at 0 V output. Its
+  procedure needs all four jacks open; the limits do not check it.
 * Every session starts with an empty line before `EVT HELLO` (protocol.md §1).
 * `CAL_NOMINAL` stays set until `g_dac`, `c_dac`, `g_v`, `g_i` and `r_s` have
   all been set with `CAL.SET`; a partial calibration keeps the wide Kelvin

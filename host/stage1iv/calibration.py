@@ -144,12 +144,19 @@ class CalInfo:
 
 # ---- plausibility (calib.h) ------------------------------------------------------------
 
+#: Half-width of the firmware's c_dac window (calib.c C_DAC_WINDOW_CODES):
+#: the DAC8552 zero-code, gain and channel-B full-scale errors move the zero
+#: by up to about 580 codes on an in-spec board.
+C_DAC_WINDOW_CODES = 1000.0
+
+
 def check_plausible(coeffs: Mapping[str, Any]) -> list[str]:
     """Problems with the given coefficients (CAL? units); empty if plausible.
 
-    Window (firmware calib.h): g_dac +-2 %, c_dac +-400 codes, g_v and g_i
-    +-5 %, r_s 80..200 ohm, r_top 70..180 ohm, r_top < r_s, i_plateau
-    20..100 mA. Keys that are absent are not checked.
+    Window (firmware calib.h): g_dac +-2 %, c_dac +-1000 codes (the DAC8552
+    worst case is about 580), g_v and g_i +-5 %, r_s 80..200 ohm, r_top
+    70..180 ohm, r_top < r_s, i_plateau 20..100 mA. Keys that are absent are
+    not checked.
     """
     c = {k: float(v) for k, v in coeffs.items() if k in CAL_KEYS}
     problems = []
@@ -165,8 +172,9 @@ def check_plausible(coeffs: Mapping[str, Any]) -> list[str]:
             problems.append(f"{key}={c[key]:g} is outside {lo:g}..{hi:g}")
 
     rel("g_dac_uv", 0.02)
-    if "c_dac" in c and not abs(c["c_dac"] - NOMINAL["c_dac"]) <= 400:
-        problems.append(f"c_dac={c['c_dac']:g} is outside {NOMINAL['c_dac']:g} +-400 codes")
+    if "c_dac" in c and not abs(c["c_dac"] - NOMINAL["c_dac"]) <= C_DAC_WINDOW_CODES:
+        problems.append(f"c_dac={c['c_dac']:g} is outside {NOMINAL['c_dac']:g} "
+                        f"+-{C_DAC_WINDOW_CODES:g} codes")
     rel("g_v_uv", 0.05)
     rel("g_i_na", 0.05)
     window("r_s", 80.0, 200.0)
