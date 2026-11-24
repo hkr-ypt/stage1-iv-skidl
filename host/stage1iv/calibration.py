@@ -32,10 +32,9 @@ import math
 import time
 from dataclasses import dataclass, field
 from decimal import ROUND_HALF_EVEN, Decimal
-from typing import TYPE_CHECKING, Any, Callable, Iterator, Mapping, Sequence
+from typing import TYPE_CHECKING, Any, Callable, Iterable, Iterator, Mapping, Sequence
 
-from .errors import DeviceError, ProtocolError
-from .errors import TimeoutError as S1Timeout
+from .errors import Stage1IVError
 from .protocol import convert_value, scaled_to_str, to_scaled
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -450,8 +449,9 @@ class CalibrationWorkflow:
     dac_fit: DacFit | None = None
     rs_fit: SeriesResistanceFit | None = None
     current: dict[str, Decimal] = field(default_factory=dict)
-    #: core keys the last :meth:`proposal` moved one step off the nominal value
-    nudged: list[str] = field(default_factory=list)
+    #: core keys the last :meth:`proposal` moved one step off the nominal
+    #: value, with the value it proposed
+    nudged: dict[str, Decimal] = field(default_factory=dict)
 
     def load_current(self) -> dict[str, Decimal]:
         self.current = dict(self.inst.cal_get().coeffs)
@@ -603,7 +603,7 @@ class CalibrationWorkflow:
 
         The firmware counts a coefficient equal to its nominal value at that
         resolution as nominal (protocol.md ``CAL.SET``). A fit that rounds to
-        exactly that value is moved one step towards the unrounded fit (at
+        exactly that value is moved one step towards the unrounded fit (so at
         most one resolution step from it, far below the fit's uncertainty),
         so that it counts as measured; :attr:`nudged` lists such keys."""
         new: dict[str, Any] = {}
@@ -617,15 +617,19 @@ class CalibrationWorkflow:
         if self.rs_fit:
             new["r_s"] = self.rs_fit.r_s
         out = round_cal(**new)
-        self.nudged = []
-        nominal = round_cal(**{k: NOMINAL[k] for k in out if k in CAL_CORE_KEYS})
-        for k, nom in nominal.items():
+        self.nudged = {}
+        for k, nom in self._rounded_nominal(out).items():
             if out[k] == nom:
                 step = Decimal(1).scaleb(-CAL_DECIMALS[k])
                 fit = Decimal(repr(new[k])) if isinstance(new[k], float) else Decimal(new[k])
-                out[k] = nom + step if fit >= Decimal(repr(NOMINAL[k])) else nom - step
-                self.nudged.append(k)
+                out[k] = nom + step if fit >= nom else nom - step
+                self.nudged[k] = out[k]
         return out
+
+    @staticmethod
+    def _rounded_nominal(keys: Iterable[str]) -> dict[str, Decimal]:
+        """Nominal values of the core keys among ``keys``, as CAL? prints them."""
+        return round_cal(**{k: NOMINAL[k] for k in keys if k in CAL_CORE_KEYS})
 
     def apply(self, coeffs: Mapping[str, Any] | None = None, note: str | None = None,
               ts: int | None = None) -> int | None:
@@ -643,10 +647,14 @@ class CalibrationWorkflow:
                 self.say(f"  - {p}")
             return None
         line = build_command("CAL.SET", *format_cal_args(**coeffs))
-        for k in self.nudged:
-            if k in coeffs:
+        for k, nom in self._rounded_nominal(coeffs).items():
+            value = round_cal(**{k: coeffs[k]})[k]
+            if k in self.nudged and value == self.nudged[k]:
                 self.say(f"Note: the {k} fit rounds to its nominal value; it is sent one "
                          "step away so that the firmware counts it as measured.")
+            elif value == nom:
+                self.say(f"Note: {k} equals its nominal value at CAL.SET resolution; the "
+                         "firmware will count it as nominal (not calibrated).")
         self.say("Command to send:")
         self.say(f"  {line}")
         if not ask_yes(self.ask, "Send CAL.SET and save to flash? [y/N] "):
@@ -657,7 +665,7 @@ class CalibrationWorkflow:
         self.say(f"Saved calibration record seq={seq}.")
         try:
             still = self.inst.cal_get().nominal_core
-        except (DeviceError, ProtocolError, S1Timeout) as exc:
+        except Stage1IVError as exc:   # incl. SessionLost: the record is saved anyway
             # the record is saved; only the report is missing
             self.say(f"Could not read CAL? back ({exc}); check CAL? measured= yourself.")
             return seq

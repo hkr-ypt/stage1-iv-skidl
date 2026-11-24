@@ -54,7 +54,11 @@ Before the first command, ``HELLO``\\ s, events, responses and records can be
 an earlier session's unread output (protocol.md section 1): responses,
 records and cut-off lines are dropped, a later ``HELLO`` replaces an earlier
 one, and while :meth:`Instrument.open` waits for the session's ``HELLO``
-events are held back and those before the last ``HELLO`` dropped.
+events are held back, those before the last ``HELLO`` dropped and the rest
+delivered (on the dispatcher thread) before it returns. A ``STATE`` event
+fails waiting calls as a lost session only for ``DISARMING`` with
+``reason=session_lost|host_timeout``: the ``DISARMED`` that ends such a ramp
+can belong to the previous session.
 """
 
 from __future__ import annotations
@@ -97,7 +101,7 @@ HOST_TIMEOUT_DEFAULT_S = 30
 #: and the new ``HELLO`` arrive back to back (protocol.md section 1).
 HELLO_QUIET_S = 0.1
 #: :meth:`Instrument.wait_ready` polls ``STAT?`` this often while the
-#: instrument is in BOOT (POST).
+#: instrument is in BOOT (POST) or DISARMING.
 READY_POLL_S = 0.1
 #: :meth:`Instrument.arm` retries ``ERR PRECOND afe`` for this long plus two
 #: conversion periods at the configured ADC rate.
@@ -413,6 +417,8 @@ class Instrument:
         self._last_rx = 0.0           # when the dispatcher last got a line
         self._opening = False         # open() waits for HELLO: events are held
         self._held: list[P.Event] = []  # events since the last HELLO (dispatcher only)
+        self._held_done = threading.Event()   # the held events were delivered
+        self._held_done.set()
         self._ka_sent = 0.0           # when the last keep-alive PING was written
         self._hello_seen = threading.Event()
         self._lost: SessionLost | None = None
@@ -462,6 +468,8 @@ class Instrument:
         # Until the session's HELLO is known, events may be an earlier
         # session's unread output: hold them, and drop those before a HELLO.
         self._opening = self.hello_timeout > 0
+        if self._opening:
+            self._held_done.clear()
         self._dispatcher = threading.Thread(target=self._dispatch_loop,
                                             name="stage1iv-dispatch", daemon=True)
         self._dispatcher.start()
@@ -482,6 +490,11 @@ class Instrument:
                         break
                     time.sleep(min(quiet, limit) - now)
         self._opening = False         # the dispatcher now delivers the held events
+        # ... before open() returns: the first command and its response come
+        # after them, and inst.state and listeners see them (on the
+        # dispatcher thread, like every event).
+        if not self._held_done.wait(1.0):
+            log.debug("held events not yet delivered when open() returned")
         # Idle unless a library call or hold() needs it (see the module docstring).
         self._keepalive = threading.Thread(target=self._keepalive_loop,
                                            name="stage1iv-keepalive", daemon=True)
@@ -526,12 +539,14 @@ class Instrument:
 
     def _dispatch_loop(self) -> None:
         while not self._stop.is_set():
-            if self._held and not self._opening:
+            if not self._opening and not self._held_done.is_set():
                 held, self._held = self._held, []
                 for ev in held:
                     self._handle_event(ev)
+                self._held_done.set()
             try:
-                line = self.transport.read_line(0.1)
+                # short reads while open() waits for the held events
+                line = self.transport.read_line(0.1 if self._held_done.is_set() else 0.01)
             except SessionLost as exc:
                 if not self._stop.is_set():
                     log.warning("session lost: %s", exc)
@@ -583,7 +598,9 @@ class Instrument:
             except ProtocolError as exc:
                 self._stale_or_error(line, str(exc))
                 return
-            if self._opening and not self._sent_any:
+            if not self._held_done.is_set() and not self._sent_any:
+                # open() still waits (or the held events wait for delivery,
+                # which keeps the order)
                 if ev.type != "HELLO":
                     self._held.append(ev)
                     return
@@ -664,7 +681,11 @@ class Instrument:
             listeners = list(self._listeners)
         for lst in listeners:
             lst.offer_event(index, ev)
-        if ev.type == "STATE" and (ev.get("reason") or "").lower() in SESSION_LOSS_REASONS:
+        if (ev.type == "STATE" and (ev.arg or "").upper() == "DISARMING"
+                and (ev.get("reason") or "").lower() in SESSION_LOSS_REASONS):
+            # The disarm for a lost session or a host timeout starts with
+            # DISARMING; the DISARMED with the same reason only ends that ramp
+            # and can arrive in the next session (its HELLO reported it).
             exc = SessionLost(f"instrument reports {ev.line}")
             for lst in listeners:
                 lst.fail(exc)

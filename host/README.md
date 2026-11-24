@@ -69,12 +69,13 @@ with Instrument.open_serial(serial="0034002B3436511233353533") as inst:
 * Opening the port can first deliver up to about 4 KB that an earlier
   program left unread when it closed the port (protocol.md §1). `open()`
   (with `hello_timeout`, as `open_serial` sets it) waits for `EVT HELLO` and
-  for the input to pause, 0.1 s; until then events are held back, and those
-  before the last `HELLO` are dropped. Responses, records and cut-off lines
+  for the input to pause, 0.1 s; until then events are held back, those
+  before the last `HELLO` are dropped and the rest delivered before `open()`
+  returns. Responses, records and cut-off lines
   that arrive before the first command are dropped as well. After the first
   command, a new `HELLO` means the instrument restarted (`SessionLost`;
-  this also happens if the program was too busy to read for the 0.1 s
-  between an old and the new `HELLO`: open the port again).
+  this also happens if the input paused for 0.1 s between an old and the
+  new `HELLO`, a program too busy to read: open the port again).
   `inst.wait_ready()` waits while the instrument is in BOOT (POST after
   power-up) or DISARMING (a disarm ramp the previous session left); the
   tools do this, except `iv-diag`.
@@ -108,7 +109,9 @@ with Instrument.open_serial(serial="0034002B3436511233353533") as inst:
 * `iv-cal` says which of `g_dac`, `c_dac`, `g_v`, `g_i`, `r_s` are still
   nominal after it saves (`CalInfo.measured`, `CalInfo.nominal_core`): until
   all five are calibrated, records keep `CAL_NOMINAL` and the wide Kelvin
-  tolerance.
+  tolerance. A fit that rounds exactly to the nominal value (which the
+  firmware would count as nominal) is sent one step towards the unrounded
+  fit, and `iv-cal` says so.
 * `v_V`/`i_A` (PT records, `MEAS?`) are computed by the firmware from the
   unrounded means; `i_raw`/`v_raw` are those means rounded to whole codes.
   The firmware's default `i_compliance` is 100 mA.

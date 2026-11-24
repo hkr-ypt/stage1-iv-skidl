@@ -574,3 +574,50 @@ def test_wait_ready_waits_out_boot_and_disarming(device, inst, busy):
     device.state = busy
     with pytest.raises(S1Timeout):
         inst.wait_ready(timeout=0.2)
+
+
+def test_events_held_at_open_are_delivered_before_open_returns():
+    """A previous session lost while armed leaves its disarm ramp running;
+    the new HELLO says state=DISARMING, and the ramp's end (EVT STATE DISARMED
+    reason=session_lost) can arrive while open() waits for its input to
+    pause. open() returns only after that event is delivered (index 0, before
+    any command), and it is not this session's loss: disarm() and DATA.FETCH
+    right after open() work."""
+    from stage1iv.transport import LoopbackTransport
+    from conftest import FakeDevice
+    hello = HELLO.replace("disarm_reason=session_lost", "state=DISARMING disarm_reason=session_lost")
+    hello = hello.replace("state=DISARMED ", "", 1)
+    for _ in range(5):                       # the old race lost about one open in four
+        t = LoopbackTransport()
+        t.device_write_line("")
+        t.device_write_line(hello)
+        threading.Timer(0.05, lambda: t.device_write_line(
+            "EVT STATE DISARMED reason=session_lost")).start()
+        dev = FakeDevice(t)
+        seen = []
+        i = Instrument(t, keepalive_interval=None, command_timeout=2.0, hello_timeout=1.0)
+        i.add_event_callback(lambda ev: seen.append((ev.type, ev.arg)))
+        try:
+            i.open()
+            assert i.state == "DISARMED"
+            assert seen == [("HELLO", None), ("STATE", "DISARMED")]
+            i.disarm()                       # must not raise SessionLost
+            i.data_fetch(1)
+            assert i.session_lost is None
+        finally:
+            i.close()
+            dev.stop()
+            t.close()
+
+
+def test_only_a_disarm_for_a_loss_fails_listeners(device, inst):
+    """EVT STATE DISARMING reason=host_timeout is this session's loss; the
+    DISARMED with that reason only ends the ramp (e.g. one the previous
+    session left) and must not fail a waiting call."""
+    with inst.listen(lambda ev: False) as lst:
+        device.w("EVT STATE DISARMED reason=session_lost")
+        assert lst.get(0.3) is None
+    with inst.listen(lambda ev: False) as lst:
+        device.w("EVT STATE DISARMING reason=host_timeout")
+        with pytest.raises(SessionLost):
+            lst.get(1.0)

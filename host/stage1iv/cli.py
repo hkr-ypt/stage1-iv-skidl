@@ -22,6 +22,7 @@ import logging
 import os
 import sys
 import tempfile
+import time
 import tomllib
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
@@ -56,25 +57,45 @@ def _add_device_args(ap: argparse.ArgumentParser) -> None:
     g.add_argument("-v", "--verbose", action="store_true")
 
 
-def _check_writable(targets: Iterable[Path]) -> None:
+def _check_writable(targets: Iterable[Path]) -> list[Path]:
     """Raise OSError unless each file can be written: an existing one must be
     a writable file, a new one is created and removed again (this also
-    catches a missing directory and a name the file system refuses)."""
+    catches a missing directory and a name the file system refuses). Returns
+    the empty probe files that could not be removed (e.g. a virus scanner
+    holding them on Windows): the results may replace exactly those."""
+    leftovers = []
     for target in targets:
         if target.exists():
             if not target.is_file():
                 raise IsADirectoryError(f"{target} is a directory, not a file")
             if not os.access(target, os.W_OK):
                 raise PermissionError(f"cannot write {target}")
-        else:
-            with open(target, "x"):
-                pass
-            target.unlink()
+            continue
+        with open(target, "x"):
+            pass
+        for attempt in range(5):
+            try:
+                target.unlink()
+                break
+            except FileNotFoundError:
+                break
+            except OSError:
+                if attempt == 4:
+                    leftovers.append(target)
+                else:
+                    time.sleep(0.05)
+    return leftovers
+
+
+def _only_probes(paths: Iterable[Path], probes: list[Path]) -> bool:
+    """Every existing one of ``paths`` is an empty probe file of this run."""
+    return all(p in probes and p.stat().st_size == 0 for p in paths if p.exists())
 
 
 @contextlib.contextmanager
 def _open(args: argparse.Namespace, ready: bool = True, **kwargs: Any) -> Iterator[Instrument]:
-    """Open the instrument; with ``ready`` wait until it has left BOOT."""
+    """Open the instrument; with ``ready`` wait until it has left BOOT and
+    DISARMING (:meth:`Instrument.wait_ready`)."""
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.WARNING,
                         format="%(levelname)s %(name)s: %(message)s")
     if args.sim is not None:
@@ -252,7 +273,10 @@ def sweep_main(argv: Sequence[str] | None = None) -> int:
             if existing:
                 raise FileExistsError(f"refusing to overwrite {', '.join(existing)} "
                                       "(--no-overwrite)")
-        _check_writable(sweep_paths(args.out))    # a typo must not cost the sweep
+        probes = _check_writable(sweep_paths(args.out))   # a typo must not cost the sweep
+        for p in probes:
+            print(f"iv-sweep: warning: could not remove the empty test file {p}; "
+                  "the results will replace it", file=sys.stderr)
     except CLI_ERRORS as exc:
         print(f"iv-sweep: {exc}", file=sys.stderr)
         return 1
@@ -305,7 +329,8 @@ def sweep_main(argv: Sequence[str] | None = None) -> int:
             except OSError as exc:
                 errors.append(f"cannot write the results to {base}: {exc}")
                 return None
-        written = write(Path(args.out), not args.no_overwrite)
+        written = write(Path(args.out), not args.no_overwrite
+                        or _only_probes(sweep_paths(args.out), probes))
         if written is None:
             # Never lose a finished sweep: a new directory of its own in the
             # temporary directory (nothing there can be overwritten), under

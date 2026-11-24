@@ -221,23 +221,63 @@ def test_cal_apply_says_when_cal_nominal_remains(device, inst):
     assert not any(t.startswith("Still nominal") for t in said)
 
 
-def test_cal_apply_reports_but_does_not_fail_when_cal_cannot_be_read_back(device, inst):
-    """The record is saved; a failing CAL? afterwards only loses the report."""
+@pytest.mark.parametrize("failure", ["error", "session lost"])
+def test_cal_apply_reports_but_does_not_fail_when_cal_cannot_be_read_back(device, inst,
+                                                                          failure):
+    """The record is saved; a failing CAL? afterwards (an error, or the
+    session lost, e.g. the cable pulled) only loses the report."""
     said: list[str] = []
     wf = C.CalibrationWorkflow(inst, ask=lambda p: "y", say=said.append)
     wf.load_current()
-    device.override["CAL?"] = ["ERR INTERNAL flash busy"]
+    if failure == "error":
+        device.override["CAL?"] = ["ERR INTERNAL flash busy"]
+    else:
+        real = device.handle
+
+        def handle(line):
+            if line.startswith("CAL?"):
+                device.t.device_disconnect("USB cable pulled")
+                return
+            real(line)
+        device.handle = handle
     assert wf.apply({"r_s": "118.5"}) == 1
     assert any(t.startswith("Could not read CAL? back") for t in said)
 
 
 def test_cal_proposal_moves_a_fit_equal_to_nominal_one_step():
     """A fit that rounds to exactly the nominal value would count as nominal
-    in the firmware; it is moved one step towards the unrounded fit."""
+    in the firmware; it is moved one step towards the unrounded fit, so at
+    most one step from it (also where the unrounded nominal lies between the
+    fit and its rounded value, as for g_v_uv)."""
     wf = C.CalibrationWorkflow(inst=None)
     wf.rs_fit = type("Fit", (), {"r_s": 121.00003})()
-    assert wf.proposal() == {"r_s": Decimal("121.0001")} and wf.nudged == ["r_s"]
+    assert wf.proposal() == {"r_s": Decimal("121.0001")}
+    assert wf.nudged == {"r_s": Decimal("121.0001")}
     wf.rs_fit = type("Fit", (), {"r_s": 120.99996})()
     assert wf.proposal() == {"r_s": Decimal("120.9999")}
     wf.rs_fit = type("Fit", (), {"r_s": 118.71234})()
-    assert wf.proposal() == {"r_s": Decimal("118.7123")} and wf.nudged == []
+    assert wf.proposal() == {"r_s": Decimal("118.7123")} and wf.nudged == {}
+    wf.rs_fit = None
+    nominal_g_v = C.round_cal(g_v_uv=C.NOMINAL["g_v_uv"])["g_v_uv"]     # 1.498587
+    assert Decimal(repr(C.NOMINAL["g_v_uv"])) < nominal_g_v
+    for fit in (1.4985868, 1.49858699, 1.4985872):
+        wf.v_fit = type("Fit", (), {"gain_uv": fit})()
+        sent = wf.proposal()["g_v_uv"]
+        assert sent != nominal_g_v
+        assert abs(sent - Decimal(repr(fit))) <= Decimal("0.000001")   # one step at most
+
+
+def test_cal_apply_notes_only_what_is_sent(device, inst):
+    """The nudge note is for the value proposal() made; a value equal to its
+    nominal one sent anyway is reported as counting as nominal."""
+    said: list[str] = []
+    wf = C.CalibrationWorkflow(inst, ask=lambda p: "y", say=said.append)
+    wf.load_current()
+    wf.rs_fit = type("Fit", (), {"r_s": 121.00003})()
+    wf.proposal()
+    assert wf.apply({"r_s": Decimal("121.0000")}) == 1
+    assert not any("sent one step away" in t for t in said)
+    assert any("will count it as nominal" in t for t in said)
+    said.clear()
+    assert wf.apply() == 1                   # the proposal itself: 121.0001
+    assert any("sent one step away" in t for t in said)

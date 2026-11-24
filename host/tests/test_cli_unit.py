@@ -247,3 +247,24 @@ def test_open_waits_for_boot_except_for_iv_diag(monkeypatch):
     with cli._open(args, ready=False):
         pass
     assert waited == [1]
+
+
+def test_a_probe_file_that_cannot_be_removed_does_not_block_the_sweep(tmp_path, monkeypatch,
+                                                                      capsys, use_fake):
+    """The pre-check's own empty test file may be held by another program
+    (a virus scanner on Windows) and stay: the sweep still runs, and its
+    results replace exactly that file, also with --no-overwrite."""
+    from pathlib import Path
+    real_unlink = Path.unlink
+
+    def held(self, *a, **k):
+        if self.suffix == ".csv":
+            raise PermissionError(32, "being used by another process")
+        return real_unlink(self, *a, **k)
+    monkeypatch.setattr(Path, "unlink", held)
+    rc = cli.sweep_main(["--wp", "0", "1", "--step", "0.5", "--no-overwrite",
+                         "--out", str(tmp_path / "r")])
+    out, err = capsys.readouterr()
+    assert rc == 0, err
+    assert "could not remove the empty test file" in err
+    assert len(W.read_csv(tmp_path / "r.csv")) == 3
