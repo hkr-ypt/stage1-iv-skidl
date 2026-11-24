@@ -11,9 +11,10 @@
  *   NO_OUTPUT     : |V_set| >= 1 V, |I| < max(2 uA, 4 sigma_I(zero))
  *                   (100 uA without a valid zero: the worst-case INA128
  *                   offset to 85 C), |V_K| < 0.1 |V_set|
- *   CLIM          : |I| >= 0.8 i_plateau, e*sign(V_set) > tol and
- *                   V_K*sign(V_set) > -0.1 V (an open SENSE+ drives V_K to
- *                   the other side: that is KELVIN, not a plateau)
+ *   CLIM          : |I| >= 0.8 i_plateau and e*sign(V_set) > tol; also
+ *                   KELVIN when V_K carries the open-SENSE+ signature
+ *                   (V_K*sign(V_set) < -0.1 V and |V_K + I*15 ohm| <=
+ *                   3 ohm*|I| + 20 mV), so a lifted lead is not hidden
  *   KELVIN        : |e| > tol, unless NO_OUTPUT or CLIM explains it
  * The flags are warnings for the operator, not proofs (spec §7.7).
  */

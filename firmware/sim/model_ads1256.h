@@ -73,6 +73,8 @@ void     adsm_get_regs(const adsm_t *m, uint8_t regs[11]);
 void     adsm_set_noise(adsm_t *m, double sigma_codes, uint32_t seed);
 void     adsm_set_stuck(adsm_t *m, adsm_stuck_t s);
 void     adsm_set_drdy_dead(adsm_t *m, bool dead);
+/* Fault: SELFCAL commands are accepted but do nothing (no calibration). */
+void     adsm_set_ignore_selfcal(adsm_t *m, bool ignore);
 void     adsm_spontaneous_reset(adsm_t *m, uint64_t now_us);
 uint32_t adsm_conversions(const adsm_t *m);
 uint32_t adsm_selfcals(const adsm_t *m);

@@ -161,6 +161,7 @@ struct adsm {
     adsm_stuck_t stuck;
     bool    drdy_dead;
     bool    sync_hold;      /* SYNC received, no WAKEUP yet          */
+    bool    ignore_selfcal; /* fault: SELFCAL does nothing           */
     double  noise_sigma;
     uint64_t rng;
     bool    gauss_have;
@@ -493,9 +494,11 @@ static uint8_t command_byte(adsm_t *m, uint8_t b, double ts, double te)
         m->ps = P_WREG_N;
     } else if (b == 0xF0) {                               /* SELFCAL */
         advance_to(m, te);
-        reset_calregs(m);
-        start_cal(m, te, cal_time_us(m));
-        m->selfcals++;
+        if (!m->ignore_selfcal) {
+            reset_calregs(m);
+            start_cal(m, te, cal_time_us(m));
+            m->selfcals++;
+        }
         end_command(m, te, T11_SHORT_US);
     } else if (b >= 0xF1 && b <= 0xF4) {                  /* other calibrations */
         advance_to(m, te);
@@ -762,6 +765,11 @@ void adsm_set_noise(adsm_t *m, double sigma_codes, uint32_t seed)
 void adsm_set_stuck(adsm_t *m, adsm_stuck_t s)
 {
     m->stuck = s;
+}
+
+void adsm_set_ignore_selfcal(adsm_t *m, bool ignore)
+{
+    m->ignore_selfcal = ignore;
 }
 
 void adsm_set_drdy_dead(adsm_t *m, bool dead)

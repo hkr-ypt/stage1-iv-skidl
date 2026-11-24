@@ -1213,6 +1213,7 @@ bool port_stack_ok(void)
 void port_system_reset(void)
 {
     ensure();
+    dac_zero_safe();          /* as the target's system.c does */
     S.resets_requested++;
     request_reset(RST_SFT);
 }

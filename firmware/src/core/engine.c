@@ -883,8 +883,13 @@ static void dispatch(uint64_t now)
         mon_sample(&smp, now);
         break;
     case OWN_ACQ: {
-        if (!s_acq.active || !acq_sample_belongs(&smp)) {
-            break;   /* stale: started before this acquisition's DAC load */
+        if (!s_acq.active) {
+            break;
+        }
+        if (!acq_sample_belongs(&smp)) {
+            s_acq.in_flight = false;   /* stale: started before this acquisition's
+                                        * DAC load; convert again */
+            break;
         }
         bool tripped = false;
         int64_t i_pa = 0;

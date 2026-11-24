@@ -113,6 +113,44 @@ static void test_open_sense_plus_is_kelvin(void)
     }
 }
 
+/* A lifted SENSE+ lead on a low-impedance DUT at plateau-level current: V_K
+ * reads -I x R_bot. The point is CLIM (not DUT data) and KELVIN (the lead),
+ * both on the plateau and on the load line just below it. */
+static void test_open_sense_plus_at_high_current_is_clim_and_kelvin(void)
+{
+    const double i_s[] = { 0.049, 0.045, -0.049 };
+    for (size_t k = 0; k < 3; k++) {
+        for (int nominal = 0; nominal < 2; nominal++) {
+            point_check_t p = base(nominal != 0);
+            p.i = i_s[k];
+            p.v_set = p.i * (10.0 + R_S);          /* a 10 ohm DUT */
+            p.v_k = -p.i * R_BOT;                  /* U7 +IN at AGND */
+            TEST_ASSERT_EQUAL_HEX16(PF_CLIM | PF_KELVIN, safety_classify(&p));
+        }
+    }
+}
+
+/* An active DUT (cell, battery, charged capacitor) driven into the plateau
+ * at the opposite polarity holds V_K at its own voltage, on the other side
+ * of V_set: still a plateau, CLIM, and no sense-lead warning. */
+static void test_active_dut_on_the_plateau_is_clim_alone(void)
+{
+    const double v_cell[] = { 1.5, 3.0, 9.0 };
+    for (size_t k = 0; k < 3; k++) {
+        for (int nominal = 0; nominal < 2; nominal++) {
+            point_check_t p = base(nominal != 0);
+            p.v_set = -10.0;
+            p.i = -0.049;
+            p.v_k = v_cell[k];
+            TEST_ASSERT_EQUAL_HEX16(PF_CLIM, safety_classify(&p));
+            p.v_set = 10.0;
+            p.i = 0.049;
+            p.v_k = -v_cell[k];
+            TEST_ASSERT_EQUAL_HEX16(PF_CLIM, safety_classify(&p));
+        }
+    }
+}
+
 static void test_open_sense_minus_only_at_high_current(void)
 {
     /* V_K reads high by I * R_bot: detectable once 10 ohm*|I| exceeds tol */
@@ -142,11 +180,16 @@ static void test_force_path_open_is_no_output(void)
     /* below 1 V the check is not applied */
     p.v_set = 0.5;
     TEST_ASSERT_NOT_EQUAL(PF_NO_OUTPUT, safety_classify(&p) & PF_NO_OUTPUT);
-    /* without a zero the current threshold is 30 uA */
+    /* without a zero the current threshold is 100 uA, above the worst-case
+     * uncorrected INA128P current offset to 85 C (79 uA) */
     p.v_set = 5.0;
     p.sigma_i_zero = -1.0;
     p.i = 25e-6;
     TEST_ASSERT_EQUAL_HEX16(PF_NO_OUTPUT, safety_classify(&p));
+    p.i = 79e-6;
+    TEST_ASSERT_EQUAL_HEX16(PF_NO_OUTPUT, safety_classify(&p));
+    p.i = 101e-6;
+    TEST_ASSERT_EQUAL_HEX16(0, safety_classify(&p) & PF_NO_OUTPUT);
 }
 
 static void test_open_dut_with_kelvin_connected_is_clean(void)
@@ -233,6 +276,8 @@ int main(void)
     RUN_TEST(test_dut_drawing_45_mA_on_load_line_not_clim);
     RUN_TEST(test_current_limit_plateau_is_clim);
     RUN_TEST(test_open_sense_plus_is_kelvin);
+    RUN_TEST(test_open_sense_plus_at_high_current_is_clim_and_kelvin);
+    RUN_TEST(test_active_dut_on_the_plateau_is_clim_alone);
     RUN_TEST(test_open_sense_minus_only_at_high_current);
     RUN_TEST(test_swapped_kelvin_is_kelvin);
     RUN_TEST(test_force_path_open_is_no_output);

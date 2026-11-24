@@ -18,6 +18,7 @@
 #include "heartbeat.h"
 #include "instrument.h"
 #include "port.h"
+#include "port_sim_ext.h"
 
 #include <math.h>
 #include <stdio.h>
@@ -723,6 +724,67 @@ static void test_arm_refused_while_reset_pending(void)
     TEST_ASSERT_NOT_EQUAL(SIZE_MAX, h_find("ERR STATE reset pending", ok + 1));
 }
 
+/* RESET writes the zero pair before the MCU reset (port_system_reset, as on
+ * the target), whatever the DAC held: here it is corrupted by hand while
+ * DISARMED, as a stray write would. */
+static void test_reset_writes_the_zero_pair_first(void)
+{
+    dac_stats_t s0, s1;
+    dac_get_stats(&s0);
+    h_send("RESET");
+    uint64_t t0 = psim_time_us();
+    while (!psim_reset_requested() && psim_time_us() - t0 < 1000000u) {
+        psim_dac()->dac[0] = 0x9000u;   /* the zero pair must be rewritten */
+        app_pass();
+    }
+    TEST_ASSERT_TRUE(psim_reset_requested());
+    dac_get_stats(&s1);
+    TEST_ASSERT_EQUAL_UINT32(s0.zero_safe + 1u, s1.zero_safe);
+    TEST_ASSERT_EQUAL_HEX16(0x8000, psim_dac()->dac[0]);
+    TEST_ASSERT_EQUAL_HEX16(0xFFFF, psim_dac()->dac[1]);
+    psim_mcu_reset();
+    app_init();
+    TEST_ASSERT_TRUE(h_run_until_state(ST_DISARMED, 2000000));
+}
+
+#if FW_BRINGUP
+/* SI-8 at the erase itself. A CAL.SAVE that outlives its session waits for
+ * the ADC conversion in flight; a bring-up HB.EDGE in the new session (a
+ * DISARMED command) makes an edge shortly before that conversion ends. The
+ * save job re-checks SI-8 there and gives up instead of erasing within
+ * T_DISARM of an edge. At 2.5 SPS one conversion takes t18 = 400 ms. */
+static void test_bringup_calsave_rechecks_si8_at_the_erase(void)
+{
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("CFG adc_rate=2.5"));
+    h_run_us(3000000);                       /* SELFCAL at 2.5 SPS, ~1.2 s */
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("CAL.SET r_s=119"));
+    psim_obs_t o0;
+    psim_observe(&o0);
+    /* just after a conversion completes, the monitor starts the next one,
+     * which the job will wait for */
+    uint32_t c0 = adsm_conversions(psim_ads());
+    for (int k = 0; k < 20000 && adsm_conversions(psim_ads()) == c0; k++) {
+        h_run_us(100);
+    }
+    h_run_us(10000);
+    TEST_ASSERT_EQUAL(ADS_CONVERTING, ads_state());
+    h_send("CAL.SAVE TS=1700000000");
+    h_run_us(2000);
+    psim_set_dtr(false);                     /* the host leaves: the job stays */
+    h_run_us(5000);
+    psim_set_dtr(true);
+    h_run_us(5000);
+    h_run_us(320000);                        /* ~340 ms into the conversion */
+    TEST_ASSERT_EQUAL(ADS_CONVERTING, ads_state());
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("HB.EDGE"));
+    h_run_us(600000);
+    psim_obs_t o1;
+    psim_observe(&o1);
+    TEST_ASSERT_EQUAL_UINT32_MESSAGE(o0.cal_erases, o1.cal_erases, "erased within T_DISARM of an edge");
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("HB.HOLD OFF"));
+}
+#endif
+
 /* ARM whose zero write fails latches FAULT and must not answer OK. */
 static void test_arm_answers_fault_when_zero_write_fails(void)
 {
@@ -861,9 +923,13 @@ int main(void)
     RUN_TEST(test_compliance_at_zero_is_reported_once);
     RUN_TEST(test_calsave_pending_across_session_never_erases_armed);
     RUN_TEST(test_arm_refused_while_reset_pending);
+    RUN_TEST(test_reset_writes_the_zero_pair_first);
     RUN_TEST(test_arm_answers_fault_when_zero_write_fails);
     RUN_TEST(test_fault_during_selftest_reruns_post_on_clear);
     RUN_TEST(test_abort_then_rerun_discards_orphan_conversion);
     RUN_TEST(test_bringup_hb_hold_cannot_pump_the_gate);
+#if FW_BRINGUP
+    RUN_TEST(test_bringup_calsave_rechecks_si8_at_the_erase);
+#endif
     return UNITY_END();
 }

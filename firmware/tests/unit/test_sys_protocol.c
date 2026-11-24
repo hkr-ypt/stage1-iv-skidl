@@ -1035,9 +1035,11 @@ static unsigned pt_flags(const char *line)
     return (unsigned)strtoul(f[16], NULL, 16);
 }
 
-/* A lifted SENSE+ lead on a low-impedance DUT must read KELVIN, not CLIM:
- * V_K is driven to the side opposite V_set, which a real plateau never does. */
-static void test_open_sense_plus_on_low_impedance_dut_is_kelvin_not_clim(void)
+/* A lifted SENSE+ lead on a low-impedance DUT reads V_K = -I x R_bot. The
+ * points at plateau-level current stay CLIM (not DUT data) and are KELVIN as
+ * well, so the lead is reported (KELVIN on every point, EVT WARN KELVIN)
+ * instead of hidden behind CLIM. */
+static void test_open_sense_plus_on_low_impedance_dut_is_flagged_kelvin(void)
 {
     TEST_ASSERT_EQUAL_STRING("OK", h_cmd("CAL.SET r_s=121 r_top=106"));
     psim_board()->dut.kind = DUT_RESISTOR;
@@ -1048,7 +1050,7 @@ static void test_open_sense_plus_on_low_impedance_dut_is_kelvin_not_clim(void)
     size_t from = h_lines();
     TEST_ASSERT_EQUAL(0, strncmp(h_cmd("SWP.RUN"), "OK id=", 6));
     TEST_ASSERT_TRUE(h_wait_line("EVT SWEEP_END", from, 20000000));
-    unsigned clim = 0, kelvin = 0;
+    unsigned clim = 0, kelvin = 0, clim_alone = 0;
     for (size_t k = from; k < h_lines(); k++) {
         if (strncmp(h_line(k), "PT ", 3) != 0) {
             continue;
@@ -1056,9 +1058,51 @@ static void test_open_sense_plus_on_low_impedance_dut_is_kelvin_not_clim(void)
         unsigned f = pt_flags(h_line(k));
         clim += (f & PF_CLIM) ? 1u : 0u;
         kelvin += (f & PF_KELVIN) ? 1u : 0u;
+        clim_alone += ((f & PF_CLIM) && !(f & PF_KELVIN)) ? 1u : 0u;
     }
-    TEST_ASSERT_EQUAL_UINT32(0, clim);
     TEST_ASSERT_TRUE(kelvin >= 10u);
+    TEST_ASSERT_TRUE(clim >= 1u);            /* the plateau-level points */
+    TEST_ASSERT_EQUAL_UINT32(0, clim_alone); /* none hides the lead */
+    TEST_ASSERT_NOT_EQUAL(SIZE_MAX, h_find("EVT WARN KELVIN", from));
+}
+
+/* An active DUT (a cell) driven into the plateau at the opposite polarity
+ * holds V_K at its own voltage, on the other side of V_set. Those points are
+ * the plateau, not DUT data: CLIM, without a false sense-lead warning. */
+static void test_active_dut_on_the_plateau_keeps_clim(void)
+{
+    psim_board()->dut.kind = DUT_CELL;
+    psim_board()->dut.r_ohm = 1.0;
+    arm();
+    for (int pol = 0; pol < 2; pol++) {
+        psim_board()->dut.v_cell = pol ? -1.5 : 1.5;
+        const char *def = pol ? "SWP.WP 0 10 STEP=1" : "SWP.WP 0 -10 STEP=1";
+        TEST_ASSERT_EQUAL(0, strncmp(h_cmd(def), "OK SWP", 6));
+        size_t from = h_lines();
+        TEST_ASSERT_EQUAL(0, strncmp(h_cmd("SWP.RUN"), "OK id=", 6));
+        TEST_ASSERT_TRUE(h_wait_line("EVT SWEEP_END", from, 20000000));
+        /* I = (V_set - V_cell) / 122 ohm reaches the 49 mA plateau near
+         * |V_set| = 4.5 V; from 6 V on the point lies >= 1.5 V off the load
+         * line, far outside even the nominal tolerance */
+        char f[17][32];
+        unsigned plateau = 0, clim = 0, kelvin = 0;
+        for (size_t k = from; k < h_lines(); k++) {
+            if (strncmp(h_line(k), "PT ", 3) != 0) {
+                continue;
+            }
+            TEST_ASSERT_EQUAL(17, pt_fields(h_line(k), f));
+            unsigned fl = (unsigned)strtoul(f[16], NULL, 16);
+            if (fabs(atof(f[8])) >= 6.0) {
+                plateau++;
+                clim += (fl & PF_CLIM) ? 1u : 0u;
+            }
+            kelvin += (fl & PF_KELVIN) ? 1u : 0u;
+        }
+        TEST_ASSERT_EQUAL_UINT32(5, plateau);
+        TEST_ASSERT_EQUAL_UINT32(plateau, clim);
+        TEST_ASSERT_EQUAL_UINT32(0, kelvin);
+        TEST_ASSERT_EQUAL(SIZE_MAX, h_find("EVT WARN KELVIN", from));
+    }
 }
 
 /* The real plateau of a healthy low-impedance DUT is still CLIM. */
@@ -1436,6 +1480,37 @@ static void test_damaged_newest_record_is_reported(void)
     TEST_ASSERT_EQUAL(0, h_kv_ll(h_cmd("STAT?"), "warn") & W_CAL_DAMAGED);
 }
 
+/* Sweep records keep the sub-code resolution too: the PT line's i_A comes
+ * from the record's rounded mean plus its 1/256-code fraction. Two dithered
+ * one-point sweeps of 256 pairs, half a code apart, differ by about 6.2 nA;
+ * whole-code means could differ only by 0 or 12.4 nA, and a fraction of the
+ * wrong sign would cancel the shift. */
+static void test_sweep_records_keep_sub_code_resolution(void)
+{
+    const double half_code_v = 0.5 * (2.0 * 2.5 / (2.0 * 8388607.0));
+    h_jacks_open(true);
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("CFG n_avg=256"));
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("SWP.LIST.CLR"));
+    TEST_ASSERT_EQUAL_STRING("OK n=1", h_cmd("SWP.LIST.ADD 0"));
+    TEST_ASSERT_EQUAL(0, strncmp(h_cmd("SWP.LIST.USE"), "OK SWP kind=list points=1 ", 26));
+    adsm_set_noise(psim_ads(), 0.5, 3u);
+    arm();
+    double i_a[2];
+    for (int k = 0; k < 2; k++) {
+        size_t first = 0;
+        char end[256];
+        TEST_ASSERT_EQUAL(1, run_sweep(&first, end, sizeof end, 20000000u));
+        char f[17][32];
+        TEST_ASSERT_EQUAL(17, pt_fields(h_line(first), f));
+        TEST_ASSERT_EQUAL_STRING("256", f[9]);
+        i_a[k] = atof(f[15]);
+        psim_board()->ina_i_offset_v += half_code_v;
+    }
+    psim_board()->ina_i_offset_v -= 2.0 * half_code_v;
+    adsm_set_noise(psim_ads(), 0.0, 3u);
+    TEST_ASSERT_DOUBLE_WITHIN(2.5e-9, 6.22e-9, i_a[1] - i_a[0]);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -1456,7 +1531,8 @@ int main(void)
     RUN_TEST(test_event_loss_is_reported);
     RUN_TEST(test_meas_and_zero);
     RUN_TEST(test_zero_accepts_worst_case_front_end_offsets);
-    RUN_TEST(test_open_sense_plus_on_low_impedance_dut_is_kelvin_not_clim);
+    RUN_TEST(test_open_sense_plus_on_low_impedance_dut_is_flagged_kelvin);
+    RUN_TEST(test_active_dut_on_the_plateau_keeps_clim);
     RUN_TEST(test_plateau_on_short_is_still_clim);
     RUN_TEST(test_default_compliance_lets_the_plateau_act);
     RUN_TEST(test_rail_lost_while_armed_is_afe_fault);
@@ -1464,6 +1540,7 @@ int main(void)
     RUN_TEST(test_no_late_flags_at_the_pass_budget);
     RUN_TEST(test_saturated_sd_is_flagged);
     RUN_TEST(test_averaged_means_keep_sub_code_resolution);
+    RUN_TEST(test_sweep_records_keep_sub_code_resolution);
     RUN_TEST(test_adc_traffic_obeys_the_data_sheet);
     RUN_TEST(test_late_sample_time_is_its_conversion_centroid);
     RUN_TEST(test_reopened_port_gets_no_stale_output);

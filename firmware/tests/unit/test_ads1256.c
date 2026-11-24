@@ -409,7 +409,8 @@ static bool convert_with_stall(uint32_t sps_x10, uint32_t stall_us, ads_sample_t
  * That is one late sample of the right channel, not an ADC timeout fault. */
 static void test_stall_after_an_edge_gives_a_late_sample(void)
 {
-    static const uint32_t rates[] = { 37500u, 10000u, 1000u, 600u, 500u, 100u, 50u, 25u };
+    static const uint32_t rates[] = { 37500u, 20000u, 10000u, 5000u, 1000u, 600u, 500u,
+                                      300u, 250u, 150u, 100u, 50u, 25u };   /* all 13 v1 rates */
     for (size_t i = 0; i < sizeof rates / sizeof rates[0]; i++) {
         uint32_t p = ads_period_us(rate_sps(rates[i]));
         const uint32_t stalls[] = { p / 2u, p + p / 10u, p + p / 2u, p + (9u * p) / 10u };
@@ -458,6 +459,29 @@ static void test_drdy_dead_after_a_stall_times_out(void)
         TEST_ASSERT_EQUAL(ADS_ERR_TIMEOUT, ads_error());
         TEST_ASSERT_TRUE(tp_now() - t_end <= p * 3u / 2u + 2000u + 1000u);
     }
+}
+
+/* A SELFCAL the part ignores leaves /DRDY to old data or to the conversion
+ * WAKEUP started, long before the Table 21 calibration time: init and
+ * reconfigure report it (after one retry) instead of running on an old
+ * calibration. A real calibration is never mistaken for one. */
+static void test_ignored_selfcal_is_detected(void)
+{
+    adsm_set_ignore_selfcal(tp_model(), true);
+    ads_cfg_t c = { rate_sps(10000)->drate, ADS_PGA_2 };
+    ads_init_begin(&c);
+    TEST_ASSERT_FALSE(run_until_idle(3000000));
+    TEST_ASSERT_EQUAL(ADS_ERR_TIMEOUT, ads_error());
+    adsm_set_ignore_selfcal(tp_model(), false);
+    init_at(10000, ADS_PGA_2);
+    assert_no_violations();
+    adsm_set_ignore_selfcal(tp_model(), true);
+    ads_cfg_t c2 = { rate_sps(25u)->drate, ADS_PGA_2 };
+    TEST_ASSERT_TRUE(ads_reconfigure(&c2));
+    TEST_ASSERT_FALSE(run_until_idle(5000000));
+    TEST_ASSERT_EQUAL(ADS_ERR_TIMEOUT, ads_error());
+    adsm_set_ignore_selfcal(tp_model(), false);
+    init_at(25u, ADS_PGA_2);
 }
 
 /* ---- failures ------------------------------------------------------------------------------ */
@@ -557,6 +581,7 @@ int main(void)
     RUN_TEST(test_preemption_by_new_start);
     RUN_TEST(test_stall_after_an_edge_gives_a_late_sample);
     RUN_TEST(test_drdy_dead_after_a_stall_times_out);
+    RUN_TEST(test_ignored_selfcal_is_detected);
     RUN_TEST(test_drdy_dead_times_out);
     RUN_TEST(test_spi_failure_reported);
     RUN_TEST(test_spontaneous_reset_caught_by_scrub);

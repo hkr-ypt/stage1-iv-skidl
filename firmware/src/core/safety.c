@@ -15,6 +15,7 @@
 #include "safety.h"
 
 #include "dac8552.h"
+#include "nominal.h"
 #include "port.h"
 #include "scaling.h"
 
@@ -25,11 +26,27 @@
  * (50 + 500/G) uV + (0.5 + 20/G) uV/C to 85 C at G = 2.40, over R10 10 ohm:
  * 79 uA), the NO_OUTPUT current floor until a session zero exists. */
 #define NO_OUTPUT_I_FLOOR_NO_ZERO_A 100e-6
-/* CLIM needs V_K on V_set's side. With SENSE+ open, U7 +IN is pulled to AGND
- * and V_K = -I (R10 + F2) ~ -15 ohm x I, i.e. <= -0.24 V at the lowest CLIM
- * current (0.8 x 20 mA); a real plateau leaves V_K = I x R_DUT >= 0 (passive
- * DUT), minus offsets of a few mV. */
-#define CLIM_VK_FLOOR_V  0.1
+/* The open-SENSE+ signature. With SENSE+ open, U7 +IN is pulled to AGND and
+ * -IN sits at the DUT's low end, so V_K = -I x R_bot, R_bot = F2 + R10
+ * (13...17.5 ohm, nominal 15): opposite V_set's side and proportional to I,
+ * <= -0.24 V at the lowest CLIM current (0.8 x 20 mA). A point that the
+ * plateau rule marks CLIM (not DUT data) is also marked KELVIN when it carries
+ * that signature, so a lifted lead on a low-impedance DUT is reported instead
+ * of hidden behind CLIM. CLIM itself is never withdrawn: an active DUT (cell,
+ * battery, charged capacitor) driven into the plateau at the opposite
+ * polarity holds V_K at its own voltage, which misses the band, and keeps
+ * CLIM alone. */
+#define OPEN_SP_VK_MIN_V     0.1    /* beyond offsets                           */
+#define OPEN_SP_R_BOT_OHM    (NOM_R10_OHM + NOM_PTC_OHM)
+#define OPEN_SP_R_BAND_OHM   3.0    /* covers 13...17.5 ohm and the I gain error */
+#define OPEN_SP_V_BAND_V     0.02   /* uncorrected offsets                      */
+
+static bool open_sense_plus_signature(const point_check_t *p, double sign)
+{
+    return p->v_k * sign < -OPEN_SP_VK_MIN_V
+        && fabs(p->v_k + p->i * OPEN_SP_R_BOT_OHM)
+               <= OPEN_SP_R_BAND_OHM * fabs(p->i) + OPEN_SP_V_BAND_V;
+}
 
 double safety_kelvin_error(const point_check_t *p)
 {
@@ -66,8 +83,12 @@ uint16_t safety_classify(const point_check_t *p)
     double e = safety_kelvin_error(p);
     double tol = safety_kelvin_tol(p);
     double sign = (p->v_set < 0.0) ? -1.0 : 1.0;
-    if (ai >= 0.8 * p->i_plateau && e * sign > tol && p->v_k * sign > -CLIM_VK_FLOOR_V) {
-        return (uint16_t)(flags | PF_CLIM);
+    if (ai >= 0.8 * p->i_plateau && e * sign > tol) {
+        flags |= PF_CLIM;
+        if (open_sense_plus_signature(p, sign)) {
+            flags |= PF_KELVIN;   /* a lifted SENSE+ lead as well */
+        }
+        return flags;
     }
     if (fabs(e) > tol) {
         flags |= PF_KELVIN;

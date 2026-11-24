@@ -126,6 +126,7 @@ static struct {
     uint64_t          t_drdy;
     bool              late;
     uint32_t          late_count;
+    uint8_t           cal_tries;         /* SYNC/WAKEUP/SELFCAL frames sent   */
     ads_sample_t      sample;
     /* stuck-DOUT detector */
     uint32_t          stuck_run;
@@ -436,7 +437,21 @@ static void service_init(void)
 
     case PH_CAL_WAIT: {
         uint32_t limit = s.rate->selfcal_us * 3u / 2u + ADS_CAL_TIMEOUT_EXTRA_US;
-        if (elapsed(now, s.t_phase) >= ADS_DRDY_POLL_MIN_US && port_adc_drdy_low()) {
+        uint64_t el = elapsed(now, s.t_phase);
+        if (el >= ADS_DRDY_POLL_MIN_US && port_adc_drdy_low()) {
+            if (el < s.rate->selfcal_us / 2u) {
+                /* /DRDY low in less than half the Table 21 time (> t18 at
+                 * every v1 rate): the part did not calibrate; a SELFCAL it
+                 * ignored leaves only old data or the WAKEUP's conversion.
+                 * Send the frame once more, then fail as a calibration that
+                 * never ends would, rather than run on an old calibration. */
+                if (++s.cal_tries < 2u) {
+                    s.ph = PH_SYNC_CAL;
+                } else {
+                    fail(ADS_ERR_TIMEOUT);
+                }
+                break;
+            }
             uint8_t rx[5] = { 0, 0, 0, 0, 0 };
             if (!txn_rreg5(rx)) {
                 break;
@@ -640,6 +655,7 @@ bool ads_reconfigure(const ads_cfg_t *cfg)
     s.shadow[ADS_REG_DRATE] = cfg->drate;
     s.state = ADS_INIT;
     s.ph = PH_RECONF_WRITE;
+    s.cal_tries = 0;
     return true;
 }
 
