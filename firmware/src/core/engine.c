@@ -13,8 +13,12 @@
  *    100 ohm to AGND, AINCOM = VREF (blocks/adc.py).
  *  - Front-end check, Kelvin/plateau/no-output classification: safety.h.
  *  - R_sd = R12 + R32 (nominal.h, blocks/sense_amp.py).
- *  - ZERO plausibility: |o_i| <= 30 uA, |o_v| <= 3 mV (INA128 SBOS051G
- *    worst-case offsets referred to the DUT are 26 uA / 2.76 mV, spec §4.6).
+ *  - ZERO plausibility: |o_i| <= 100 uA, |o_v| <= 10 mV: the INA128P
+ *    worst case referred to the DUT over its rated range to 85 C (SBOS051G:
+ *    (50 + 500/G) uV at 25 C plus (0.5 + 20/G) uV/C; U6 at G = 2.40 over
+ *    R10 = 10 ohm: 79 uA; U7 at G = 1 behind k = 0.1992: 8.9 mV, plus about
+ *    0.3 mV of bias current and supply rejection). The 25 C values alone
+ *    (26 uA / 2.76 mV) would refuse an in-spec board a few kelvin warmer.
  *
  * Re-entrancy: any call that may latch a fault (dac_update failure,
  * compliance with on_compliance=fault, clip while armed) re-enters the engine
@@ -44,12 +48,16 @@
 #endif
 
 #define CONV_OVERHEAD_US     220u      /* 70 us SPI + one 150 us pass        */
-#define LATE_SETTLE_US       200u
+/* A point's first conversion starts in the pass after the settle ends, and
+ * ads_service() issues it one pass later still (app.c order: ads_service,
+ * then engine_service): up to two passes of the 150 us budget. LATE flags
+ * only what exceeds that. */
+#define LATE_SETTLE_US       (2u * PASS_BUDGET_US + 50u)
 #define NEGREF_EXPECT        (-4194304)
 #define NEGREF_TOL           20972     /* 0.5 % of 2^22                       */
 #define ZERO_CODE_TOL        200
-#define ZERO_MAX_I_A         30e-6
-#define ZERO_MAX_V_V         3e-3
+#define ZERO_MAX_I_A         100e-6
+#define ZERO_MAX_V_V         10e-3
 #define KELVIN_RUN_WARN      3u
 #define JOB_TIMEOUT_US       15000000u /* guard above every documented bound   */
 #define R_SD_OHM             (NOM_R12_OHM + NOM_R32_OHM)
@@ -58,6 +66,7 @@
 
 static cal_coeffs_t s_cal;
 static cal_source_t s_cal_src;
+static uint32_t     s_cal_measured;   /* CAL_M_* of s_cal */
 static uint32_t     s_cal_seq;
 static calib_scan_t s_scan;
 static zero_t       s_zero;
@@ -242,30 +251,43 @@ const char *engine_cal_source_name(void)
     }
 }
 
-void engine_cal_set(const cal_coeffs_t *c)
+void engine_cal_set(const cal_coeffs_t *c, uint32_t measured)
 {
     s_cal = *c;
+    s_cal_measured |= measured & CAL_M_ALL;
     s_cal_src = CALSRC_RAM;
+}
+
+uint32_t engine_cal_measured(void)
+{
+    return s_cal_measured;
+}
+
+bool engine_cal_nominal(void)
+{
+    return (s_cal_measured & CAL_M_CORE) != CAL_M_CORE;
 }
 
 void engine_cal_default(void)
 {
     calib_nominal(&s_cal);
+    s_cal_measured = 0u;
     s_cal_src = CALSRC_NOMINAL;
 }
 
 void engine_cal_reload(void)
 {
-    s_cal_src = calib_load(&s_cal, &s_scan, &s_cal_seq) ? CALSRC_STORED : CALSRC_NOMINAL;
+    s_cal_src = calib_load(&s_cal, &s_scan, &s_cal_seq, &s_cal_measured) ? CALSRC_STORED
+                                                                         : CALSRC_NOMINAL;
 }
 
 err_t engine_cal_save(uint32_t timestamp, const char *note, uint32_t *seq)
 {
     app_note_long_op();
-    err_t e = calib_save(&s_cal, timestamp, note, seq);
+    err_t e = calib_save(&s_cal, s_cal_measured, timestamp, note, seq);
     cal_coeffs_t check;
     uint32_t seq_now = 0;
-    bool stored = calib_load(&check, &s_scan, &seq_now);
+    bool stored = calib_load(&check, &s_scan, &seq_now, NULL);
     if (e == E_OK && stored && seq_now == *seq) {
         s_cal_src = CALSRC_STORED;
         s_cal_seq = seq_now;
@@ -550,15 +572,51 @@ static void compliance_trip(int64_t i_pa)
     }
 }
 
+/* The front-end signature of a missing +-15 V rail (both INA128 outputs near
+ * AGND: both channels below -0.8 full scale) on two consecutive conversions
+ * of different channels. With a live output it cannot occur: |V_SWEEP| <=
+ * 10.04 V and R_s >= 115 ohm forbid |V_K| >= 10 V together with |I| >= 83 mA. */
+static struct {
+    bool      valid;
+    ads_mux_t mux;
+    int32_t   code;
+    uint64_t  t_drdy;
+} s_prev_conv;
+
+static bool afe_signature_armed(const ads_sample_t *smp)
+{
+    bool hit = false;
+    if (s_prev_conv.valid && s_prev_conv.mux != smp->mux
+        && (smp->mux == ADS_MUX_I || smp->mux == ADS_MUX_V)
+        && (s_prev_conv.mux == ADS_MUX_I || s_prev_conv.mux == ADS_MUX_V)
+        && smp->t_drdy_us - s_prev_conv.t_drdy <= rate()->t18_us + MONITOR_PERIOD_US) {
+        int32_t i_code = (smp->mux == ADS_MUX_I) ? smp->code : s_prev_conv.code;
+        int32_t v_code = (smp->mux == ADS_MUX_V) ? smp->code : s_prev_conv.code;
+        hit = !safety_afe_pair_ok(i_code, v_code);
+    }
+    s_prev_conv.valid = true;
+    s_prev_conv.mux = smp->mux;
+    s_prev_conv.code = smp->code;
+    s_prev_conv.t_drdy = smp->t_drdy_us;
+    return hit;
+}
+
 /* Returns false if the conversion latched a fault. */
 static bool conversion_checks(const ads_sample_t *smp, bool *tripped, int64_t *i_pa_out)
 {
     *tripped = false;
     if (!armed_states()) {
+        s_prev_conv.valid = false;
         return true;
     }
     if (smp->clipped) {
         inst_fault(F_AFE, smp->mux == ADS_MUX_I ? "clip_i" : "clip_v");
+        return false;
+    }
+    if (afe_signature_armed(smp)) {
+        /* analog supply lost: U12 has opened FORCE+, the readings are the
+         * front end's, not the DUT's (spec §6.2) */
+        inst_fault(F_AFE, "afe_signature");
         return false;
     }
     if (smp->mux == ADS_MUX_I) {
@@ -576,8 +634,23 @@ static bool conversion_checks(const ads_sample_t *smp, bool *tripped, int64_t *i
 /* acquisition                                                                          */
 /* ================================================================================== */
 
+/* End the acquisition. A conversion it still has in flight is disowned, so
+ * dispatch() discards it when it completes: it can never become a sample of
+ * a later acquisition (a new sweep, MEAS? or ZERO started before it lands). */
+static void acq_end(void)
+{
+    s_acq.active = false;
+    s_acq.in_flight = false;
+    if (s_owner == OWN_ACQ) {
+        s_owner = OWN_NONE;
+    }
+}
+
 static void acq_begin(uint16_t pairs, uint32_t settle_us, uint64_t t_set)
 {
+    if (s_owner == OWN_ACQ) {
+        s_owner = OWN_NONE;   /* a conversion of an ended acquisition: orphan */
+    }
     memset(&s_acq, 0, sizeof s_acq);
     s_acq.active = true;
     s_acq.pairs = pairs;
@@ -619,6 +692,13 @@ static void acq_service(uint64_t now)
     }
 }
 
+/* A sample is this acquisition's only if its conversion started at or after
+ * the DAC load the acquisition belongs to; anything older is stale. */
+static bool acq_sample_belongs(const ads_sample_t *smp)
+{
+    return smp->t_start_us >= s_acq.t_set;
+}
+
 static void acq_sample(const ads_sample_t *smp)
 {
     s_acq.in_flight = false;
@@ -632,7 +712,12 @@ static void acq_sample(const ads_sample_t *smp)
     s_acq.cnt[ch]++;
     s_acq.clip[ch] = s_acq.clip[ch] || smp->clipped;
     s_acq.late = s_acq.late || smp->late;
-    s_acq.tmid[ch] += (smp->t_start_us + smp->t_drdy_us) / 2u;
+    /* centroid of the conversion's input window, which ends at the accepted
+     * /DRDY edge and spans t18 (SBAS288K Table 13): (WAKEUP + edge) / 2 for an
+     * on-time sample. A late one is a later free-running conversion, settled
+     * in one period (Table 15): its window ends at that later edge. */
+    s_acq.tmid[ch] += smp->late ? smp->t_drdy_us - rate()->t18_us / 2u
+                                : (smp->t_start_us + smp->t_drdy_us) / 2u;
     if (s_acq.j == 0u) {
         s_acq.t_first_start = smp->t_start_us;
     }
@@ -647,6 +732,28 @@ static int32_t acq_mean(unsigned ch)
     return (int32_t)div_round_i64(s_acq.sum[ch], (int64_t)s_acq.cnt[ch]);
 }
 
+/* The unrounded mean in codes: v_V and i_A are computed from it, so the
+ * resolution averaging gives (n_avg pairs, slow rates) is not cut to 1 code. */
+static double acq_mean_d(unsigned ch)
+{
+    if (s_acq.cnt[ch] == 0u) {
+        return 0.0;
+    }
+    return (double)s_acq.sum[ch] / (double)s_acq.cnt[ch];
+}
+
+/* mean - rounded mean in 1/256 code, for pt_rec_t (|mean - raw| <= 0.5) */
+static int8_t acq_frac(unsigned ch, int32_t raw)
+{
+    double f = floor((acq_mean_d(ch) - (double)raw) * 256.0 + 0.5);
+    if (f > 127.0) {
+        f = 127.0;
+    } else if (f < -128.0) {
+        f = -128.0;
+    }
+    return (int8_t)f;
+}
+
 static double acq_sd(unsigned ch)
 {
     uint16_t n = s_acq.cnt[ch];
@@ -658,13 +765,15 @@ static double acq_sd(unsigned ch)
     return var > 0.0 ? sqrt(var) : 0.0;
 }
 
+#define SD_DECI_SAT 0xFFFEu   /* 6553.4 codes: the ceiling; PF_SD_SAT marks it */
+
 static uint16_t sd_deci(double sd)
 {
     if (sd < 0.0) {
         return 0xFFFFu;
     }
     double x = floor(sd * 10.0 + 0.5);
-    return x >= 65534.0 ? 0xFFFEu : (uint16_t)x;
+    return x >= (double)SD_DECI_SAT ? SD_DECI_SAT : (uint16_t)x;
 }
 
 static bool acq_settle_late(void)
@@ -675,11 +784,12 @@ static bool acq_settle_late(void)
     return s_acq.t_first_start > s_acq.t_set + s_acq.settle_req + LATE_SETTLE_US;
 }
 
-/* Common flags and classification for a completed acquisition. */
-static uint16_t acq_flags(int32_t i_raw, int32_t v_raw, bool classify, uint16_t code)
+/* Common flags and classification for a completed acquisition; i_mean and
+ * v_mean are the unrounded means in codes. */
+static uint16_t acq_flags(double i_mean, double v_mean, bool classify, uint16_t code)
 {
     uint16_t f = 0;
-    if (s_cal_src == CALSRC_NOMINAL) {
+    if (engine_cal_nominal()) {
         f |= PF_CAL_NOMINAL;
     }
     if (engine_zero_state(port_now_us()) != ZERO_VALID) {
@@ -699,11 +809,11 @@ static uint16_t acq_flags(int32_t i_raw, int32_t v_raw, bool classify, uint16_t 
     }
     point_check_t p;
     p.v_set = (double)scaling_code_to_v_uv(&s_cal, code) / 1e6;
-    p.v_k = (double)scaling_v_nv(&s_cal, zero_for_scaling(), (double)v_raw) / 1e9;
-    p.i = (double)scaling_i_pa(&s_cal, zero_for_scaling(), (double)i_raw) / 1e12;
+    p.v_k = (double)scaling_v_nv(&s_cal, zero_for_scaling(), v_mean) / 1e9;
+    p.i = (double)scaling_i_pa(&s_cal, zero_for_scaling(), i_mean) / 1e12;
     p.clip_v = s_acq.clip[1];
     p.clip_i = s_acq.clip[0];
-    p.cal_nominal = (s_cal_src == CALSRC_NOMINAL);
+    p.cal_nominal = engine_cal_nominal();
     p.sigma_i_zero = s_zero.valid ? s_zero.sd_i * s_cal.g_i : -1.0;
     p.r_s = s_cal.r_s;
     p.r_top = s_cal.r_top;
@@ -773,8 +883,8 @@ static void dispatch(uint64_t now)
         mon_sample(&smp, now);
         break;
     case OWN_ACQ: {
-        if (!s_acq.active) {
-            break;
+        if (!s_acq.active || !acq_sample_belongs(&smp)) {
+            break;   /* stale: started before this acquisition's DAC load */
         }
         bool tripped = false;
         int64_t i_pa = 0;
@@ -819,7 +929,14 @@ static void monitor_service(uint64_t now)
         }
         return;
     }
-    if (now < s_mon_due) {
+    /* While a ramp moves the output (SRC, the sweep's pre-ramp and end ramp,
+     * the disarm ramp) the only compliance checks are monitor I conversions,
+     * so they run back to back: at 10 V/s the output then moves about one
+     * conversion time's worth (~12 mV at 1000 SPS) between checks instead of
+     * 1 V. The I/V pair still comes once per monitor period. */
+    bool ramping = (s_out.ramp != RAMP_NONE) && !settle;
+    bool due = (now >= s_mon_due);
+    if (!due && !ramping) {
         return;
     }
     if (settle && s_acq.t_settle_end < now + rate()->t18_us + 1000u) {
@@ -827,8 +944,10 @@ static void monitor_service(uint64_t now)
     }
     if (ads_start(ADS_MUX_I)) {
         s_owner = OWN_MON;
-        s_mon_due = now + MONITOR_PERIOD_US;
-        s_mon_v_next = !settle;
+        if (due) {
+            s_mon_due = now + MONITOR_PERIOD_US;
+        }
+        s_mon_v_next = !settle && due;
     }
 }
 
@@ -1062,7 +1181,7 @@ static void sweep_end(sweep_status_t st, bool have_trip, int64_t trip_pa)
     }
     s_sw.active = false;
     s_sw.status = st;
-    s_acq.active = false;
+    acq_end();
 
     char buf[160];
     lb_t b;
@@ -1170,14 +1289,19 @@ static void sweep_finish_point(void)
     r.n = s_acq.pairs;
     r.i_raw = acq_mean(0);
     r.v_raw = acq_mean(1);
+    r.i_frac = acq_frac(0, r.i_raw);
+    r.v_frac = acq_frac(1, r.v_raw);
     r.i_sd = sd_deci(acq_sd(0));
     r.v_sd = sd_deci(acq_sd(1));
     r.t_set_us = rel32(s_acq.t_set, s_sw.t0);
     r.t_i_us = rel32(s_acq.tmid[0] / (s_acq.cnt[0] ? s_acq.cnt[0] : 1u), s_sw.t0);
     r.t_v_us = rel32(s_acq.tmid[1] / (s_acq.cnt[1] ? s_acq.cnt[1] : 1u), s_sw.t0);
-    uint16_t flags = acq_flags(r.i_raw, r.v_raw, true, r.dac_code);
+    uint16_t flags = acq_flags(acq_mean_d(0), acq_mean_d(1), true, r.dac_code);
     if (s_sw.first) {
         flags |= PF_FIRST;
+    }
+    if (r.i_sd == SD_DECI_SAT || r.v_sd == SD_DECI_SAT) {
+        flags |= PF_SD_SAT;
     }
     r.flags = flags;
     if (flags & PF_LATE) {
@@ -1217,7 +1341,7 @@ static void sweep_service(uint64_t now)
     }
     s_sw.first = false;
     if (!sweep_iter_next(&s_sw.it, &s_sw.v, &s_sw.settle, &s_sw.seg, &s_sw.idx)) {
-        s_acq.active = false;
+        acq_end();
         sweep_end(SWS_COMPLETE, false, 0);
         return;
     }
@@ -1242,7 +1366,7 @@ static void job_finish(err_t e, const char *msg)
     s_job.res.err = e;
     s_job.res.msg = msg;
     s_job.done = true;
-    s_acq.active = false;
+    acq_end();
 }
 
 static void job_reset(void)
@@ -1311,6 +1435,16 @@ static void job_calsave(void)
     if (s_owner != OWN_NONE || ads_state() == ADS_CONVERTING || ads_state() == ADS_INIT) {
         return;
     }
+    /* SI-8 again, at the erase itself: the command was accepted DISARMED, but
+     * the job can outlive its session (engine_job_cancel lets flash jobs run
+     * to completion), and the erase stalls the CPU for up to 500 ms. */
+    hb_stats_t hs;
+    hb_get_stats(&hs);
+    if (inst_state() != ST_DISARMED || hb_enabled()
+        || (hs.edges != 0u && port_now_us() - hs.last_edge_us < T_DISARM_US)) {
+        job_finish(E_STATE, "heartbeat recently active");
+        return;
+    }
     uint32_t seq = 0;
     err_t e = engine_cal_save(s_job.arg_ts, s_job.arg_has_note ? s_job.arg_note : NULL, &seq);
     s_job.res.seq = seq;
@@ -1346,7 +1480,7 @@ bool engine_job_take(job_result_t *out)
 void engine_job_cancel(void)
 {
     if (s_job.kind == JOB_MEAS || s_job.kind == JOB_ZERO) {
-        s_acq.active = false;
+        acq_end();
         job_reset();
         return;
     }
@@ -1524,10 +1658,13 @@ static void job_meas(void)
     r->v_raw = acq_mean(1);
     r->i_sd = sd_deci(acq_sd(0));
     r->v_sd = sd_deci(acq_sd(1));
-    r->v_nv = scaling_v_nv(&s_cal, zero_for_scaling(), (double)r->v_raw);
-    r->i_pa = scaling_i_pa(&s_cal, zero_for_scaling(), (double)r->i_raw);
+    r->v_nv = scaling_v_nv(&s_cal, zero_for_scaling(), acq_mean_d(1));
+    r->i_pa = scaling_i_pa(&s_cal, zero_for_scaling(), acq_mean_d(0));
     bool classify = (inst_state() == ST_ARMED);
-    r->flags = (uint16_t)(acq_flags(r->i_raw, r->v_raw, classify, s_out.code) | PF_MEAS);
+    r->flags = (uint16_t)(acq_flags(acq_mean_d(0), acq_mean_d(1), classify, s_out.code) | PF_MEAS);
+    if (r->i_sd == SD_DECI_SAT || r->v_sd == SD_DECI_SAT) {
+        r->flags |= PF_SD_SAT;
+    }
     if (s_acq.tripped) {
         r->flags |= PF_COMPLIANCE;
     }
@@ -1654,7 +1791,7 @@ void engine_fault_entry(fault_t f)
         }
         job_finish(E_FAULT, fault_name(f));
     }
-    s_acq.active = false;
+    acq_end();
     s_out.ramp = RAMP_NONE;
     s_out.uv = 0;
     s_out.code = dac_shadow_a();   /* dac_zero_safe() loaded the zero pair */
@@ -1684,6 +1821,7 @@ void engine_init(void)
     s_list_n = 0;
     s_sweep_counter = 0;
     s_owner = OWN_NONE;
+    memset(&s_prev_conv, 0, sizeof s_prev_conv);
     s_mon_due = 0;
     s_mon_v_next = false;
     s_mon_pair_open = false;

@@ -21,6 +21,15 @@
 #include <math.h>
 
 #define AFE_LOW_CODE     (-6710886)   /* -0.8 x (2^23 - 1) */
+/* Worst-case uncorrected current offset before a ZERO (INA128P SBOS051G:
+ * (50 + 500/G) uV + (0.5 + 20/G) uV/C to 85 C at G = 2.40, over R10 10 ohm:
+ * 79 uA), the NO_OUTPUT current floor until a session zero exists. */
+#define NO_OUTPUT_I_FLOOR_NO_ZERO_A 100e-6
+/* CLIM needs V_K on V_set's side. With SENSE+ open, U7 +IN is pulled to AGND
+ * and V_K = -I (R10 + F2) ~ -15 ohm x I, i.e. <= -0.24 V at the lowest CLIM
+ * current (0.8 x 20 mA); a real plateau leaves V_K = I x R_DUT >= 0 (passive
+ * DUT), minus offsets of a few mV. */
+#define CLIM_VK_FLOOR_V  0.1
 
 double safety_kelvin_error(const point_check_t *p)
 {
@@ -49,14 +58,15 @@ uint16_t safety_classify(const point_check_t *p)
     }
     double av = fabs(p->v_set);
     double ai = fabs(p->i);
-    double i_floor = (p->sigma_i_zero < 0.0) ? 30e-6 : fmax(2e-6, 4.0 * p->sigma_i_zero);
+    double i_floor = (p->sigma_i_zero < 0.0) ? NO_OUTPUT_I_FLOOR_NO_ZERO_A
+                                              : fmax(2e-6, 4.0 * p->sigma_i_zero);
     if (av >= 1.0 && ai < i_floor && fabs(p->v_k) < 0.1 * av) {
         return (uint16_t)(flags | PF_NO_OUTPUT);
     }
     double e = safety_kelvin_error(p);
     double tol = safety_kelvin_tol(p);
     double sign = (p->v_set < 0.0) ? -1.0 : 1.0;
-    if (ai >= 0.8 * p->i_plateau && e * sign > tol) {
+    if (ai >= 0.8 * p->i_plateau && e * sign > tol && p->v_k * sign > -CLIM_VK_FLOOR_V) {
         return (uint16_t)(flags | PF_CLIM);
     }
     if (fabs(e) > tol) {

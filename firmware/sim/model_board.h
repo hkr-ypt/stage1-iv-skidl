@@ -1,6 +1,6 @@
 /*
  * model_board.h — analog behavioural model of the Stage 1 board, from the
- * DAC registers to the ADC input pins (blocks/<name>.py at 8a84b55):
+ * DAC registers to the ADC input pins (blocks/<name>.py at c4e7592):
  *
  *   PC5 edges -> charge pump DAC_ARM (C48 || R37, tau 47 ms) -> TMUX1101 gate
  *     gate ON at DAC_ARM >= 1.49 V, OFF at <= 0.87 V, holds in between

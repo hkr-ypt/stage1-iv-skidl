@@ -1036,6 +1036,13 @@ void port_host_flush(void)
     ensure();
 }
 
+/* s_tx stands for TinyUSB's CDC TX FIFO (bytes the host has not taken). */
+void port_host_discard_tx(void)
+{
+    ensure();
+    ring_clear(&s_tx);
+}
+
 void port_usb_service(void)
 {
     ensure();

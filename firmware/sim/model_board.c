@@ -3,7 +3,7 @@
  * model_board.h). It exists to exercise the firmware's logic in unit tests
  * and in the whole-firmware simulator; it does NOT predict analog accuracy.
  *
- * Hardware facts used (blocks/<name>.py at 8a84b55, docs/firmware/
+ * Hardware facts used (blocks/<name>.py at c4e7592, docs/firmware/
  * firmware_spec.md §4.4, §4.6, §7.7):
  *  - Heartbeat pump (blocks/mcu.py): PC5 -> R36 1k -> C47 100 nF -> D6 BAT54S
  *    -> DAC_ARM = C48 470 nF || R37 100 k (tau 47 ms) -> TMUX1101 U11 SEL.
@@ -24,7 +24,8 @@
  *    U3B's swing +-13.8 V. A powered-down DAC channel (dacm_effective() < 0,
  *    high impedance) is taken as 0 V.
  *  - Force path (blocks/output_buffer.py, protection.py, current_sense.py):
- *    U5 (OPA548) follower, current limit ~49 mA both polarities, then
+ *    U5 (OPA547T) follower, current limit ~49 mA both polarities (the
+ *    design centre; real units 40...65 mA, sinking higher), then
  *    R_top = F1 + R30 + U12 to FORCE+; FORCE- -> R_bot = F2 + R10 (10.0 ohm
  *    shunt) to AGND. U12 opens when either +-15 V rail is missing.
  *  - Kelvin attenuators R12+R32 and R13+R33 (R_sd = 50.2 k to AGND) on

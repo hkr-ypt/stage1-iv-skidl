@@ -13,10 +13,16 @@
  *    touches OTG registers (ES0287 2.12.1 FIFO corruption).
  *  - Without HSE there is no 48 MHz clock: USB stays off and every host
  *    call is a no-op (F_CLOCK, instrument.c).
+ *  - Device mode is forced (GUSBCFG.FDMOD) and confirmed (GINTSTS.CMOD = 0)
+ *    before tusb_init(); PA10 (OTG_FS_ID, unconnected) is pulled up so the
+ *    core starts as a B-device anyway (gpio_spi.c). A core that does not
+ *    reach device mode within 100 ms leaves USB off, as without HSE.
  */
 #include "port_stm32.h"
 
 #include "tusb.h"
+
+#define USB_MODE_TIMEOUT_US 100000u   /* 4 x the 25 ms FDMOD settling time */
 
 static bool s_usb_ok;
 
@@ -28,9 +34,22 @@ bool stm32_usb_init(void)
     }
     RCC->AHB2ENR |= RCC_AHB2ENR_OTGFSEN;
     (void)RCC->AHB2ENR;
+    /* Device mode before TinyUSB's first device-register write: dcd_init()
+     * writes DCFG (full speed) and DCTL (soft disconnect) before it sets
+     * GUSBCFG.FDMOD itself, and a core still in host mode ignores them
+     * (GINTSTS.MMIS). Force it here and wait until GINTSTS.CMOD shows device
+     * mode (the change takes up to 25 ms, spec §4.7; the force bit persists
+     * across the core soft reset in tusb_init). With PA10 pulled up the core
+     * already starts as a B-device and the wait ends at once. */
+    USB_OTG_FS->GUSBCFG = (USB_OTG_FS->GUSBCFG & ~USB_OTG_GUSBCFG_FHMOD) | USB_OTG_GUSBCFG_FDMOD;
+    if (!stm32_wait_reg(&USB_OTG_FS->GINTSTS, USB_OTG_GINTSTS_CMOD, 0u, USB_MODE_TIMEOUT_US)) {
+        s_usb_ok = false;
+        return false;
+    }
     NVIC_SetPriority(OTG_FS_IRQn, PRIO_USB);
     tusb_rhport_init_t init = { .role = TUSB_ROLE_DEVICE, .speed = TUSB_SPEED_FULL };
-    s_usb_ok = tusb_init(0, &init);
+    s_usb_ok = tusb_init(0, &init)
+            && stm32_wait_reg(&USB_OTG_FS->GINTSTS, USB_OTG_GINTSTS_CMOD, 0u, USB_MODE_TIMEOUT_US);
     if (s_usb_ok) {
         tud_disconnect();
     }
@@ -79,6 +98,17 @@ void port_host_flush(void)
 {
     if (s_usb_ok) {
         (void)tud_cdc_write_flush();
+    }
+}
+
+/* The CDC stream copies from its FIFO into a 64-byte endpoint buffer in
+ * thread context (tu_edpt_stream_write_xfer), so the FIFO is never touched by
+ * the OTG interrupt and can be cleared here; a packet already in the endpoint
+ * still goes out. */
+void port_host_discard_tx(void)
+{
+    if (s_usb_ok) {
+        (void)tud_cdc_write_clear();
     }
 }
 

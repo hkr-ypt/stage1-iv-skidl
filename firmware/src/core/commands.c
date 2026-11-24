@@ -526,12 +526,20 @@ static err_t h_arm(ctx_t *c)
     if (e != E_OK) {
         return e;
     }
+    if (s_c.action != ACT_NONE) {
+        /* a RESET (or bring-up CRASH) is pending: it would hit an armed output */
+        return fail(c, E_STATE, "reset pending");
+    }
     const char *why;
     e = inst_arm_check(&why);
     if (e != E_OK) {
         return fail(c, e, why);
     }
     inst_arm();
+    if (inst_state() == ST_FAULT) {
+        /* the zero write before the first edge failed: FAULT is latched */
+        return fail(c, E_FAULT, fault_name(inst_fault_code()));
+    }
     return E_OK;
 }
 
@@ -1087,6 +1095,7 @@ static err_t h_cal_get(ctx_t *c)
     lb_puts(c->out, "CAL");
     lb_kv_s(c->out, "source", engine_cal_source_name());
     lb_kv_u(c->out, "seq", engine_cal_seq());
+    lb_kv_hex(c->out, "measured", engine_cal_measured(), 2u);
     put_cal_values(c->out);
     return E_OK;
 }
@@ -1104,11 +1113,13 @@ static err_t h_cal_set(ctx_t *c)
         return fail(c, E_ARG, "usage: CAL.SET key=value ...");
     }
     cal_coeffs_t n = *engine_cal();
+    uint32_t measured = 0u;
     for (unsigned i = 0; i < 7u; i++) {
         const tok_t *t = kv_get(c, k_cal_keys[i].key);
         if (t == NULL) {
             continue;
         }
+        measured |= 1u << i;   /* CAL_M_* follow the key order */
         int64_t v;
         if ((e = parse_scaled(c, t, k_cal_keys[i].scale, INT64_MIN / 2, INT64_MAX / 2, &v,
                               k_cal_keys[i].key)) != E_OK) {
@@ -1119,7 +1130,7 @@ static err_t h_cal_set(ctx_t *c)
     if (!calib_plausible(&n)) {
         return fail(c, E_RANGE, "implausible coefficients");
     }
-    engine_cal_set(&n);
+    engine_cal_set(&n, measured);
     return E_OK;
 }
 
@@ -1205,6 +1216,17 @@ static err_t h_hb_freq(ctx_t *c)
     return E_OK;
 }
 
+/* A static PC5 level cannot pump the reference gate (one edge peaks at
+ * 0.54 V < V_IL 0.87 V, spec §4.4), but repeated level changes from the host
+ * would: a rising edge is refused until the gate has decayed from the
+ * previous one (T_DISARM after the last edge). */
+static bool hb_edge_too_soon(void)
+{
+    hb_stats_t hs;
+    hb_get_stats(&hs);
+    return hs.edges != 0u && port_now_us() - hs.last_edge_us < T_DISARM_US;
+}
+
 static err_t h_hb_edge(ctx_t *c)
 {
     err_t e = no_args(c);
@@ -1213,6 +1235,9 @@ static err_t h_hb_edge(ctx_t *c)
     }
     if (hb_bringup_holding()) {
         return fail(c, E_STATE, "HB.HOLD active (HB.HOLD OFF first)");
+    }
+    if (hb_edge_too_soon()) {
+        return fail(c, E_STATE, "edge within T_DISARM of the last one");
     }
     if (!hb_bringup_hold(true)) {
         return fail(c, E_STATE, "heartbeat enabled");
@@ -1234,6 +1259,9 @@ static err_t h_hb_hold(ctx_t *c)
         high = false;
     } else {
         return fail(c, E_ARG, "HIGH, LOW or OFF");
+    }
+    if (high && !hb_bringup_holding() && hb_edge_too_soon()) {
+        return fail(c, E_STATE, "edge within T_DISARM of the last one");
     }
     if (!hb_bringup_hold(high)) {
         return fail(c, E_STATE, "heartbeat enabled");

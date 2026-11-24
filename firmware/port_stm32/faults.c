@@ -102,6 +102,7 @@ void stm32_fault_c(const uint32_t *frame, uint32_t exc_return, uint32_t cause)
         RCC->CIR = RCC_CIR_CSSC;
         cause = CRASH_CSS;
     }
+    port_dac_cs(false);   /* abort a frame in flight before SPI1 may be reset */
     stm32_dac_spi_retune();
     dac_zero_safe();
 

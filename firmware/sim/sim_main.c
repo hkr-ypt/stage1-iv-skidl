@@ -380,7 +380,7 @@ static void obs_line(ctl_client_t *c)
     adsm_violations_t v;
     adsm_get_violations(a, &v);
     uint32_t vtot = v.sclk + v.t6 + v.t11 + v.t10 + v.read_not_ready + v.busy +
-                    v.unknown_cmd + v.short_read;
+                    v.unknown_cmd + v.short_read + v.after_sync;
     double v_hi, v_lo, i_dut, i_shunt;
     bool lim;
     board_solve(b, &v_hi, &v_lo, &i_dut, &i_shunt, &lim);
@@ -399,6 +399,7 @@ static void obs_line(ctl_client_t *c)
              " adc_conversions=%u adc_selfcals=%u adc_viol_total=%u adc_viol_sclk=%u"
              " adc_viol_t6=%u adc_viol_t11=%u adc_viol_t10=%u adc_viol_read_not_ready=%u"
              " adc_viol_busy=%u adc_viol_unknown_cmd=%u adc_viol_short_read=%u"
+             " adc_viol_after_sync=%u"
              " vbus_mv=%u dtr=%d configured=%d connected=%d client=%d"
              " cal_erases=%u cal_programs=%u hung=%d",
              (unsigned long long)psim_time_us(), board_vsweep(b), board_vref_dac(b),
@@ -414,7 +415,7 @@ static void obs_line(ctl_client_t *c)
              crash ? crash_cause_name(cr.cause) : "none", o.iwdg_kicks, x.iwdg_fires,
              o.deadman_enabled ? 1 : 0, x.deadman_fires,
              adsm_conversions(a), adsm_selfcals(a), vtot, v.sclk, v.t6, v.t11, v.t10,
-             v.read_not_ready, v.busy, v.unknown_cmd, v.short_read,
+             v.read_not_ready, v.busy, v.unknown_cmd, v.short_read, v.after_sync,
              port_vbus_mv(), port_host_dtr() ? 1 : 0, port_host_configured() ? 1 : 0,
              psim_host_connected() ? 1 : 0, G.client_present ? 1 : 0,
              o.cal_erases, o.cal_programs, psim_hung() ? 1 : 0);

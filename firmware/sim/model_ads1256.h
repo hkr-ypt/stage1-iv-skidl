@@ -44,6 +44,7 @@ typedef double (*adsm_input_fn)(void *ctx, int ain, uint64_t t_us);
 
 typedef struct {
     uint32_t sclk, t6, t11, t10, read_not_ready, busy, unknown_cmd, short_read;
+    uint32_t after_sync;   /* a command other than WAKEUP or RESET after SYNC */
 } adsm_violations_t;
 
 typedef enum { ADSM_STUCK_NONE = 0, ADSM_STUCK_LOW, ADSM_STUCK_HIGH } adsm_stuck_t;

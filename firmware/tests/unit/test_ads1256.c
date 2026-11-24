@@ -15,6 +15,7 @@
 #include "ads1256/tp_ads.h"
 
 #include <math.h>
+#include <stdio.h>
 #include <string.h>
 
 static double g_ain[9];
@@ -58,6 +59,7 @@ static void assert_no_violations(void)
     TEST_ASSERT_EQUAL_UINT32_MESSAGE(0, v.busy, "command while busy");
     TEST_ASSERT_EQUAL_UINT32_MESSAGE(0, v.unknown_cmd, "unknown command");
     TEST_ASSERT_EQUAL_UINT32_MESSAGE(0, v.short_read, "short read");
+    TEST_ASSERT_EQUAL_UINT32_MESSAGE(0, v.after_sync, "command other than WAKEUP after SYNC");
 }
 
 static bool run_until_idle(uint64_t timeout_us)
@@ -367,6 +369,97 @@ static void test_preemption_by_new_start(void)
     assert_no_violations();
 }
 
+/* One conversion of AIN0; once its first /DRDY edge is latched (by the
+ * emulated EXTI) the main loop stalls for stall_us while interrupts keep
+ * running. Returns true with a sample, false on a driver error. */
+static bool convert_with_stall(uint32_t sps_x10, uint32_t stall_us, ads_sample_t *s,
+                               uint64_t *t_stall_end)
+{
+    tp_setup(input, NULL);
+    adsm_set_noise(tp_model(), 0.0, 1);
+    tp_set_pass(5, 50, 3);
+    init_at(sps_x10, ADS_PGA_2);
+    TEST_ASSERT_TRUE(ads_start(ADS_MUX_I));
+    bool stalled = false;
+    uint64_t end = tp_now() + 10u * ads_period_us(rate_sps(sps_x10)) + 100000u;
+    while (tp_now() < end) {
+        uint64_t t;
+        if (!stalled && tp_edge_latched(&t)) {
+            tp_advance(stall_us);
+            stalled = true;
+            if (t_stall_end != NULL) {
+                *t_stall_end = tp_now();
+            }
+        }
+        tp_pass();
+        if (ads_take(s)) {
+            return true;
+        }
+        if (ads_state() == ADS_ERROR) {
+            return false;
+        }
+    }
+    TEST_FAIL_MESSAGE("neither a sample nor an error");
+    return false;
+}
+
+/* A main-loop stall of one to two data periods after a /DRDY edge: the edge
+ * one period later has gone by when the missed deadline is noticed, and the
+ * re-arm clears it, so the next usable edge is two periods after the first.
+ * That is one late sample of the right channel, not an ADC timeout fault. */
+static void test_stall_after_an_edge_gives_a_late_sample(void)
+{
+    static const uint32_t rates[] = { 37500u, 10000u, 1000u, 600u, 500u, 100u, 50u, 25u };
+    for (size_t i = 0; i < sizeof rates / sizeof rates[0]; i++) {
+        uint32_t p = ads_period_us(rate_sps(rates[i]));
+        const uint32_t stalls[] = { p / 2u, p + p / 10u, p + p / 2u, p + (9u * p) / 10u };
+        for (size_t k = 0; k < sizeof stalls / sizeof stalls[0]; k++) {
+            ads_sample_t s;
+            char msg[96];
+            bool ok = convert_with_stall(rates[i], stalls[k], &s, NULL);
+            snprintf(msg, sizeof msg, "%u.%u SPS, stall %u us: error %d", (unsigned)(rates[i] / 10u),
+                     (unsigned)(rates[i] % 10u), (unsigned)stalls[k], (int)ads_error());
+            TEST_ASSERT_TRUE_MESSAGE(ok, msg);
+            /* half a period is within the read deadline: an ordinary sample */
+            TEST_ASSERT_EQUAL_MESSAGE(k > 0u, s.late, msg);
+            TEST_ASSERT_EQUAL(ADS_MUX_I, s.mux);
+            TEST_ASSERT_INT32_WITHIN(2, expect_code(0.3, 2.0), s.code);
+            assert_no_violations();
+        }
+    }
+}
+
+/* ...while a /DRDY that dies during the stall is still a timeout, within
+ * 3/2 P + 2 ms (and one pass) of the end of the stall. */
+static void test_drdy_dead_after_a_stall_times_out(void)
+{
+    static const uint32_t rates[] = { 10000u, 1000u, 100u };
+    for (size_t i = 0; i < sizeof rates / sizeof rates[0]; i++) {
+        uint32_t p = ads_period_us(rate_sps(rates[i]));
+        tp_setup(input, NULL);
+        tp_set_pass(5, 50, 3);
+        init_at(rates[i], ADS_PGA_2);
+        TEST_ASSERT_TRUE(ads_start(ADS_MUX_I));
+        uint64_t t_end = 0;
+        bool stalled = false;
+        while (tp_now() < 5000000u && ads_state() != ADS_ERROR) {
+            uint64_t t;
+            if (!stalled && tp_edge_latched(&t)) {
+                tp_advance(p + p / 2u);
+                adsm_set_drdy_dead(tp_model(), true);
+                t_end = tp_now();
+                stalled = true;
+            }
+            tp_pass();
+            ads_sample_t s;
+            TEST_ASSERT_FALSE(ads_take(&s));
+        }
+        TEST_ASSERT_EQUAL(ADS_ERROR, ads_state());
+        TEST_ASSERT_EQUAL(ADS_ERR_TIMEOUT, ads_error());
+        TEST_ASSERT_TRUE(tp_now() - t_end <= p * 3u / 2u + 2000u + 1000u);
+    }
+}
+
 /* ---- failures ------------------------------------------------------------------------------ */
 
 static void test_drdy_dead_times_out(void)
@@ -462,6 +555,8 @@ int main(void)
     RUN_TEST(test_late_read_waits_for_next_edge);
     RUN_TEST(test_read_running_into_the_next_update_is_discarded);
     RUN_TEST(test_preemption_by_new_start);
+    RUN_TEST(test_stall_after_an_edge_gives_a_late_sample);
+    RUN_TEST(test_drdy_dead_after_a_stall_times_out);
     RUN_TEST(test_drdy_dead_times_out);
     RUN_TEST(test_spi_failure_reported);
     RUN_TEST(test_spontaneous_reset_caught_by_scrub);

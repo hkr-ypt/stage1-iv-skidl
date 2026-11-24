@@ -13,6 +13,7 @@
 #include "engine.h"
 #include "instrument.h"
 #include "port.h"
+#include "port_sim_ext.h"
 #include "proto.h"
 
 #include <math.h>
@@ -416,8 +417,13 @@ static void test_event_loss_is_reported(void)
 
 static void test_meas_and_zero(void)
 {
+    /* A DUT left connected is refused only when it drives a reading beyond the
+     * worst-case front-end offsets (10 mV / 100 uA referred to the DUT): here a
+     * 15 mV residual at V_SWEEP across the connected 1 kohm DUT. */
+    psim_board()->sweep_offset_v = 0.015;
     const char *r = h_cmd("ZERO");
     TEST_ASSERT_TRUE_MESSAGE(starts(r, "ERR RANGE implausible"), r);   /* DUT connected */
+    psim_board()->sweep_offset_v = 0.002;
     h_jacks_open(true);
     r = h_cmd("ZERO");
     TEST_ASSERT_TRUE_MESSAGE(starts(r, "OK ZERO"), r);
@@ -473,6 +479,8 @@ static void test_cal_save_reload_and_torn_write(void)
     char c[400];
     snprintf(c, sizeof c, "%s", h_cmd("CAL?"));
     TEST_ASSERT_EQUAL(0, strncmp(c, "OK CAL source=stored seq=2", 26));
+    /* the tear left the new record's area erased: nothing stored was lost */
+    TEST_ASSERT_EQUAL(0, h_kv_ll(h_cmd("STAT?"), "warn") & W_CAL_DAMAGED);
     TEST_ASSERT_NOT_NULL_MESSAGE(strstr(c, " r_s=118.5000"), c);
     TEST_ASSERT_NOT_NULL(strstr(c, " g_v_uv=1.500000"));
     TEST_ASSERT_EQUAL_STRING("OK", h_cmd("CAL.DEFAULT"));
@@ -487,10 +495,17 @@ static void test_cal_save_reload_and_torn_write(void)
         size_t l = strlen(set);
         snprintf(set + l, sizeof set - l, " %s=%s", keys[i], v);
     }
+    /* r_s and g_v_uv were set: measured = bits 4 and 2 */
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(c, " seq=2 measured=0x14 g_dac_uv="), c);
     char before[400];
-    snprintf(before, sizeof before, "%s", c + strlen("OK CAL source=stored seq=2"));
+    snprintf(before, sizeof before, "%s", strstr(c, " g_dac_uv="));
     TEST_ASSERT_EQUAL_STRING("OK", h_cmd(set));
-    TEST_ASSERT_EQUAL_STRING(before, h_cmd("CAL?") + strlen("OK CAL source=ram seq=2"));
+    char after[400];
+    snprintf(after, sizeof after, "%s", h_cmd("CAL?"));
+    TEST_ASSERT_EQUAL(0, strncmp(after, "OK CAL source=ram seq=2 measured=0x7F g_dac_uv=", 47));
+    TEST_ASSERT_EQUAL_STRING(before, strstr(after, " g_dac_uv="));
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("CAL.DEFAULT"));
+    TEST_ASSERT_EQUAL(0, strncmp(h_cmd("CAL?"), "OK CAL source=nominal seq=2 measured=0x00 ", 42));
 }
 
 /* ---- classification flags on the modelled board ------------------------------------------- */
@@ -987,6 +1002,440 @@ static void test_session_loss_during_deferred_job_frees_the_slot(void)
     TEST_ASSERT_TRUE_MESSAGE(starts(r, "OK ZERO"), r);
 }
 
+/* ZERO accepts the INA128P worst-case offsets of an in-spec board up to 85 C
+ * (U7: (50 + 500) uV + 20.5 uV/C x 60 C = 1.78 mV RTI, 8.9 mV at V_K; U6:
+ * 258 uV + 8.83 uV/C x 60 C = 0.79 mV RTI, 79 uA over R10), and still
+ * refuses offsets beyond them. */
+static void test_zero_accepts_worst_case_front_end_offsets(void)
+{
+    h_jacks_open(true);
+    psim_board()->ina_v_offset_v = 0.0090 * 0.199203;     /* 9.0 mV at V_K, output-referred */
+    psim_board()->ina_i_offset_v = 79e-6 * 24.0056;       /* 79 uA through R10, output-referred */
+    const char *r = h_cmd("ZERO");
+    TEST_ASSERT_TRUE_MESSAGE(starts(r, "OK ZERO"), r);
+    r = h_cmd("MEAS? N=16");
+    TEST_ASSERT_TRUE_MESSAGE(starts(r, "OK MEAS"), r);
+    TEST_ASSERT_DOUBLE_WITHIN(20e-6, 0.0, h_kv_d(r, "v_v"));   /* the offsets are removed */
+    TEST_ASSERT_DOUBLE_WITHIN(0.3e-6, 0.0, h_kv_d(r, "i_a"));
+    psim_board()->ina_v_offset_v = 0.0120 * 0.199203;     /* 12 mV: beyond any in-spec part */
+    r = h_cmd("ZERO");
+    TEST_ASSERT_TRUE_MESSAGE(starts(r, "ERR RANGE implausible"), r);
+    psim_board()->ina_v_offset_v = 0.0003;
+    psim_board()->ina_i_offset_v = 120e-6 * 24.0056;      /* 120 uA: beyond any in-spec part */
+    r = h_cmd("ZERO");
+    TEST_ASSERT_TRUE_MESSAGE(starts(r, "ERR RANGE implausible"), r);
+}
+
+/* ---- final firmware audit: measurement and classification regressions ---------------- */
+
+static unsigned pt_flags(const char *line)
+{
+    char f[17][32];
+    TEST_ASSERT_EQUAL_MESSAGE(17, pt_fields(line, f), line);
+    return (unsigned)strtoul(f[16], NULL, 16);
+}
+
+/* A lifted SENSE+ lead on a low-impedance DUT must read KELVIN, not CLIM:
+ * V_K is driven to the side opposite V_set, which a real plateau never does. */
+static void test_open_sense_plus_on_low_impedance_dut_is_kelvin_not_clim(void)
+{
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("CAL.SET r_s=121 r_top=106"));
+    psim_board()->dut.kind = DUT_RESISTOR;
+    psim_board()->dut.r_ohm = 10.0;
+    psim_board()->sense_plus_open = true;
+    TEST_ASSERT_EQUAL(0, strncmp(h_cmd("SWP.WP 0 10 STEP=0.5"), "OK SWP", 6));
+    arm();
+    size_t from = h_lines();
+    TEST_ASSERT_EQUAL(0, strncmp(h_cmd("SWP.RUN"), "OK id=", 6));
+    TEST_ASSERT_TRUE(h_wait_line("EVT SWEEP_END", from, 20000000));
+    unsigned clim = 0, kelvin = 0;
+    for (size_t k = from; k < h_lines(); k++) {
+        if (strncmp(h_line(k), "PT ", 3) != 0) {
+            continue;
+        }
+        unsigned f = pt_flags(h_line(k));
+        clim += (f & PF_CLIM) ? 1u : 0u;
+        kelvin += (f & PF_KELVIN) ? 1u : 0u;
+    }
+    TEST_ASSERT_EQUAL_UINT32(0, clim);
+    TEST_ASSERT_TRUE(kelvin >= 10u);
+}
+
+/* The real plateau of a healthy low-impedance DUT is still CLIM. */
+static void test_plateau_on_short_is_still_clim(void)
+{
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("CAL.SET r_s=121 r_top=106"));
+    psim_board()->dut.kind = DUT_RESISTOR;
+    psim_board()->dut.r_ohm = 0.01;
+    TEST_ASSERT_EQUAL(0, strncmp(h_cmd("SWP.WP 0 10 STEP=0.5"), "OK SWP", 6));
+    arm();
+    size_t from = h_lines();
+    TEST_ASSERT_EQUAL(0, strncmp(h_cmd("SWP.RUN"), "OK id=", 6));
+    TEST_ASSERT_TRUE(h_wait_line("EVT SWEEP_END", from, 20000000));
+    TEST_ASSERT_NOT_EQUAL(SIZE_MAX, h_find("EVT SWEEP_END id=1 status=complete", from));
+    unsigned clim = 0, kelvin = 0;
+    for (size_t k = from; k < h_lines(); k++) {
+        if (strncmp(h_line(k), "PT ", 3) == 0) {
+            unsigned f = pt_flags(h_line(k));
+            clim += (f & PF_CLIM) ? 1u : 0u;
+            kelvin += (f & PF_KELVIN) ? 1u : 0u;
+        }
+    }
+    TEST_ASSERT_TRUE(clim >= 5u);
+    TEST_ASSERT_EQUAL_UINT32(0, kelvin);
+}
+
+/* The default software compliance must not act inside the hardware plateau
+ * (OPA547T, expected 40..65 mA): a 60 mA plateau into a short is flagged
+ * CLIM in both polarities instead of being zeroed by the firmware. */
+static void test_default_compliance_lets_the_plateau_act(void)
+{
+    psim_board()->i_lim = 0.060;
+    psim_board()->dut.kind = DUT_RESISTOR;
+    psim_board()->dut.r_ohm = 0.01;
+    arm();
+    for (int pol = 0; pol < 2; pol++) {
+        size_t from = h_lines();
+        TEST_ASSERT_EQUAL_STRING("OK", h_cmd(pol ? "SRC V=-10" : "SRC V=10"));
+        TEST_ASSERT_TRUE(h_wait_line("EVT SRC_DONE", from, 5000000));
+        TEST_ASSERT_NOT_EQUAL_MESSAGE(SIZE_MAX, h_find("EVT SRC_DONE v_v=", from), "SRC_DONE missing");
+        TEST_ASSERT_EQUAL(SIZE_MAX, h_find("EVT WARN COMPLIANCE", from));
+        const char *r = h_cmd("MEAS? N=4");
+        TEST_ASSERT_TRUE_MESSAGE(starts(r, "OK MEAS"), r);
+        TEST_ASSERT_DOUBLE_WITHIN(0.002, pol ? -0.060 : 0.060, h_kv_d(r, "i_a"));
+        TEST_ASSERT_TRUE_MESSAGE((h_kv_ll(r, "flags") & PF_CLIM) != 0, r);
+    }
+}
+
+/* A missing +-15 V rail while armed (U12 opens; both INA128 outputs near
+ * AGND) is the front-end fault, not a DUT over-current or plateau. */
+static void test_rail_lost_while_armed_is_afe_fault(void)
+{
+    psim_board()->dut.kind = DUT_RESISTOR;
+    psim_board()->dut.r_ohm = 1000.0;
+    arm();
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("SRC V=3"));
+    h_run_us(500000);
+    size_t from = h_lines();
+    psim_board()->rail_pos = false;
+    TEST_ASSERT_TRUE(h_run_until_state(ST_FAULT, 1000000));
+    TEST_ASSERT_TRUE(h_wait_line("EVT FAULT", from, 100000));
+    size_t k = h_find("EVT FAULT", from);
+    TEST_ASSERT_EQUAL_STRING("EVT FAULT AFE detail=afe_signature", h_line(k));
+    TEST_ASSERT_EQUAL(SIZE_MAX, h_find("EVT WARN COMPLIANCE", from));
+    TEST_ASSERT_EQUAL_HEX16(0x8000, h_dac_a());
+    psim_board()->rail_pos = true;
+}
+
+/* Compliance during an SRC ramp is checked on back-to-back monitor
+ * conversions: the output stops within tens of mV of the crossing instead of
+ * running on for up to 100 ms (1 V at 10 V/s). */
+static void test_compliance_during_ramp_acts_promptly(void)
+{
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("CFG i_compliance=0.005"));
+    psim_board()->dut.kind = DUT_RESISTOR;
+    psim_board()->dut.r_ohm = 10.0;
+    arm();
+    h_send("SRC V=5");
+    double vmax = 0.0;
+    uint64_t t0 = psim_time_us();
+    while (psim_time_us() - t0 < 2000000u) {
+        h_run_us(100);
+        double v = h_vsweep();
+        vmax = v > vmax ? v : vmax;
+    }
+    /* the limit is crossed at 5 mA x (10 + 121) ohm = 0.655 V */
+    TEST_ASSERT_TRUE_MESSAGE(vmax < 0.70, "the ramp ran on past the compliance point");
+    TEST_ASSERT_TRUE(vmax > 0.60);
+    TEST_ASSERT_DOUBLE_WITHIN(0.01, 0.0, h_vsweep());
+}
+
+/* At the design pass budget (150 us) a point's first conversion starts up to
+ * two passes after its settle: that is not LATE. */
+static void test_no_late_flags_at_the_pass_budget(void)
+{
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("CFG settle_us=1000 n_avg=1"));
+    psim_board()->dut.kind = DUT_RESISTOR;
+    psim_board()->dut.r_ohm = 1000.0;
+    TEST_ASSERT_EQUAL(0, strncmp(h_cmd("SWP.WP 0 1 STEP=0.025"), "OK SWP", 6));
+    arm();
+    psim_set_pass_cost_us(150);
+    size_t from = h_lines();
+    h_send("SWP.RUN");
+    TEST_ASSERT_TRUE(h_wait_line("EVT SWEEP_END", from, 20000000));
+    psim_set_pass_cost_us(20);
+    unsigned late = 0, pts = 0;
+    for (size_t k = from; k < h_lines(); k++) {
+        if (strncmp(h_line(k), "PT ", 3) == 0) {
+            pts++;
+            late += (pt_flags(h_line(k)) & PF_LATE) ? 1u : 0u;
+        }
+    }
+    TEST_ASSERT_EQUAL_UINT32(41, pts);
+    TEST_ASSERT_EQUAL_UINT32(0, late);
+}
+
+/* A standard deviation at its 6553.4-code ceiling is marked SD_SAT. */
+static void test_saturated_sd_is_flagged(void)
+{
+    h_jacks_open(true);
+    adsm_set_noise(psim_ads(), 20000.0, 7u);
+    const char *r = h_cmd("MEAS? N=64");
+    TEST_ASSERT_TRUE_MESSAGE(starts(r, "OK MEAS"), r);
+    TEST_ASSERT_NOT_NULL(strstr(r, "i_sd=6553.4"));
+    TEST_ASSERT_TRUE_MESSAGE((h_kv_ll(r, "flags") & PF_SD_SAT) != 0, r);
+    adsm_set_noise(psim_ads(), 1.0, 7u);
+    r = h_cmd("MEAS? N=64");
+    TEST_ASSERT_TRUE_MESSAGE(starts(r, "OK MEAS"), r);
+    TEST_ASSERT_EQUAL(0, h_kv_ll(r, "flags") & PF_SD_SAT);
+    adsm_set_noise(psim_ads(), 0.0, 7u);
+}
+
+/* i_A keeps the resolution averaging gives. One current code is 12.44 nA
+ * and i_A is printed to 0.1 nA. Two dithered 256-sample means half a code
+ * apart must differ by about 6.2 nA; means rounded to whole codes (the old
+ * firmware) can differ only by 0 or 12.4 nA. v_V is printed to 1 uV (0.67
+ * of its 1.50 uV code), so its gain is smaller and it is not tested here. */
+static void test_averaged_means_keep_sub_code_resolution(void)
+{
+    const double half_code_v = 0.5 * (2.0 * 2.5 / (2.0 * 8388607.0)); /* at the ADC input */
+    h_jacks_open(true);
+    adsm_set_noise(psim_ads(), 0.5, 3u);
+    const char *r = h_cmd("MEAS? N=256");
+    TEST_ASSERT_TRUE_MESSAGE(starts(r, "OK MEAS n=256"), r);
+    double i0 = h_kv_d(r, "i_a");
+    psim_board()->ina_i_offset_v += half_code_v;
+    r = h_cmd("MEAS? N=256");
+    TEST_ASSERT_TRUE_MESSAGE(starts(r, "OK MEAS n=256"), r);
+    double di = h_kv_d(r, "i_a") - i0;
+    psim_board()->ina_i_offset_v -= half_code_v;
+    adsm_set_noise(psim_ads(), 0.0, 3u);
+    /* sigma of the difference is about 0.6 nA (0.5 code noise, n = 256) */
+    TEST_ASSERT_DOUBLE_WITHIN(2.5e-9, 6.22e-9, di);
+}
+
+/* The whole firmware keeps the ADS1256 model's timing and command rules
+ * (t6, t10, t11, SCLK, reads outside t17, nothing sent while busy, SYNC always
+ * completed by WAKEUP): init, data-rate changes, MEAS?, the monitor and an
+ * armed sweep. */
+static void test_adc_traffic_obeys_the_data_sheet(void)
+{
+    /* The simulator re-runs app_init() after an emulated reset without the
+     * .bss clearing of the target's startup code, so the driver state left by
+     * the previous test can send one transaction to the freshly powered model
+     * before POST re-initialises it. That traffic does not exist on the
+     * target: count from here, and run the full init again with SELFTEST. */
+    adsm_clear_violations(psim_ads());
+    uint32_t cals0 = adsm_selfcals(psim_ads());
+    size_t from = h_lines();
+    h_send("SELFTEST");
+    TEST_ASSERT_TRUE(h_wait_line("OK", from, 3000000u));
+    TEST_ASSERT_TRUE_MESSAGE(starts(h_line(h_find("OK", from)), "OK SELFTEST"), h_line(h_find("OK", from)));
+    /* at least the init at PGA 1 and the reconfiguration to PGA 2 */
+    uint32_t cals1 = adsm_selfcals(psim_ads());
+    TEST_ASSERT_TRUE(cals1 - cals0 >= 2u);
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("CFG adc_rate=100"));
+    h_run_us(600000);
+    TEST_ASSERT_EQUAL_UINT32(cals1 + 1u, adsm_selfcals(psim_ads()));
+    const char *r = h_cmd("MEAS? N=4");
+    TEST_ASSERT_TRUE_MESSAGE(starts(r, "OK MEAS n=4"), r);
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("CFG adc_rate=1000"));
+    h_run_us(100000);
+    TEST_ASSERT_EQUAL_UINT32(cals1 + 2u, adsm_selfcals(psim_ads()));
+    arm();
+    r = h_cmd("SWP.WP 0 1 -1 0 STEP=0.25");
+    TEST_ASSERT_TRUE_MESSAGE(starts(r, "OK SWP kind=wp points=17 "), r);
+    size_t first = 0;
+    char end[256];
+    TEST_ASSERT_EQUAL(17, run_sweep(&first, end, sizeof end, 20000000u));
+    adsm_violations_t v;
+    adsm_get_violations(psim_ads(), &v);
+    TEST_ASSERT_EQUAL_UINT32_MESSAGE(0, v.sclk, "SCLK");
+    TEST_ASSERT_EQUAL_UINT32_MESSAGE(0, v.t6, "t6");
+    TEST_ASSERT_EQUAL_UINT32_MESSAGE(0, v.t11, "t11");
+    TEST_ASSERT_EQUAL_UINT32_MESSAGE(0, v.t10, "t10");
+    TEST_ASSERT_EQUAL_UINT32_MESSAGE(0, v.read_not_ready, "read while not ready");
+    TEST_ASSERT_EQUAL_UINT32_MESSAGE(0, v.busy, "command while busy");
+    TEST_ASSERT_EQUAL_UINT32_MESSAGE(0, v.unknown_cmd, "unknown command");
+    TEST_ASSERT_EQUAL_UINT32_MESSAGE(0, v.short_read, "short read");
+    TEST_ASSERT_EQUAL_UINT32_MESSAGE(0, v.after_sync, "command other than WAKEUP after SYNC");
+}
+
+/* A late sample's time is the centroid of the conversion it actually read.
+ * At 2000 SPS (P = 500 us, t18 = 680 us, read deadline 464 us) a main-loop
+ * stall of 650 us across a point's first I edge (short enough that the
+ * heartbeat gap, with up to 250 us since its last edge, stays under 1 ms)
+ * makes the read miss its deadline; the re-arm skips the
+ * edge one period later and the read takes the one two periods later. That
+ * conversion ends 2P = 1000 us after the on-time one would have, so t_i moves
+ * by 1000 us (the old midpoint of WAKEUP and edge moved it by 500 us). */
+static void test_late_sample_time_is_its_conversion_centroid(void)
+{
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("CFG adc_rate=2000"));
+    h_run_us(100000);
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("CFG settle_us=20000 n_avg=1"));
+    psim_board()->dut.kind = DUT_RESISTOR;
+    psim_board()->dut.r_ohm = 1000.0;
+    TEST_ASSERT_EQUAL(0, strncmp(h_cmd("SWP.WP 0 0.5 STEP=0.25"), "OK SWP", 6));
+    arm();
+    size_t from = h_lines();
+    uint16_t code0 = h_dac_a();
+    h_send("SWP.RUN");
+    /* point 0 is 0 V (no DAC change); point 1 (0.25 V) is the first change */
+    uint64_t t_change = 0;
+    for (uint64_t t0 = psim_time_us(); psim_time_us() - t0 < 2000000u;) {
+        h_run_us(20);
+        if (h_dac_a() != code0) {
+            t_change = psim_time_us();
+            break;
+        }
+    }
+    TEST_ASSERT_TRUE(t_change != 0u);
+    /* the I conversion's WAKEUP comes 1-2 passes after the 20 ms settle and its
+     * first edge t18 = 680 us later (about 20.73 ms after the DAC write, which
+     * the loop above sees within one pass): stall from about 100 us before
+     * that edge to about 550 us after it (past the deadline and the next edge) */
+    h_run_us(t_change + 20620u - psim_time_us());
+    psim_advance_us(650);
+    TEST_ASSERT_TRUE(h_wait_line("EVT SWEEP_END", from, 5000000));
+    char f[17][32];
+    long long d_i[3] = { 0, 0, 0 };
+    unsigned flags[3] = { 0, 0, 0 };
+    unsigned pts = 0;
+    for (size_t k = from; k < h_lines(); k++) {
+        if (starts(h_line(k), "PT ")) {
+            TEST_ASSERT_EQUAL(17, pt_fields(h_line(k), f));
+            long long idx = atoll(f[2]);
+            TEST_ASSERT_TRUE(idx >= 0 && idx < 3);
+            d_i[idx] = atoll(f[5]) - atoll(f[4]);   /* t_i_us - t_set_us */
+            flags[idx] = (unsigned)strtoul(f[16], NULL, 16);
+            pts++;
+        }
+    }
+    TEST_ASSERT_EQUAL_UINT32(3, pts);
+    TEST_ASSERT_TRUE_MESSAGE((flags[1] & PF_LATE) != 0, "the stalled point is not LATE");
+    TEST_ASSERT_EQUAL_UINT32(0, flags[2] & PF_LATE);
+    /* point 2 has the same settle and an on-time read: the reference */
+    TEST_ASSERT_INT_WITHIN(100, 1000, (int)(d_i[1] - d_i[2]));
+}
+
+/* A host that stops reading and then closes the port leaves up to 4 KB of
+ * output in TinyUSB's CDC TX FIFO, which only a bus reset clears (the
+ * simulator's device-side TX ring stands for it here). The next session must
+ * not receive that tail, and EVT HELLO must start a line of its own. */
+static void test_reopened_port_gets_no_stale_output(void)
+{
+    TEST_ASSERT_EQUAL(0, strncmp(h_cmd("SWP.WP 0 2 STEP=0.001"), "OK SWP", 6));
+    arm();
+    h_send("SWP.RUN");
+    psim_set_tx_space_limit(4096);           /* the CDC TX FIFO size */
+    for (int k = 0; k < 20000; k++) {        /* the host is not reading */
+        app_pass();
+    }
+    TEST_ASSERT_TRUE(psim_host_tx_pending() > 3000u);
+    psim_set_dtr(false);                     /* it closes the port */
+    for (int k = 0; k < 2000; k++) {
+        app_pass();
+    }
+    psim_set_dtr(true);                      /* opens it again and reads */
+    static uint8_t buf[8192];
+    size_t n = 0;
+    for (int k = 0; k < 2000 && n < sizeof buf - 1u; k++) {
+        app_pass();
+        n += psim_host_take_tx(buf + n, sizeof buf - 1u - n);
+    }
+    buf[n] = 0;
+    psim_set_tx_space_limit(PSIM_TX_NO_LIMIT);
+    TEST_ASSERT_EQUAL_STRING_LEN_MESSAGE("\nEVT HELLO ", (const char *)buf, 11, (const char *)buf);
+    TEST_ASSERT_NOT_NULL(strstr((const char *)buf, " disarm_reason=session_lost"));
+}
+
+/* After a cable pull the D+ pull-up can back-feed the VBUS node through U10
+ * to about 2.7...3.0 V (firmware_handoff.md §6; up to 3.09 V as read with the
+ * ADC1 tolerances). That must read as "VBUS absent", or the pull-up holds
+ * itself on. A valid VBUS (>= 4.4 V, 4.27 V as read) must keep the link. */
+static void test_vbus_backfeed_releases_the_pullup(void)
+{
+    TEST_ASSERT_TRUE(psim_host_connected());
+    psim_set_vbus_mv(4270);                 /* lowest valid VBUS, as read */
+    h_run_us(1000000);
+    TEST_ASSERT_TRUE(psim_host_connected());
+    psim_set_configured(false);             /* cable pulled: host gone */
+    psim_set_vbus_mv(3090);                 /* back-fed by the pull-up */
+    h_run_us(500000);
+    TEST_ASSERT_FALSE_MESSAGE(psim_host_connected(), "D+ pull-up held on by its own back-feed");
+    psim_set_vbus_mv(5000);                 /* plugged in again */
+    psim_set_configured(true);
+    h_run_us(100000);
+    TEST_ASSERT_TRUE(psim_host_connected());
+}
+
+/* Bring-up order (bringup_checklist.md §7 before §8): CAL.SET i_plateau and
+ * CAL.SAVE on a unit whose other coefficients are still nominal. That is not
+ * a calibration: records keep CAL_NOMINAL, STAT? keeps the warning and the
+ * classifier keeps the nominal Kelvin tolerance, so a healthy unit with a
+ * typical DAC zero error (2.5 mV x 8.03 = 20 mV at V_SWEEP) gets no false
+ * KELVIN flags. Once every coefficient the tolerance depends on is set, the
+ * marking goes. */
+static bool warns_cal_nominal(void)
+{
+    return ((unsigned long long)h_kv_ll(h_cmd("STAT?"), "warn") & W_CAL_NOMINAL) != 0u;
+}
+
+static void test_partial_calibration_stays_nominal(void)
+{
+    psim_board()->sweep_offset_v = 0.020;
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("CAL.SET i_plateau=0.045"));
+    TEST_ASSERT_EQUAL_STRING("OK seq=1", h_cmd("CAL.SAVE TS=1700000000"));
+    TEST_ASSERT_EQUAL(0, strncmp(h_cmd("CAL?"), "OK CAL source=stored seq=1 measured=0x40 ", 41));
+    TEST_ASSERT_TRUE(warns_cal_nominal());
+    arm();
+    unsigned fl;
+    TEST_ASSERT_EQUAL(9, sweep_flags("SWP.WP 0 8 STEP=1", &fl));
+    TEST_ASSERT_TRUE_MESSAGE((fl & PF_CAL_NOMINAL) != 0, "partial calibration not marked CAL_NOMINAL");
+    TEST_ASSERT_EQUAL_UINT32_MESSAGE(0, fl & PF_KELVIN, "false KELVIN flags on nominal gains");
+    /* the mask survives a reset */
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("DISARM"));
+    TEST_ASSERT_TRUE(h_run_until_state(ST_DISARMED, 3000000));
+    psim_mcu_reset();
+    app_init();
+    TEST_ASSERT_TRUE(h_run_until_state(ST_DISARMED, 2000000));
+    TEST_ASSERT_EQUAL(0, strncmp(h_cmd("CAL?"), "OK CAL source=stored seq=1 measured=0x40 ", 41));
+    /* the coefficients the tolerance depends on, one CAL.SET at a time */
+    psim_board()->sweep_offset_v = 0.002;
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("CAL.SET g_dac_uv=306.401387 c_dac=32767.5"));
+    TEST_ASSERT_TRUE(warns_cal_nominal());
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("CAL.SET g_v_uv=1.498587 g_i_na=12.435568 r_s=121"));
+    TEST_ASSERT_EQUAL(0, strncmp(h_cmd("CAL?"), "OK CAL source=ram seq=1 measured=0x5F ", 38));
+    TEST_ASSERT_FALSE(warns_cal_nominal());
+    const char *r = h_cmd("MEAS? N=4");
+    TEST_ASSERT_TRUE_MESSAGE(starts(r, "OK MEAS n=4"), r);
+    TEST_ASSERT_EQUAL_UINT32(0, (unsigned)h_kv_ll(r, "flags") & PF_CAL_NOMINAL);
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("CAL.DEFAULT"));
+    TEST_ASSERT_TRUE(warns_cal_nominal());
+}
+
+/* A newest record that has gone bad (here: one flipped bit) is not used; the
+ * older one is, and STAT? says so (CAL_DAMAGED) until a save overwrites it. */
+static void test_damaged_newest_record_is_reported(void)
+{
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("CAL.SET r_s=118.5"));
+    TEST_ASSERT_EQUAL_STRING("OK seq=1", h_cmd("CAL.SAVE TS=1700000000"));
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("CAL.SET r_s=119.5"));
+    TEST_ASSERT_EQUAL_STRING("OK seq=2", h_cmd("CAL.SAVE TS=1700000001"));
+    TEST_ASSERT_EQUAL(0, h_kv_ll(h_cmd("STAT?"), "warn") & W_CAL_DAMAGED);
+    psim_cal_sector_mut(1)[40] ^= 0x04u;      /* seq 2 is in sector 1 */
+    psim_mcu_reset();
+    app_init();
+    TEST_ASSERT_TRUE(h_run_until_state(ST_DISARMED, 2000000));
+    const char *r = h_cmd("CAL?");
+    TEST_ASSERT_EQUAL(0, strncmp(r, "OK CAL source=stored seq=1 ", 27));
+    TEST_ASSERT_NOT_NULL(strstr(r, " r_s=118.5000"));
+    TEST_ASSERT_TRUE((h_kv_ll(h_cmd("STAT?"), "warn") & W_CAL_DAMAGED) != 0);
+    TEST_ASSERT_EQUAL_STRING("OK seq=2", h_cmd("CAL.SAVE TS=1700000002"));
+    TEST_ASSERT_EQUAL(0, h_kv_ll(h_cmd("STAT?"), "warn") & W_CAL_DAMAGED);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -1006,6 +1455,21 @@ int main(void)
     RUN_TEST(test_fetch_resends_retained);
     RUN_TEST(test_event_loss_is_reported);
     RUN_TEST(test_meas_and_zero);
+    RUN_TEST(test_zero_accepts_worst_case_front_end_offsets);
+    RUN_TEST(test_open_sense_plus_on_low_impedance_dut_is_kelvin_not_clim);
+    RUN_TEST(test_plateau_on_short_is_still_clim);
+    RUN_TEST(test_default_compliance_lets_the_plateau_act);
+    RUN_TEST(test_rail_lost_while_armed_is_afe_fault);
+    RUN_TEST(test_compliance_during_ramp_acts_promptly);
+    RUN_TEST(test_no_late_flags_at_the_pass_budget);
+    RUN_TEST(test_saturated_sd_is_flagged);
+    RUN_TEST(test_averaged_means_keep_sub_code_resolution);
+    RUN_TEST(test_adc_traffic_obeys_the_data_sheet);
+    RUN_TEST(test_late_sample_time_is_its_conversion_centroid);
+    RUN_TEST(test_reopened_port_gets_no_stale_output);
+    RUN_TEST(test_vbus_backfeed_releases_the_pullup);
+    RUN_TEST(test_partial_calibration_stays_nominal);
+    RUN_TEST(test_damaged_newest_record_is_reported);
     RUN_TEST(test_zero_armed_requires_zero_output);
     RUN_TEST(test_cal_save_reload_and_torn_write);
     RUN_TEST(test_open_sense_plus_flags_kelvin);

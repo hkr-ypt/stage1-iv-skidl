@@ -15,6 +15,7 @@
 #include "app.h"
 #include "dac8552.h"
 #include "engine.h"
+#include "heartbeat.h"
 #include "instrument.h"
 #include "port.h"
 
@@ -652,6 +653,170 @@ static void test_bringup_verbs_absent(void)
 #endif
 }
 
+/* ---- final firmware audit: regression tests -------------------------------------- */
+
+/* A CAL.SAVE left pending when its session ends must never erase while the
+ * output is armed (SI-8): ARM is refused while the job is pending, and the
+ * job re-checks SI-8 at the erase itself. */
+static void test_calsave_pending_across_session_never_erases_armed(void)
+{
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("CFG adc_rate=2.5"));
+    h_run_us(3000000);
+    psim_obs_t o;
+    psim_observe(&o);
+    uint32_t e0 = o.cal_erases;
+    h_send("CAL.SAVE TS=1");
+    h_run_us(200);
+    TEST_ASSERT_TRUE_MESSAGE(engine_job_active(), "CAL.SAVE should wait for the conversion in flight");
+    psim_set_dtr(false);                  /* the host closes the port ... */
+    h_run_us(1000);
+    psim_set_dtr(true);                   /* ... and a new session opens it */
+    h_run_us(1000);
+    const char *r = h_cmd("ARM");
+    TEST_ASSERT_EQUAL_STRING("ERR PRECOND busy", r);
+    bool erased_armed = false;
+    uint64_t t0 = psim_time_us();
+    for (;;) {
+        psim_observe(&o);
+        if (o.cal_erases != e0 || psim_time_us() - t0 > 2000000u) {
+            break;
+        }
+        if (h_state() != ST_DISARMED || hb_enabled()) {
+            erased_armed = true;
+        }
+        h_run_us(10);
+    }
+    TEST_ASSERT_TRUE_MESSAGE(o.cal_erases != e0, "the save never ran");
+    TEST_ASSERT_FALSE(erased_armed);
+    TEST_ASSERT_EQUAL(ST_DISARMED, h_state());
+    TEST_ASSERT_FALSE(hb_enabled());
+    h_run_us(10000);
+    TEST_ASSERT_FALSE(engine_job_active());
+    arm();                                /* afterwards ARM works again */
+}
+
+/* RESET is a DISARMED/FAULT command; an ARM sent before the reset executes
+ * is refused, so the reset never hits an armed output. */
+static void test_arm_refused_while_reset_pending(void)
+{
+    psim_ext_obs_t x;
+    psim_observe_ext(&x);
+    uint32_t r0 = x.mcu_resets;
+    size_t from = h_lines();
+    h_send("RESET");
+    h_send("ARM");
+    bool armed_before_reset = false;
+    uint64_t t0 = psim_time_us();
+    for (;;) {
+        psim_observe_ext(&x);
+        if (x.mcu_resets != r0 || psim_time_us() - t0 > 1000000u) {
+            break;
+        }
+        inst_state_t st = h_state();
+        armed_before_reset = armed_before_reset || st == ST_ARMING || st == ST_ARMED || h_gate();
+        h_run_us(5);
+    }
+    TEST_ASSERT_TRUE(x.mcu_resets != r0);
+    TEST_ASSERT_FALSE(armed_before_reset);
+    size_t ok = h_find("OK", from);
+    TEST_ASSERT_NOT_EQUAL(SIZE_MAX, ok);
+    TEST_ASSERT_NOT_EQUAL(SIZE_MAX, h_find("ERR STATE reset pending", ok + 1));
+}
+
+/* ARM whose zero write fails latches FAULT and must not answer OK. */
+static void test_arm_answers_fault_when_zero_write_fails(void)
+{
+    psim_fail_spi1(10);
+    const char *r = h_cmd("ARM");
+    TEST_ASSERT_TRUE_MESSAGE(strncmp(r, "ERR FAULT", 9) == 0, r);
+    TEST_ASSERT_EQUAL(ST_FAULT, h_state());
+    TEST_ASSERT_EQUAL_HEX16(0x8000, h_dac_a());
+    TEST_ASSERT_FALSE(h_gate());
+}
+
+/* A non-ADC fault during SELFTEST clears POST; FAULT.CLR re-runs it, so ARM is
+ * not left refused with 'post'. */
+static void test_fault_during_selftest_reruns_post_on_clear(void)
+{
+    h_send("SELFTEST");
+    h_run_us(2000);
+    TEST_ASSERT_TRUE(engine_job_active());
+    psim_set_dbg_tim2_frozen(true);       /* F_INVARIANT while the self-test runs */
+    h_run_us(200);
+    TEST_ASSERT_EQUAL(ST_FAULT, h_state());
+    psim_set_dbg_tim2_frozen(false);
+    h_run_us(200000);
+    TEST_ASSERT_FALSE(engine_post_passed());
+    TEST_ASSERT_EQUAL_STRING("ERR PRECOND adc", h_cmd("FAULT.CLR"));   /* POST re-run */
+    h_run_us(3000000);
+    TEST_ASSERT_TRUE(engine_post_passed());
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("FAULT.CLR"));
+    h_run_us(1500000);
+    arm();
+}
+
+/* A conversion in flight when a sweep is aborted belongs to no point: it must
+ * not become the first sample of the next sweep (stale value, and a t_i
+ * before t_set that breaks the host's time unwrap). */
+static void test_abort_then_rerun_discards_orphan_conversion(void)
+{
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("CFG adc_rate=10 settle_us=100000 first_settle_us=100000 n_avg=1"));
+    h_run_us(2000000);
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("SWP.LIST.CLR"));
+    TEST_ASSERT_EQUAL(0, strncmp(h_cmd("SWP.LIST.ADD 0.5 0.5 0.5 0.5 0.5 0.5"), "OK", 2));
+    TEST_ASSERT_EQUAL(0, strncmp(h_cmd("SWP.LIST.USE"), "OK SWP", 6));
+    h_run_us(1500000);
+    arm();
+    TEST_ASSERT_EQUAL(0, strncmp(h_cmd("SWP.RUN"), "OK id=", 6));
+    size_t k0 = h_lines();
+    TEST_ASSERT_TRUE(h_wait_line("PT 1,", k0, 5000000));
+    size_t k1 = h_find("PT 1,", k0) + 1;
+    TEST_ASSERT_TRUE(h_wait_line("PT 1,", k1, 5000000));
+    h_run_us(175000);                     /* the next point's I conversion is in flight */
+    h_send("SWP.ABORT");
+    h_send("SWP.LIST.CLR");
+    h_send("SWP.LIST.ADD 0.6 0.6 0.6");
+    h_send("SWP.LIST.USE");
+    size_t from = h_lines();
+    h_send("SWP.RUN");
+    TEST_ASSERT_TRUE(h_wait_line("PT 2,", from, 5000000));
+    size_t k = h_find("PT 2,", from);
+    unsigned long sid, seq, idx, seg, t_set, t_i, t_v;
+    TEST_ASSERT_EQUAL(7, sscanf(h_line(k), "PT %lu,%lu,%lu,%lu,%lu,%lu,%lu",
+                                &sid, &seq, &idx, &seg, &t_set, &t_i, &t_v));
+    TEST_ASSERT_EQUAL_UINT32(0, idx);
+    TEST_ASSERT_TRUE_MESSAGE(t_i >= t_set && t_i < 2000000ul, h_line(k));
+    TEST_ASSERT_TRUE_MESSAGE(t_v >= t_set && t_v < 2000000ul, h_line(k));
+}
+
+/* Bring-up: HB.HOLD/HB.EDGE drive a static PC5 level; repeated level changes
+ * from the host must not pump the reference gate closed. */
+static void test_bringup_hb_hold_cannot_pump_the_gate(void)
+{
+#if FW_BRINGUP
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("HB.HOLD HIGH"));
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("HB.HOLD LOW"));
+    TEST_ASSERT_EQUAL_STRING("ERR STATE edge within T_DISARM of the last one", h_cmd("HB.HOLD HIGH"));
+    TEST_ASSERT_EQUAL_STRING("ERR STATE edge within T_DISARM of the last one", h_cmd("HB.EDGE"));
+    for (int i = 0; i < 200; i++) {
+        h_send("HB.HOLD HIGH");
+        h_send("HB.HOLD LOW");
+    }
+    bool gate_seen = false;
+    uint64_t t0 = psim_time_us();
+    while (psim_time_us() - t0 < 300000u) {
+        h_run_us(5);
+        gate_seen = gate_seen || h_gate();
+    }
+    TEST_ASSERT_FALSE(gate_seen);
+    h_run_us(100000);                     /* after T_DISARM a single edge is allowed again */
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("HB.HOLD HIGH"));
+    TEST_ASSERT_EQUAL_STRING("OK", h_cmd("HB.HOLD OFF"));
+#else
+    TEST_IGNORE_MESSAGE("bring-up only");
+#endif
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -694,5 +859,11 @@ int main(void)
     RUN_TEST(test_sweep_refused_during_src_ramp);
     RUN_TEST(test_dac_scrub_only_after_the_scrub_period);
     RUN_TEST(test_compliance_at_zero_is_reported_once);
+    RUN_TEST(test_calsave_pending_across_session_never_erases_armed);
+    RUN_TEST(test_arm_refused_while_reset_pending);
+    RUN_TEST(test_arm_answers_fault_when_zero_write_fails);
+    RUN_TEST(test_fault_during_selftest_reruns_post_on_clear);
+    RUN_TEST(test_abort_then_rerun_discards_orphan_conversion);
+    RUN_TEST(test_bringup_hb_hold_cannot_pump_the_gate);
     return UNITY_END();
 }

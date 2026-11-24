@@ -62,7 +62,7 @@ target_link_options(${FW_IMAGE} PRIVATE
 
 add_custom_command(TARGET ${FW_IMAGE} POST_BUILD
     COMMAND ${CMAKE_OBJCOPY} -O ihex "$<TARGET_FILE:${FW_IMAGE}>" "${CMAKE_BINARY_DIR}/${FW_IMAGE}.hex"
-    COMMAND ${CMAKE_OBJCOPY} -O binary "$<TARGET_FILE:${FW_IMAGE}>" "${CMAKE_BINARY_DIR}/${FW_IMAGE}.bin"
+    COMMAND ${CMAKE_OBJCOPY} -O binary --gap-fill 0xFF "$<TARGET_FILE:${FW_IMAGE}>" "${CMAKE_BINARY_DIR}/${FW_IMAGE}.bin"
     COMMAND ${CMAKE_SIZE} -A -x "$<TARGET_FILE:${FW_IMAGE}>"
     COMMENT "objcopy ${FW_IMAGE}.hex / .bin, section sizes"
     VERBATIM)

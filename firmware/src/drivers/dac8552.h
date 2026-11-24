@@ -58,10 +58,11 @@ uint16_t dac_shadow_b(void);          /* 0xFFFF unless the bring-up DAC.RAW ran 
  * Robust zero, used by FAULT entry, the fault handlers and the dead-man ISR.
  * FAULT-SAFE: uses only FAULT-SAFE port calls, bounded to ~200 us.
  *   1. PC5 low (port_hb_force_low).
- *   2. Wait for SPI1 idle; on timeout reset SPI1 (never clear SPE while busy).
- *   3. /SYNC high for >= 1 us: aborts any half-sent frame (< 24 bits).
+ *   2. /SYNC high for >= 1 us: aborts any half-sent frame (< 24 bits), before
+ *      SPI1 is touched, so a reset cannot clock a stray bit into the DAC.
+ *   3. Wait for SPI1 idle; on timeout reset SPI1 (never clear SPE while busy).
  *   4. Send 00 80 00 then 34 FF FF, each framed by /SYNC.
- *   5. If 2 or 4 failed: bit-bang the same frames on PA5/PA7 in mode 1.
+ *   5. If 3 or 4 failed: bit-bang the same frames on PA5/PA7 in mode 1.
  * Afterwards the DAC holds A = 0x8000, B = 0xFFFF and the shadow says so.
  */
 void dac_zero_safe(void);

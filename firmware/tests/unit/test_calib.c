@@ -44,7 +44,7 @@ static void test_record_layout_and_crc(void)
     TEST_ASSERT_EQUAL_HEX32(0xCBF43926u, crc32_ieee("123456789", 9));
     cal_record_t r;
     cal_coeffs_t c = coeffs(120.0);
-    calib_build_record(&r, &c, 7, k_uid, 1700000000u, "bench");
+    calib_build_record(&r, &c, CAL_M_ALL, 7, k_uid, 1700000000u, "bench");
     TEST_ASSERT_EQUAL(CALREC_VALID, calib_check(&r, k_uid));
     TEST_ASSERT_EQUAL_STRING("bench", r.note);
     /* every single-bit flip is caught */
@@ -63,7 +63,7 @@ static void test_check_statuses(void)
     cal_coeffs_t c = coeffs(120.0);
     memset(&r, 0xFF, sizeof r);
     TEST_ASSERT_EQUAL(CALREC_ERASED, calib_check(&r, k_uid));
-    calib_build_record(&r, &c, 1, k_uid, 0, NULL);
+    calib_build_record(&r, &c, CAL_M_ALL, 1, k_uid, 0, NULL);
     uint32_t other[3] = { 1, 2, 3 };
     TEST_ASSERT_EQUAL(CALREC_WRONG_UID, calib_check(&r, other));
     cal_record_t v = r;
@@ -76,7 +76,7 @@ static void test_check_statuses(void)
     TEST_ASSERT_EQUAL(CALREC_BAD_MAGIC, calib_check(&m, k_uid));
     /* CRC-valid but implausible (e.g. written by a buggy tool) */
     cal_coeffs_t bad = coeffs(500.0);
-    calib_build_record(&v, &bad, 1, k_uid, 0, NULL);
+    calib_build_record(&v, &bad, CAL_M_ALL, 1, k_uid, 0, NULL);
     TEST_ASSERT_EQUAL(CALREC_IMPLAUSIBLE, calib_check(&v, k_uid));
 }
 
@@ -89,7 +89,7 @@ static void test_plausibility_window(void)
     TEST_ASSERT_DOUBLE_WITHIN(1e-6, 32767.5, n.c_dac);
     struct { int field; double lo_ok, hi_ok, lo_bad, hi_bad; } k[] = {
         { 0, n.g_dac * 0.981, n.g_dac * 1.019, n.g_dac * 0.979, n.g_dac * 1.021 },
-        { 1, n.c_dac - 399, n.c_dac + 399, n.c_dac - 401, n.c_dac + 401 },
+        { 1, n.c_dac - 999, n.c_dac + 999, n.c_dac - 1001, n.c_dac + 1001 },
         { 2, n.g_v * 0.951, n.g_v * 1.049, n.g_v * 0.949, n.g_v * 1.051 },
         { 3, n.g_i * 0.951, n.g_i * 1.049, n.g_i * 0.949, n.g_i * 1.051 },
         { 6, 0.0201, 0.0999, 0.0199, 0.1001 },
@@ -119,7 +119,7 @@ static void test_empty_flash_gives_nominal(void)
     cal_coeffs_t c;
     calib_scan_t scan;
     uint32_t seq = 99;
-    TEST_ASSERT_FALSE(calib_load(&c, &scan, &seq));
+    TEST_ASSERT_FALSE(calib_load(&c, &scan, &seq, NULL));
     cal_coeffs_t n;
     calib_nominal(&n);
     TEST_ASSERT_EQUAL_MEMORY(&n, &c, sizeof n);
@@ -133,12 +133,12 @@ static void test_alternating_sectors_and_sequence(void)
     uint32_t seq;
     for (unsigned i = 1; i <= 6; i++) {
         cal_coeffs_t c = coeffs(110.0 + i);   /* r_s > r_top (106) */
-        TEST_ASSERT_EQUAL(E_OK, calib_save(&c, i, NULL, &seq));
+        TEST_ASSERT_EQUAL(E_OK, calib_save(&c, CAL_M_ALL, i, NULL, &seq));
         TEST_ASSERT_EQUAL_UINT32(i, seq);
         cal_coeffs_t back;
         calib_scan_t scan;
         uint32_t s2;
-        TEST_ASSERT_TRUE(calib_load(&back, &scan, &s2));
+        TEST_ASSERT_TRUE(calib_load(&back, &scan, &s2, NULL));
         TEST_ASSERT_EQUAL_UINT32(i, s2);
         TEST_ASSERT_EQUAL_DOUBLE(110.0 + i, back.r_s);
         TEST_ASSERT_EQUAL((int)((i - 1u) % 2u), scan.newest);   /* 0,1,0,1,... */
@@ -151,15 +151,15 @@ static void save_two(void)
 {
     uint32_t seq;
     cal_coeffs_t a = coeffs(111.0), b = coeffs(122.0);
-    TEST_ASSERT_EQUAL(E_OK, calib_save(&a, 1, NULL, &seq));
-    TEST_ASSERT_EQUAL(E_OK, calib_save(&b, 2, NULL, &seq));
+    TEST_ASSERT_EQUAL(E_OK, calib_save(&a, CAL_M_ALL, 1, NULL, &seq));
+    TEST_ASSERT_EQUAL(E_OK, calib_save(&b, CAL_M_ALL, 2, NULL, &seq));
 }
 
 static double loaded_r_s(uint32_t *seq)
 {
     cal_coeffs_t c;
     calib_scan_t scan;
-    (void)calib_load(&c, &scan, seq);
+    (void)calib_load(&c, &scan, seq, NULL);
     return c.r_s;
 }
 
@@ -170,7 +170,7 @@ static void test_torn_erase_keeps_newest(void)
         fake_flash_tear_erase(words, (words % 2) != 0);
         uint32_t seq;
         cal_coeffs_t c = coeffs(133.0);
-        TEST_ASSERT_EQUAL(E_FLASH, calib_save(&c, 3, NULL, &seq));
+        TEST_ASSERT_EQUAL(E_FLASH, calib_save(&c, CAL_M_ALL, 3, NULL, &seq));
         fake_flash_power_cycle();
         uint32_t s;
         TEST_ASSERT_EQUAL_DOUBLE(122.0, loaded_r_s(&s));
@@ -185,7 +185,7 @@ static void test_torn_program_keeps_newest(void)
         fake_flash_tear_program_after(words, (words % 3) == 0);
         uint32_t seq;
         cal_coeffs_t c = coeffs(144.0);
-        TEST_ASSERT_EQUAL(E_FLASH, calib_save(&c, 3, NULL, &seq));
+        TEST_ASSERT_EQUAL(E_FLASH, calib_save(&c, CAL_M_ALL, 3, NULL, &seq));
         fake_flash_power_cycle();
         uint32_t s;
         TEST_ASSERT_EQUAL_DOUBLE(122.0, loaded_r_s(&s));
@@ -194,7 +194,7 @@ static void test_torn_program_keeps_newest(void)
     /* and a clean save afterwards still works */
     uint32_t seq;
     cal_coeffs_t c = coeffs(155.0);
-    TEST_ASSERT_EQUAL(E_OK, calib_save(&c, 4, NULL, &seq));
+    TEST_ASSERT_EQUAL(E_OK, calib_save(&c, CAL_M_ALL, 4, NULL, &seq));
     TEST_ASSERT_EQUAL_UINT32(3, seq);
 }
 
@@ -204,15 +204,15 @@ static void test_silent_erase_and_refusals(void)
     uint32_t seq;
     cal_coeffs_t c = coeffs(166.0);
     fake_flash_silent_next_erase();               /* claims success, erases nothing */
-    TEST_ASSERT_EQUAL(E_FLASH, calib_save(&c, 3, NULL, &seq));
+    TEST_ASSERT_EQUAL(E_FLASH, calib_save(&c, CAL_M_ALL, 3, NULL, &seq));
     fake_flash_fail_next_erase();
-    TEST_ASSERT_EQUAL(E_FLASH, calib_save(&c, 3, NULL, &seq));
+    TEST_ASSERT_EQUAL(E_FLASH, calib_save(&c, CAL_M_ALL, 3, NULL, &seq));
     fake_flash_fail_program_after(5);
-    TEST_ASSERT_EQUAL(E_FLASH, calib_save(&c, 3, NULL, &seq));
+    TEST_ASSERT_EQUAL(E_FLASH, calib_save(&c, CAL_M_ALL, 3, NULL, &seq));
     uint32_t s;
     TEST_ASSERT_EQUAL_DOUBLE(122.0, loaded_r_s(&s));
     cal_coeffs_t bad = coeffs(500.0);
-    TEST_ASSERT_EQUAL(E_RANGE, calib_save(&bad, 3, NULL, &seq));
+    TEST_ASSERT_EQUAL(E_RANGE, calib_save(&bad, CAL_M_ALL, 3, NULL, &seq));
 }
 
 static void test_other_mcu_record_ignored(void)
@@ -222,7 +222,7 @@ static void test_other_mcu_record_ignored(void)
     cal_coeffs_t c;
     calib_scan_t scan;
     uint32_t seq;
-    TEST_ASSERT_FALSE(calib_load(&c, &scan, &seq));
+    TEST_ASSERT_FALSE(calib_load(&c, &scan, &seq, NULL));
     TEST_ASSERT_EQUAL(CALREC_WRONG_UID, scan.status[0]);
     TEST_ASSERT_EQUAL(CALREC_WRONG_UID, scan.status[1]);
 }
@@ -237,7 +237,7 @@ static void test_corrupt_newest_falls_back_to_older(void)
     /* the next save goes to the sector NOT holding the newest valid record */
     uint32_t seq;
     cal_coeffs_t c = coeffs(177.0);
-    TEST_ASSERT_EQUAL(E_OK, calib_save(&c, 5, NULL, &seq));
+    TEST_ASSERT_EQUAL(E_OK, calib_save(&c, CAL_M_ALL, 5, NULL, &seq));
     TEST_ASSERT_EQUAL_UINT32(2, seq);
     TEST_ASSERT_EQUAL_DOUBLE(177.0, loaded_r_s(&s));
 }
@@ -247,7 +247,59 @@ static void test_small_sector_refused(void)
     fake_flash_set_sector_size(64);
     uint32_t seq;
     cal_coeffs_t c = coeffs(120.0);
-    TEST_ASSERT_EQUAL(E_FLASH, calib_save(&c, 1, NULL, &seq));
+    TEST_ASSERT_EQUAL(E_FLASH, calib_save(&c, CAL_M_ALL, 1, NULL, &seq));
+}
+
+/* The c_dac window holds the DAC8552 worst case (zero-code error 12 mV, gain
+ * error 0.2 % FSR at mid-scale, half of B's 0.5 % FSR full-scale error: 544
+ * codes; about 580 with the divider and difference amplifier), while a
+ * dropped or extra digit is still refused. */
+static void test_c_dac_window_holds_the_dac8552_worst_case(void)
+{
+    cal_coeffs_t c;
+    const double lsb_v = 2.5 / 65536.0;
+    double shift = (12e-3 + 0.002 * 2.5 / 2.0 + 0.005 * 2.5 / 2.0) / lsb_v;
+    TEST_ASSERT_DOUBLE_WITHIN(1.0, 544.0, shift);
+    const double ok[] = { 32767.5 + 580.0, 32767.5 - 580.0 };
+    for (size_t i = 0; i < 2; i++) {
+        calib_nominal(&c);
+        c.c_dac = ok[i];
+        TEST_ASSERT_TRUE(calib_plausible(&c));
+    }
+    const double typo[] = { 3276.75, 327675.0, 23767.5, 42767.5 };
+    for (size_t i = 0; i < 4; i++) {
+        calib_nominal(&c);
+        c.c_dac = typo[i];
+        TEST_ASSERT_FALSE(calib_plausible(&c));
+    }
+}
+
+/* Which coefficients were measured survives a save and a load; a record
+ * written before the mask existed (field 0) loads as fully measured. */
+static void test_measured_mask_round_trip_and_legacy_records(void)
+{
+    uint32_t seq, m = 0xFFu;
+    cal_coeffs_t c = coeffs(118.0), back;
+    calib_scan_t scan;
+    TEST_ASSERT_FALSE(calib_load(&back, &scan, &seq, &m));
+    TEST_ASSERT_EQUAL_HEX32(0u, m);                         /* nominal */
+    TEST_ASSERT_EQUAL(E_OK, calib_save(&c, CAL_M_I_PLATEAU, 1, NULL, &seq));
+    TEST_ASSERT_TRUE(calib_load(&back, &scan, &seq, &m));
+    TEST_ASSERT_EQUAL_HEX32(CAL_M_I_PLATEAU, m);
+    TEST_ASSERT_EQUAL(E_OK, calib_save(&c, CAL_M_CORE | CAL_M_I_PLATEAU | 0xF00u, 2, NULL, &seq));
+    TEST_ASSERT_TRUE(calib_load(&back, &scan, &seq, &m));
+    TEST_ASSERT_EQUAL_HEX32(CAL_M_CORE | CAL_M_I_PLATEAU, m);   /* only CAL_M_ALL bits */
+    /* a record of the earlier format: measured (then reserved0) = 0 */
+    cal_record_t r;
+    calib_build_record(&r, &c, CAL_M_I_PLATEAU, 3, k_uid, 0, NULL);
+    r.measured = 0u;
+    r.crc = crc32_ieee(&r, offsetof(cal_record_t, crc));
+    TEST_ASSERT_EQUAL(CALREC_VALID, calib_check(&r, k_uid));
+    fake_flash_reset();
+    memcpy(fake_flash_mem(0), &r, sizeof r);
+    TEST_ASSERT_TRUE(calib_load(&back, &scan, &seq, &m));
+    TEST_ASSERT_EQUAL_UINT32(3u, seq);
+    TEST_ASSERT_EQUAL_HEX32(CAL_M_ALL, m);
 }
 
 int main(void)
@@ -256,6 +308,8 @@ int main(void)
     RUN_TEST(test_record_layout_and_crc);
     RUN_TEST(test_check_statuses);
     RUN_TEST(test_plausibility_window);
+    RUN_TEST(test_c_dac_window_holds_the_dac8552_worst_case);
+    RUN_TEST(test_measured_mask_round_trip_and_legacy_records);
     RUN_TEST(test_empty_flash_gives_nominal);
     RUN_TEST(test_alternating_sectors_and_sequence);
     RUN_TEST(test_torn_erase_keeps_newest);

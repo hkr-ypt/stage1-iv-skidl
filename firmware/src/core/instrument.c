@@ -219,7 +219,11 @@ err_t inst_fault_clear(const char **why)
         *why = "wait";
         return E_PRECOND;
     }
-    if (adc_class(s_i.fault) && !(engine_post_passed() && engine_adc_ready())) {
+    /* After an ADC-class fault the ADC is re-initialised and POST must pass
+     * again; after any other fault that interrupted a POST/SELFTEST
+     * (engine_fault_entry clears post_passed) the self-test is re-run too, or
+     * ARM would stay refused with 'post' after a successful FAULT.CLR. */
+    if (!engine_post_passed() || (adc_class(s_i.fault) && !engine_adc_ready())) {
         if (!engine_job_active()) {
             (void)engine_job_start(JOB_POST, 0);
         }
@@ -260,6 +264,10 @@ err_t inst_arm_check(const char **why)
     }
     if (!engine_adc_ready()) {
         *why = "adc";
+        return E_PRECOND;
+    }
+    if (engine_job_active()) {
+        *why = "busy";    /* e.g. a CAL.SAVE that outlived its session (SI-8) */
         return E_PRECOND;
     }
     if (s_i.hb_hold || (s_i.t_hb_hold_end != 0u && now - s_i.t_hb_hold_end < T_DISARM_US)) {
@@ -437,7 +445,7 @@ uint32_t inst_warnings(uint64_t now_us)
     if (port_bor_level() != 3) {
         w |= W_BOR_OFF;
     }
-    if (engine_cal_source() == CALSRC_NOMINAL) {
+    if (engine_cal_nominal()) {
         w |= W_CAL_NOMINAL;
     }
     if (engine_zero_state(now_us) != ZERO_VALID) {
@@ -457,8 +465,12 @@ uint32_t inst_warnings(uint64_t now_us)
         w |= W_AFE;
     }
     const calib_scan_t *sc = engine_cal_scan();
-    if (sc->status[0] == CALREC_WRONG_UID || sc->status[1] == CALREC_WRONG_UID) {
-        w |= W_CAL_UID;
+    for (unsigned k = 0; k < 2u; k++) {
+        if (sc->status[k] == CALREC_WRONG_UID) {
+            w |= W_CAL_UID;
+        } else if (sc->status[k] != CALREC_VALID && sc->status[k] != CALREC_ERASED) {
+            w |= W_CAL_DAMAGED;
+        }
     }
 #if !FW_USB_PID_REGISTERED
     w |= W_DEV_USB_PID;

@@ -47,24 +47,42 @@ typedef struct {
     uint32_t     seq;           /* increments on every save                */
     uint32_t     uid[3];        /* STM32 unique ID this record belongs to  */
     uint32_t     timestamp;     /* host-supplied UTC seconds               */
-    uint32_t     reserved0;
+    uint32_t     measured;      /* CAL_MEASURED_MARK | CAL_M_* (was 0)     */
     cal_coeffs_t c;             /* 7 doubles, 8-byte aligned at offset 32  */
     char         note[CAL_NOTE_LEN];
     uint32_t     reserved1;
     uint32_t     crc;           /* CRC-32 (IEEE) of all preceding bytes    */
 } cal_record_t;
 
+/* Which coefficients were measured (set with CAL.SET) rather than nominal:
+ * bit k is the k-th CAL.SET key. A record stores them with CAL_MEASURED_MARK;
+ * a record written before the mask existed (field 0) loads as fully measured,
+ * its old meaning. While any CAL_M_CORE coefficient is nominal, records carry
+ * CAL_NOMINAL and the classifier keeps the nominal Kelvin tolerance: a
+ * partial calibration (bring-up: i_plateau alone) is not a calibration. */
+#define CAL_M_G_DAC        (1u << 0)
+#define CAL_M_C_DAC        (1u << 1)
+#define CAL_M_G_V          (1u << 2)
+#define CAL_M_G_I          (1u << 3)
+#define CAL_M_R_S          (1u << 4)
+#define CAL_M_R_TOP        (1u << 5)
+#define CAL_M_I_PLATEAU    (1u << 6)
+#define CAL_M_ALL          0x7Fu
+#define CAL_M_CORE         (CAL_M_G_DAC | CAL_M_C_DAC | CAL_M_G_V | CAL_M_G_I | CAL_M_R_S)
+#define CAL_MEASURED_MARK  0x80000000u
+
 /* Nominal coefficients computed from nominal.h. */
 void calib_nominal(cal_coeffs_t *c);
 
 /* Coefficients within the plausibility window around nominal (rejects typos
  * in CAL.SET and corrupted-but-CRC-valid nonsense):
- *   g_dac +-2 %, c_dac +-400 codes, g_v and g_i +-5 %, r_s 80..200 ohm,
+ *   g_dac +-2 %, c_dac +-1000 codes, g_v and g_i +-5 %, r_s 80..200 ohm,
  *   r_top 70..180 ohm, r_top < r_s, i_plateau 20..100 mA. */
 bool calib_plausible(const cal_coeffs_t *c);
 
-/* Build a complete record (computes size and CRC). note may be NULL. */
-void calib_build_record(cal_record_t *r, const cal_coeffs_t *c, uint32_t seq,
+/* Build a complete record (computes size and CRC). note may be NULL;
+ * measured: CAL_M_* bits. */
+void calib_build_record(cal_record_t *r, const cal_coeffs_t *c, uint32_t measured, uint32_t seq,
                         const uint32_t uid[3], uint32_t timestamp, const char *note);
 
 typedef enum {
@@ -94,13 +112,15 @@ void calib_scan(const uint8_t *sec0, const uint8_t *sec1, const uint32_t uid[3],
 unsigned calib_target_sector(const calib_scan_t *scan);
 
 /* Boot-time load through the port: fills *out with the newest valid record's
- * coefficients, or nominal ones; returns true if a stored record was used. */
-bool calib_load(cal_coeffs_t *out, calib_scan_t *scan_out, uint32_t *seq_out);
+ * coefficients, or nominal ones; returns true if a stored record was used.
+ * *measured_out (may be NULL): that record's CAL_M_* bits, 0 if nominal. */
+bool calib_load(cal_coeffs_t *out, calib_scan_t *scan_out, uint32_t *seq_out,
+                uint32_t *measured_out);
 
 /* Persist: erase the target sector, program, read back and verify. The caller
  * guarantees DISARMED with the heartbeat stopped (SI-8). Returns E_OK,
  * E_RANGE (implausible coefficients) or E_FLASH. */
-err_t calib_save(const cal_coeffs_t *c, uint32_t timestamp, const char *note,
+err_t calib_save(const cal_coeffs_t *c, uint32_t measured, uint32_t timestamp, const char *note,
                  uint32_t *seq_out);
 
 /* CRC-32 (IEEE 802.3, reflected, init/xorout 0xFFFFFFFF). */

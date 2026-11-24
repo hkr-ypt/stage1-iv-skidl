@@ -353,6 +353,7 @@ static void reset_io(void)
 {
     ring_clear(&s_rx);
     ring_clear(&s_tx);
+    port_host_discard_tx();
     s_p.line_len = 0;
     s_p.line_long = false;
     s_p.line_bad = false;
@@ -370,11 +371,18 @@ static void reset_io(void)
     commands_cancel_deferred();
 }
 
+static bool tx_line(const char *s, size_t n);
+
 void proto_session_start(void)
 {
     reset_io();
     results_skip_unsent();
     s_p.session = true;
+    /* An empty line first: a packet of the old session already loaded into
+     * the IN endpoint (up to 64 bytes, possibly ending mid-line) cannot be
+     * withdrawn; the newline ends it, so EVT HELLO always starts a line.
+     * Hosts ignore empty lines (protocol.md §2). */
+    (void)tx_line("", 0u);
 }
 
 void proto_session_end(void)
@@ -595,9 +603,9 @@ size_t proto_format_pt(const pt_rec_t *r, char *buf, size_t cap)
     lb_putc(&b, ',');
     put_sd(&b, r->v_sd);
     lb_putc(&b, ',');
-    lb_fix(&b, div_round(scaling_v_nv(c, z, (double)r->v_raw), 1000), 6);
+    lb_fix(&b, div_round(scaling_v_nv(c, z, pt_mean_v(r)), 1000), 6);
     lb_putc(&b, ',');
-    lb_fix(&b, div_round(scaling_i_pa(c, z, (double)r->i_raw), 100), 10);
+    lb_fix(&b, div_round(scaling_i_pa(c, z, pt_mean_i(r)), 100), 10);
     lb_putc(&b, ',');
     lb_hex(&b, r->flags, 4);
     return b.overflow ? 0 : b.len;

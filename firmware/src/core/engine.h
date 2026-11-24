@@ -34,7 +34,13 @@ cal_source_t        engine_cal_source(void);
 const char         *engine_cal_source_name(void);
 uint32_t            engine_cal_seq(void);           /* 0 if none stored      */
 const calib_scan_t *engine_cal_scan(void);
-void                engine_cal_set(const cal_coeffs_t *c);   /* source := ram */
+/* source := ram; measured: CAL_M_* bits of the coefficients just set (added
+ * to those already measured) */
+void                engine_cal_set(const cal_coeffs_t *c, uint32_t measured);
+uint32_t            engine_cal_measured(void);      /* CAL_M_* of engine_cal() */
+/* Some CAL_M_CORE coefficient is still nominal: records carry CAL_NOMINAL, the
+ * classifier uses the nominal Kelvin tolerance, STAT? warns. */
+bool                engine_cal_nominal(void);
 void                engine_cal_default(void);
 void                engine_cal_reload(void);
 err_t               engine_cal_save(uint32_t timestamp, const char *note, uint32_t *seq);
