@@ -8,7 +8,7 @@ authoritative and the difference is listed in §15.
 netlist and routed board unchanged by the firmware work). The final design
 audit then changed parts, not copper (`c4e7592`; U5 OPA547T with R7 348 kΩ,
 D7 BZT52B24, C26/C27 18 pF, R38/C49 fitted; `docs/final_audit.md`); the
-firmware reports that revision (`hw=stage1-iv@c4e7592`, §15 item 25).
+firmware reports that revision (`hw=stage1-iv@c4e7592`, §15 item 26).
 **Scope:** the firmware for U9 (STM32F411RET6) on this board, and the host
 software needed to use and test it.
 
@@ -40,7 +40,7 @@ pump (§4.4). Two adversarial reviews of this draft followed (§12).
 |---|---|---|
 | Execution model | Bare-metal cooperative super-loop, no RTOS. Every service is non-blocking, ≤ 70 µs per call, ≤ 150 µs per pass | The hardware's safety argument needs "the control loop completed" and "the heartbeat toggled" to be the same fact (§7.1) |
 | Heartbeat | One thread-mode edge generator on PC5, gated by the per-pass health predicate. **2 kHz on a fixed 250 µs grid**, never once per pass. Any edge spacing > 1 ms → fault. A 2 ms dead-man timer zeroes the DAC and resets on a hang. `T_ARM` = `T_DISARM` = 100 ms | Pump simulation: an uneven duty, or a sustained slow loop, starves the pump; worst-case disarm is 77 ms (§4.4) |
-| DAC | Every update is the atomic pair `00 A` + `34 FFFF`. B is never a parameter. 100 ms scrub in every armed state. /SYNC rises only after BSY = 0. A frame-aligned `dac_zero_safe()` (with SPI-reset and bit-bang fallbacks) serves every fault path | Makes the positive-bound contract structural and self-healing; the DAC has no readback |
+| DAC | Every update is the atomic pair `00 A` + `34 FFFF`. B is never a parameter. 100 ms scrub in every armed state. /SYNC rises only after BSY = 0 (except the zero path's deliberate abort pulse). A frame-aligned `dac_zero_safe()` (with SPI-reset and bit-bang fallbacks) serves every fault path | Makes the positive-bound contract structural and self-healing; the DAC has no readback |
 | Safe sequences | Zero code before stopping the heartbeat; early-boot, fault-handler and dead-man zero; never re-arm after any reset; armed only in a host session; BOR level 3 required to arm | §3, §6 |
 | ADC | Mux-cycled settled conversions, I first. PGA 2 on both channels, buffer off. Data rates ≤ 3750 SPS. Stale-edge rejection and a read deadline outside t17. SELFCAL on every rate change (DISARMED only). Register scrub ≥ 1/s and a stuck-code check. Read-back, not the ID, as the comms test | The INA128, not the ADC, limits the low end (≤ 21 % σ gain from any PGA); SBAS288K t17/t18/Table 21 (§4.5, §7.4) |
 | Measurement | Fixed per-point procedure: settle (with a preemptible monitor) → I,V,V,I conversions → checks → record. Integer-µV setpoints on an exact grid. µs timestamps for both channels | Repeatability, drift-unbiased V/I pairing, identical setpoints on up and down branches |
@@ -721,7 +721,8 @@ uint16_t dac_shadow_a(void);                             // last code successful
 - `/SYNC` toggles between the two frames: one frame per falling edge, ≥ 33 ns
   high, ≥ 100 ns from the 24th edge to the next fall. `/SYNC` rises only after
   `SPI_SR.BSY == 0`. Raising it on TXE silently discards the frame
-  (SLAS430A p.15).
+  (SLAS430A p.15). The one exception is the abort pulse of `dac_zero_safe()`
+  (and of the fault entry), which discards a partial frame on purpose.
 - **Scrub.** In every state where the heartbeat runs (`ARMING`, `ARMED`,
   `SWEEPING`, `DISARMING`), `dac_shadow_a()` and B are re-sent every
   100 ms, whatever the ADC is doing.
@@ -737,14 +738,17 @@ uint16_t dac_shadow_a(void);                             // last code successful
   handlers and the dead-man. It is bounded to ≤ 200 µs, with cycle-counted
   waits:
   1. PC5 low.
-  2. If SPI1 is clocked, wait for TXE = 1 and BSY = 0. On timeout, reset
+  2. PA4 high for ≥ 1 µs. This aborts any half-sent frame: the DAC discards
+     frames shorter than 24 bits (the /SYNC interrupt, SLAS430A). It comes
+     first, so that no SCK edge of the SPI1 reset below can complete a
+     partial frame. This is the one deliberate exception to "/SYNC rises only
+     after BSY = 0": the frame it cuts short is replaced by the zero pair.
+  3. If SPI1 is clocked, wait for TXE = 1 and BSY = 0. On timeout, reset
      SPI1 through `RCC_APB2RSTR` and reconfigure it. Never clear SPE while
      BSY = 1 (errata ES0287 2.11.1).
-  3. PA4 high for ≥ 1 µs. This aborts any half-sent frame: the DAC discards
-     frames shorter than 24 bits.
   4. Send `00 80 00` and `34 FF FF`, each framed by /SYNC, waiting BSY = 0
      before each rise.
-  5. If step 2 or 4 fails, switch PA5/PA7 to GPIO outputs and **bit-bang**
+  5. If step 3 or 4 fails, switch PA5/PA7 to GPIO outputs and **bit-bang**
      the same two frames in mode 1 (data changes while SCLK is high; the DAC
      latches on the falling edge) at ≈ 1 MHz.
 
@@ -810,7 +814,11 @@ void ads_service(void);                       // ≤ 1 SPI transaction per call;
   `CFG adc_rate` and `ADC.SELFCAL` are accepted only in `DISARMED`, and they
   mark the session zero stale.
 - **Timeout.** No valid /DRDY within `t18(DR) × 1.5 + 2 ms` →
-  `F_ADC_TIMEOUT`. A calibration times out at Table 21 + 50 %.
+  `F_ADC_TIMEOUT`. After a late (missed-deadline) edge the next edge must
+  come within `1/DR × 3/2 + 2 ms` of the re-arm that follows it, at most 8
+  times per conversion. A calibration times out at Table 21 + 50 %, and one
+  that ends in less than half its Table 21 time did not run (one retry,
+  then `F_ADC_TIMEOUT`).
 - **Timing guards.** Explicit `delay_us` calls, each with a unit test:
   - 6.51 µs (t6);
   - 4 τ after WREG/RREG/RDATA, 24 τ after SYNC, 24 τ after WAKEUP (t11; the
@@ -1023,7 +1031,7 @@ For both kinds:
 - **Ramps:** setpoint steps of ≤ 10 mV (≤ 33 codes, so up to 10.1 mV of
   output), on a 1 ms grid (hence the 10 V/s maximum; §15 item 12). They are
   not recorded; the monitor watches compliance meanwhile (back to back while
-  the output moves, §15 item 36).
+  the output moves, §15 item 37).
 - **Sweep identity:** each run gets a `sweep_id`. `EVT SWEEP_BEGIN` echoes
   the full configuration, the calibration record **and the session zero**
   (o_v, o_i, its time and data rate), so a data file is self-describing and
@@ -1048,7 +1056,7 @@ The SENSE+ attenuator draws `V_hi/R_sd` from the DUT's high side through
 | **Clip** | either code ∈ {0x7FFFFF, 0x800000} | `OVR_V` / `OVR_I`; the value is not used by the other checks |
 | **Compliance** | \|I\| > `i_compliance`, on each I conversion including monitor conversions | immediate zero code; `on_compliance` action (§6.4) |
 | **Kelvin consistency** | `e = V_set − V_K − I·R_s − (V_K/R_sd)·R_top`. Flag if `|e| > tol`, where `tol` = 10 mV + 0.2 %·\|V_set\| + 5 Ω·\|I\| when calibrated, and 50 mV + 1 %·\|V_set\| + 15 Ω·\|I\| while `CAL_NOMINAL` | `KELVIN`; `EVT WARN KELVIN` after 3 consecutive points |
-| **Current-limit plateau** | \|I\| ≥ 0.8·`i_plateau` **and** `e·sign(V_set) > tol` (U5 in limit leaves V_K short of the load line) **and** `V_K·sign(V_set) > −0.1 V` (a lifted SENSE+ lead drives V_K to the other side, ≈ −15 Ω·I: that is `KELVIN`) | `CLIM`: the point is a plateau, never DUT data. `i_plateau` is measured at bring-up (§7.10). A DUT legitimately drawing 45–49 mA *on* the load line is not flagged |
+| **Current-limit plateau** | \|I\| ≥ 0.8·`i_plateau` **and** `e·sign(V_set) > tol` (U5 in limit leaves V_K short of the load line). Also `KELVIN` when V_K carries the open-SENSE+ signature: `V_K·sign(V_set) < −0.1 V` and \|V_K + I·15 Ω\| ≤ 3 Ω·\|I\| + 20 mV (U7 +IN at AGND reads −I·R_bot, R_bot = F2 + R10 = 13…17.5 Ω). An active DUT holding V_K at its own voltage on the far side keeps `CLIM` alone, unless that voltage happens to lie in the band (a false sense-lead warning; the point is still `CLIM`) | `CLIM`: the point is a plateau, never DUT data. `i_plateau` is measured at bring-up (§7.10). A DUT legitimately drawing 45–49 mA *on* the load line is not flagged |
 | **Force path open** | \|V_set\| ≥ 1 V, \|I\| < max(2 µA, 4·σ_I(zero)), and \|V_K\| < 0.1·\|V_set\|. Before a valid `ZERO` the current threshold is 100 µA (the INA128P worst-case offset to 85 °C, 79 µA) | `NO_OUTPUT`: "output disconnected: U12 open (±15 V missing or low), PTC open, or FORCE leads open". Never adapts calibration |
 | **AFE**, gate open (before `ARM`) | a clip code on either channel, or **both** channels below −0.8 × full scale (±15 V off: both INA128 outputs near AGND) | blocks `ARM` (`ERR PRECOND afe`) |
 | **AFE**, armed | a clip code, or both channels below −0.8 × full scale on two consecutive conversions (a ±15 V rail lost while armed: U12 has opened FORCE+, so the readings are the front end's; impossible with a live output, since \|V_SWEEP\| ≤ 10.04 V and R_s ≥ 115 Ω forbid \|V_K\| ≥ 10 V with \|I\| ≥ 83 mA) | `F_AFE` (`detail=afe_signature`) |
@@ -1753,76 +1761,6 @@ here. Each item says what the code does and why; the code and
     real one. A VBUS conversion without EOC within 5 ms reads as VBUS absent.
     The configuration descriptor is self-powered, 2 mA.
 
-**Final firmware audit (2026-11)**
-
-Each item corrects behaviour that an independent review reproduced (in the
-simulator, on the driver test ports, or from the data sheets) or that the
-audited hardware requires; a regression test accompanies each (verification.md).
-
-25. *Hardware revision.* `hw=stage1-iv@c4e7592`: the last commit that changed
-    the design (OPA547T and R7 348 kΩ, D7 BZT52B24, C26/C27 18 pF, R38/C49
-    fitted). Protocol version 2 (items 33, 37, 38, 40).
-26. *Default compliance 100 mA* (was 50 mA, which lies inside the OPA547T's
-    expected 40…65 mA plateau and so zeroed the output before U5 limited on
-    most units). 100 mA is above the 92.6 mA worst-case passive bound: by
-    default the plateau limits and is flagged `CLIM`.
-27. *A CAL.SAVE can no longer erase flash while armed* (SI-8). `ARM` is refused
-    (`ERR PRECOND busy`) while any deferred job runs, and the save re-checks
-    SI-8 at the erase itself (a job can outlive its session).
-28. *`ARM` after `RESET`'s `OK`* is refused (`ERR STATE reset pending`), and
-    `port_system_reset()` writes the zero pair first. `ARM` answers
-    `ERR FAULT <F>` when its zero write fails, instead of `OK`.
-29. *A fault that interrupts POST or SELFTEST* makes `FAULT.CLR` re-run POST
-    (`ERR PRECOND adc` until it passes), instead of leaving `ARM` refused
-    with `post` after a successful `FAULT.CLR`.
-30. *Bring-up `HB.EDGE` / `HB.HOLD HIGH`* are refused within `T_DISARM` of the
-    previous edge, so the host cannot pump the reference gate closed while
-    DISARMED.
-31. *Orphan conversions.* Ending an acquisition (`SWP.ABORT`, sweep end,
-    `MEAS?`/`ZERO` cancel, faults) disowns its conversion in flight, and a
-    sample is accepted only if its conversion started at or after the
-    acquisition's DAC load, so it can never land in the next sweep's first
-    point.
-32. *`dac_zero_safe()`* raises /SYNC (≥ 1 µs) before it resets SPI1, and the
-    fault entry raises it before re-tuning SPI1: a partial frame is aborted
-    by the DAC8552's /SYNC rule instead of possibly being completed by a
-    reset SCK edge.
-33. *Measurement fidelity.* `v_V` / `i_A` come from the unrounded means (the
-    record adds a 1/256-code fraction); `LATE` allows the two passes a first
-    conversion takes (§7.5); a standard deviation at its 6553.4-code
-    ceiling sets the new flag `SD_SAT` (bit 11).
-34. *Classification.* `CLIM` needs V_K on V_set's side (`> −0.1 V`): a lifted
-    SENSE+ lead on a low-impedance DUT is `KELVIN`, not a plateau. The
-    pre-zero `NO_OUTPUT` current floor is 100 µA (the worst-case INA128P
-    offset to 85 °C), and `ZERO` accepts offsets up to 100 µA / 10 mV.
-35. *A ±15 V rail lost while armed* (both channels below −0.8 × full scale on
-    consecutive conversions) latches `F_AFE` (`afe_signature`) instead of
-    producing compliance trips or `CLIM`/`KELVIN` records from the front
-    end's own output.
-36. *Compliance during ramps.* While a ramp moves the output (`SRC`, pre-ramp,
-    end and disarm ramps) the monitor runs I conversions back to back, so a
-    compliance trip acts within about one conversion instead of up to 100 ms
-    (1 V at 10 V/s).
-37. *Calibration.* The `c_dac` window is ±1000 codes (it was ±400, narrower
-    than the DAC8552 worst case of about 580). The record stores which
-    coefficients were measured (`CAL?` `measured=`); `CAL_NOMINAL` and the
-    nominal Kelvin tolerance stay until `g_dac`, `c_dac`, `g_v`, `g_i` and
-    `r_s` are all measured. A damaged record raises warning bit 10
-    `CAL_DAMAGED`.
-38. *Session start* clears the USB transmit FIFO (`port_host_discard_tx()`) and
-    begins with an empty line, so a reopened port never receives the old
-    session's tail and `EVT HELLO` always starts a line.
-39. *VBUS detach below 3.6 V* (was 3.0 V, the top of the D+ back-feed
-    estimate, which could hold the pull-up on by itself).
-40. *ADS1256.* Init and reconfiguration send SYNC, WAKEUP, SELFCAL (§7.4); a
-    late-read timeout runs from the re-arm, so a main-loop stall of one to
-    two periods gives one late sample instead of `F_ADC_TIMEOUT`; a late
-    sample's time is the centre of the conversion it read (it was half a
-    period early); a timed-out SPI2 transfer can no longer skew every later
-    byte (stale RXNE/OVR drained at the next transfer).
-41. *USB.* Device mode is forced and confirmed before `tusb_init()`, and PA10
-    is pulled up (§4.7). The `.bin` image is filled with 0xFF, so it erases
-    the calibration sectors as build.md says.
 25. *`DISARM` and `SWP.ABORT` act on arrival.* While command parsing is held
     back (a deferred command, or no room for responses and ordered events
     because the host is not reading), a `DISARM` or `SWP.ABORT` line without
@@ -1837,6 +1775,87 @@ audited hardware requires; a regression test accompanies each (verification.md).
     beyond that, unread input is not host activity and the host timeout
     disarms.
 
+**Final firmware audit (2026-11)**
+
+Each item corrects behaviour that an independent review reproduced (in the
+simulator, on the driver test ports, or from the data sheets) or that the
+audited hardware requires; a regression test accompanies each (verification.md).
+
+26. *Hardware revision.* `hw=stage1-iv@c4e7592`: the last commit that changed
+    the design (OPA547T and R7 348 kΩ, D7 BZT52B24, C26/C27 18 pF, R38/C49
+    fitted). Protocol version 2 (items 34, 36, 38, 39).
+27. *Default compliance 100 mA* (was 50 mA, which lies inside the OPA547T's
+    expected 40…65 mA plateau and so zeroed the output before U5 limited on
+    most units). 100 mA is above the 92.6 mA worst-case passive bound: by
+    default the plateau limits and is flagged `CLIM`.
+28. *A CAL.SAVE can no longer erase flash while armed* (SI-8). `ARM` is refused
+    (`ERR PRECOND busy`) while any deferred job runs, and the save re-checks
+    SI-8 at the erase itself (a job can outlive its session).
+29. *`ARM` after `RESET`'s `OK`* is refused (`ERR STATE reset pending`), and
+    `port_system_reset()` writes the zero pair first. `ARM` answers
+    `ERR FAULT <F>` when its zero write fails, instead of `OK`.
+30. *A fault that interrupts POST or SELFTEST* makes `FAULT.CLR` re-run POST
+    (`ERR PRECOND adc` until it passes), instead of leaving `ARM` refused
+    with `post` after a successful `FAULT.CLR`.
+31. *Bring-up `HB.EDGE` / `HB.HOLD HIGH`* are refused within `T_DISARM` of the
+    previous edge, so the host cannot pump the reference gate closed while
+    DISARMED.
+32. *Orphan conversions.* Ending an acquisition (`SWP.ABORT`, sweep end,
+    `MEAS?`/`ZERO` cancel, faults) disowns its conversion in flight, and a
+    sample is accepted only if its conversion started at or after the
+    acquisition's DAC load, so it can never land in the next sweep's first
+    point.
+33. *`dac_zero_safe()`* raises /SYNC (≥ 1 µs) before it resets SPI1, and the
+    fault entry raises it before re-tuning SPI1: a partial frame is aborted
+    by the DAC8552's /SYNC rule instead of possibly being completed by a
+    reset SCK edge.
+34. *Measurement fidelity.* `v_V` / `i_A` come from the unrounded means (the
+    record adds a 1/256-code fraction); `LATE` allows the two passes a first
+    conversion takes (§7.5); a standard deviation at its 6553.4-code
+    ceiling sets the new flag `SD_SAT` (bit 11).
+35. *Classification.* A `CLIM` point whose V_K carries the open-SENSE+
+    signature (V_K on the far side of V_set, ≈ −I·15 Ω: U7 +IN at AGND) is
+    also flagged `KELVIN`, so a lifted SENSE+ lead on a low-impedance DUT is
+    reported rather than hidden behind `CLIM`; `CLIM` itself keeps its rule,
+    so every plateau point stays "not DUT data", including an active DUT
+    (cell, battery, charged capacitor) driven into the plateau at the
+    opposite polarity. The pre-zero `NO_OUTPUT` current floor is 100 µA (the
+    worst-case INA128P offset to 85 °C), and `ZERO` accepts offsets up to
+    100 µA / 10 mV.
+36. *A ±15 V rail lost while armed* (both channels below −0.8 × full scale on
+    consecutive conversions) latches `F_AFE` (`afe_signature`) instead of
+    producing compliance trips or `CLIM`/`KELVIN` records from the front
+    end's own output.
+37. *Compliance during ramps.* While a ramp moves the output (`SRC`, pre-ramp,
+    end and disarm ramps) the monitor runs I conversions back to back, so a
+    compliance trip acts within about one conversion instead of up to 100 ms
+    (1 V at 10 V/s).
+38. *Calibration.* The `c_dac` window is ±1000 codes (it was ±400, narrower
+    than the DAC8552 worst case of about 580). The record stores which
+    coefficients were measured (`CAL?` `measured=`); `CAL_NOMINAL` and the
+    nominal Kelvin tolerance stay until `g_dac`, `c_dac`, `g_v`, `g_i` and
+    `r_s` are all measured. A damaged record raises warning bit 10
+    `CAL_DAMAGED`.
+39. *Session start* clears the USB transmit FIFO (`port_host_discard_tx()`) and
+    begins with an empty line, so a reopened port never receives the old
+    session's tail and `EVT HELLO` always starts a line.
+40. *VBUS detach below 3.6 V* (was 3.0 V, the top of the D+ back-feed
+    estimate, which could hold the pull-up on by itself).
+41. *ADS1256.* Init and reconfiguration send SYNC, WAKEUP, SELFCAL (§7.4), and
+    a /DRDY that falls in less than half the Table 21 calibration time means
+    the part did not calibrate: the frame is sent once more, then the ADC
+    fails as on a calibration timeout (the old SYNC, SELFCAL sequence would
+    have timed out on an ignored SELFCAL; this keeps that detection). A
+    late-read timeout runs from the re-arm, so a main-loop stall of any
+    length beyond the read deadline gives one late sample instead of
+    `F_ADC_TIMEOUT`; a late sample's time is the centre of the conversion it
+    read (it was k·P/2 early, k the periods between the first edge and the
+    edge read: one period after a stall). A timed-out SPI2 transfer can no
+    longer skew every later byte (stale RXNE/OVR drained at the next
+    transfer).
+42. *USB.* Device mode is forced and confirmed before `tusb_init()`, and PA10
+    is pulled up (§4.7). The `.bin` image is filled with 0xFF, so it erases
+    the calibration sectors as build.md says.
 **Hardware documentation updated with this work:** `bringup_checklist.md`
 (§3 REF5025AI tolerance; §6 disarm limits 70/85 ms with rationale, the
 firmware commands, never re-arm after reset; §7 plateau as a nominal value

@@ -161,7 +161,7 @@ also pulses NRST), or `none`. `crash=` names: `hardfault`, `memmanage`,
 
 | Command | States | Effect / response |
 |---|---|---|
-| `ARM` | DISARMED | Checks the preconditions (session, POST passed, ADC idle-able, no deferred job running, a gate-open front-end check within 1 s, BOR level 3, valid configuration). `OK`, then `EVT STATE ARMING`, then `EVT STATE ARMED` 100 ms after the first heartbeat edge. Errors: `ERR STATE` (also `ERR STATE reset pending` between `RESET`'s `OK` and the reset), `ERR FAULT` (also `ERR FAULT <F>` when the zero write at arming fails and latches the fault), `ERR PRECOND <name>` |
+| `ARM` | DISARMED | Checks the preconditions (session, POST passed, ADC idle-able, no deferred job running, a gate-open front-end check within 1 s, BOR level 3, valid configuration). `OK`, then `EVT STATE ARMING`, then `EVT STATE ARMED` 100 ms after the first heartbeat edge. Errors: `ERR STATE` (also `ERR STATE reset pending` between the `OK` of `RESET`, or of a bring-up `CRASH`, and the reset; it comes before the FAULT check), `ERR FAULT` (also `ERR FAULT <F>` when the zero write at arming fails and latches the fault), `ERR PRECOND <name>` |
 | `DISARM` | ARMING, ARMED, SWEEPING; DISARMED, DISARMING (no-op) | `OK`; takes effect on arrival even when earlier commands wait (§2); aborts any sweep (`status=aborted`), ramps to 0 V at ≥ 10 V/s, zero pair, heartbeat off, `EVT STATE DISARMING reason=command` ... `EVT STATE DISARMED reason=command` (100 ms after the last edge) |
 | `SRC V=<volts>` | ARMED | Ramps the output to the level at `ramp_rate`; `OK`, then `EVT SRC_DONE v_v=<V> status=reached` when reached. A compliance trip during the ramp zeroes the output and ends it with `EVT SRC_DONE v_v=0.000000 status=compliance` (and `EVT WARN COMPLIANCE`); bring-up `DAC.RAW OFF` ends it with `status=aborted`. `DISARM` or a fault ends a ramp with `EVT STATE` instead. `ERR RANGE` beyond `v_limit` or the DAC range. A new `SRC` replaces the target of a ramp in progress |
 | `FAULT.CLR` | FAULT (`ERR STATE` otherwise) | Clears the latched fault if its cause is gone and `T_DISARM` (100 ms) has elapsed since the last edge: `OK`, then `EVT STATE DISARMED`. Otherwise `ERR PRECOND <reason>`: `wait` (T_DISARM), `adc` (ADC not re-initialised and self-tested yet, or a self-test the fault interrupted must run again; the check is started, retry), `dac` (SPI1 still failing), `invariant`, `stack` and `clock` (these two need `RESET`) |
@@ -291,7 +291,7 @@ PT <sweep_id>,<seq>,<idx>,<seg>,<t_set_us>,<t_i_us>,<t_v_us>,<dac_code>,<v_set_V
 |---|---|---|
 | 0 | `OVR_V` | voltage conversion clipped |
 | 1 | `OVR_I` | current conversion clipped |
-| 2 | `CLIM` | current-limit plateau: not DUT data |
+| 2 | `CLIM` | current-limit plateau: not DUT data (with `KELVIN` as well when V_K also shows a lifted SENSE+ lead) |
 | 3 | `KELVIN` | Kelvin consistency check failed (open/swapped sense lead, tripped PTC, ...) |
 | 4 | `NO_OUTPUT` | force path open (U12 open / rails missing / PTC open / FORCE leads open) |
 | 5 | `COMPLIANCE` | software compliance tripped at this point |

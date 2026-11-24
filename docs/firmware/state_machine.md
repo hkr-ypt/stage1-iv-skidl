@@ -34,9 +34,9 @@ is reported if the reset was not a plain power-on.
 
 ## 2. ARM preconditions (checked in this order)
 
-`ERR FAULT <F>` in FAULT; `ERR STATE` outside DISARMED, and
-`ERR STATE reset pending` between `RESET`'s `OK` and the reset; then
-`ERR PRECOND <name>`:
+First `ERR STATE reset pending` between the `OK` of `RESET` (or of a
+bring-up `CRASH`) and the reset, whatever the state; then `ERR FAULT <F>` in
+FAULT; `ERR STATE` outside DISARMED; then `ERR PRECOND <name>`:
 
 | Name | Condition |
 |---|---|
@@ -67,9 +67,12 @@ is reported if the reset was not a plain power-on.
   job, latch the fault, `EVT FAULT <F> detail=<d>`, `EVT STATE FAULT`. ADC
   faults also re-initialise the ADC.
 * **Fault handlers and dead-man (target):** the same zero, a `.noinit` crash
-  record, `NVIC_SystemReset()`; the next boot reports `crash=1`. A software
-  reset (`RESET`, `CRASH`) also writes the zero pair before
-  `NVIC_SystemReset()`.
+  record, `NVIC_SystemReset()`; the next boot reports `crash=1`. `RESET`
+  writes the zero pair in `port_system_reset()` before `NVIC_SystemReset()`.
+  `CRASH HARDFAULT` / `STACK` zero through the fault handler, and
+  `CRASH HANG` while the heartbeat runs through the dead-man; `CRASH HANG`
+  while disarmed and `CRASH HANG_IRQOFF` end in an IWDG reset with no zero
+  write (the gate decay alone acts, bringup_firmware.md §3).
 
 ## 4. Faults (latched)
 

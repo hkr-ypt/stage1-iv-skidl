@@ -25,8 +25,10 @@ Specific items to confirm on the bench:
 * the MPU stack guard: `CRASH STACK` (bring-up) must give `crash=memmanage`
   and a zeroed output;
 * ADS1256 init and reconfiguration send SYNC, WAKEUP, SELFCAL (each as
-  SBAS288K documents it). Confirm on the analyser that /DRDY rises at the
-  SELFCAL and falls after the Table 21 calibration time;
+  SBAS288K documents it). Confirm on the analyser that /DRDY goes high at the
+  SYNC/WAKEUP, stays high through the calibration and falls after the
+  Table 21 calibration time (a fall in under half that time is treated as a
+  skipped calibration);
 * ADC1 VBUS scaling (VDDA assumed 3.3 V) and the temperature reading;
 * flash erase/program on sectors 1–2 and the D-cache reset;
 * the pass-time budget (≤ 150 µs design, overruns counted above 400 µs):
@@ -46,6 +48,10 @@ Specific items to confirm on the bench:
   SENSE− lead, nor an open SENSE+ on a DUT below about 35 Ω under the
   plateau: the wide tolerance's 15 Ω·|I| term equals the error those faults
   cause (spec §7.7). Calibrate first.
+* A plateau point of an active DUT (cell, battery, charged capacitor) whose
+  own voltage, on the side opposite V_set, happens to lie near I·15 Ω (about
+  0.57…0.90 V at 49 mA) also gets `KELVIN`, a false sense-lead warning; it
+  is still `CLIM` (not DUT data).
 * The current-limit plateau (U5 OPA547T, R7 348 kΩ) is expected at
   40…65 mA, sinking up to ~8 mA above sourcing, falling ~0.2 mA/K as U5 warms;
   49 mA is the design centre, not a characterised value. `i_plateau` must be
